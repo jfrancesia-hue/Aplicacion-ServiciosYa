@@ -19,14 +19,12 @@ import { useGrantAchievement } from "../../lib/services/achievements.services";
 interface ServicioSheetViewProps {
     servicio: Servicio;
     showProfile?: boolean;
-    onHire?: () => void;
     onCancel?: () => void;
     onReport?: () => void;
 }
 
 function ServicioSheetView({
     servicio,
-    onHire,
     onCancel,
     onReport,
     showProfile = false,
@@ -57,6 +55,7 @@ function ServicioSheetView({
             id: String(servicio.user_id ?? ""),
             name: (servicio as any).nombre ?? "",
             profileImage: (servicio as any).user_foto_perfil ?? (servicio as any).foto_perfil ?? "",
+            isVerified: Boolean((servicio as any).verificado),
         });
     };
 

@@ -1,11 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -17,7 +22,15 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import BotonVolver from "../components/BotonVolver";
+import {
+  formatMicaOrderAmount,
+  getMicaOrderStatus,
+  selectMicaOrderQuote,
+  type MicaOrderQuote,
+  type MicaOrderStatus,
+} from "../lib/micaOrder";
 import { supabase } from "../lib/supabase";
+import { resolveArgentineProvince } from "../lib/utils/geoSegmentation";
 import { useLocationStore } from "../store/locationStore";
 import type { MainStackParamList, MicaChatMode } from "../types/navigation";
 
@@ -27,16 +40,7 @@ type Message = {
   author: "mica" | "user";
   text: string;
 };
-type SearchStage = "intake" | "submitted" | "quotes" | "selected" | "payment";
-type SearchQuote = {
-  id: string;
-  name: string;
-  price: string;
-  rating: string;
-  jobs: string;
-  availability: string;
-  note: string;
-};
+type SearchStage = "intake" | "submitted" | "quotes" | "selected";
 type AgentInsight = {
   issue?: string;
   service?: string;
@@ -145,40 +149,10 @@ serviceSignals.push(
 );
 
 const searchFlowSteps = [
-  { label: "Orden", icon: "create-outline" as const },
+  { label: "Pedido", icon: "create-outline" as const },
   { label: "Presupuestos", icon: "receipt-outline" as const },
-  { label: "Profesional", icon: "person-circle-outline" as const },
-  { label: "Pago", icon: "card-outline" as const },
-];
-
-const sampleQuotes: SearchQuote[] = [
-  {
-    id: "quote-1",
-    name: "Gonzalo Alegre",
-    price: "$65.100",
-    rating: "4.9",
-    jobs: "17 trabajos",
-    availability: "Disponible esta semana",
-    note: "Materiales incluidos",
-  },
-  {
-    id: "quote-2",
-    name: "Ignacio Turelli",
-    price: "$67.270",
-    rating: "4.8",
-    jobs: "10 trabajos",
-    availability: "Puede coordinar hoy",
-    note: "Visita sin cargo",
-  },
-  {
-    id: "quote-3",
-    name: "José Alegre",
-    price: "$75.950",
-    rating: "4.7",
-    jobs: "21 trabajos",
-    availability: "Disponible mañana",
-    note: "Garantía del trabajo",
-  },
+  { label: "Chat seguro", icon: "chatbubbles-outline" as const },
+  { label: "Confirmación", icon: "shield-checkmark-outline" as const },
 ];
 
 const modeConfig: Record<
@@ -374,7 +348,7 @@ function inferInsight(
       next.companyType = "Empresa";
     const units = inferUnits(text);
     if (units) next.units = units;
-    if (includesAny(text, ["demo", "llamar", "contactar", "whatsapp"]))
+    if (includesAny(text, ["demo", "contactar", "asesor"]))
       next.contactIntent = "Quiere contacto comercial";
   }
 
@@ -630,17 +604,23 @@ async function createMicaAppRequest({
   const profile = loadedProfile ?? profileFallback;
   const gpsLocationLabel = formatLocationFallback(locationFallback);
   const profileLocationLabel = formatProfileLocation(profile);
+  const requestedZone = insight.location?.trim() || null;
+  const requestedProvince = resolveArgentineProvince(requestedZone);
   const requestCity =
+    (requestedProvince ? requestedZone : null) ||
     locationFallback?.city?.trim() ||
     locationFallback?.locality?.trim() ||
     profile?.ciudad?.trim() ||
     null;
   const requestProvince =
-    locationFallback?.province?.trim() || profile?.provincia?.trim() || null;
+    requestedProvince ||
+    locationFallback?.province?.trim() ||
+    profile?.provincia?.trim() ||
+    null;
 
   const categoria = insight.service?.trim() || "Servicio general";
   const zona =
-    insight.location?.trim() ||
+    requestedZone ||
     gpsLocationLabel ||
     profileLocationLabel ||
     "Zona a confirmar";
@@ -671,6 +651,7 @@ async function createMicaAppRequest({
             : profileLocationLabel
               ? "profile"
               : "missing",
+      requested_province: requestProvince,
       insight,
     },
   });
@@ -700,9 +681,15 @@ export default function MicaChat({ navigation, route }: Props) {
   );
   const [searchStage, setSearchStage] = useState<SearchStage>("intake");
   const [createdOfertaId, setCreatedOfertaId] = useState<string | null>(null);
+  const [activeOrder, setActiveOrder] =
+    useState<MicaOrderStatus["order"]>(null);
+  const [realQuotes, setRealQuotes] = useState<MicaOrderQuote[]>([]);
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [isCreatingRequest, setIsCreatingRequest] = useState(false);
+  const [isRefreshingQuotes, setIsRefreshingQuotes] = useState(false);
+  const [selectingQuoteId, setSelectingQuoteId] = useState<string | null>(null);
+  const [orderError, setOrderError] = useState<string | null>(null);
   const [profileFallback, setProfileFallback] =
     useState<MicaProfileFallback | null>(null);
   const effectiveLocation = useLocationStore((state) => state.effectiveLocation);
@@ -774,38 +761,93 @@ export default function MicaChat({ navigation, route }: Props) {
   const checklist = getChecklist(mode, insight, profileLocation);
   const progress = getProgress(mode, insight, profileLocation);
   const suggestions = getSuggestions(mode, insight);
-  const selectedQuote = sampleQuotes.find(
-    (quote) => quote.id === selectedQuoteId,
-  );
-  const searchStepIndex =
-    searchStage === "payment"
-      ? 3
-      : searchStage === "selected"
-        ? 2
-        : searchStage === "quotes" || searchStage === "submitted"
-          ? 1
-          : 0;
 
-  const addMicaMessage = (text: string) => {
+  const addMicaMessage = useCallback((text: string) => {
     const timestamp = Date.now();
     setMessages((current) => [
       ...current,
       { id: `mica-action-${timestamp}`, author: "mica", text },
     ]);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-  };
+  }, []);
 
-  const handleSearchPrimaryAction = async () => {
-    if (!searchReadiness.canCreate) {
-      addMicaMessage(
-        `Dale, antes de pedir presupuestos necesito un dato más.\n\n${getMissingQuestion(mode, insight, profileLocation)}`,
-      );
+  const applyOrderStatus = useCallback((status: MicaOrderStatus) => {
+    if (!status.order) return false;
+
+    setActiveOrder(status.order);
+    setCreatedOfertaId(status.order.id);
+    setRealQuotes(status.quotes);
+    setOrderError(null);
+
+    if (status.order.selectedBudgetId) {
+      setSelectedQuoteId(status.order.selectedBudgetId);
+      setSearchStage("selected");
+    } else if (status.quotes.length > 0) {
+      setSearchStage("quotes");
+    } else {
+      setSearchStage("submitted");
+    }
+    return true;
+  }, []);
+
+  const refreshOrderStatus = useCallback(
+    async (offerId?: string | null, silent = false) => {
+      if (mode !== "buscar-servicio") return null;
+      if (!silent) setIsRefreshingQuotes(true);
+
+      try {
+        const status = await getMicaOrderStatus(offerId);
+        applyOrderStatus(status);
+        return status;
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : "No se pudo actualizar el pedido.";
+        setOrderError(message);
+        return null;
+      } finally {
+        if (!silent) setIsRefreshingQuotes(false);
+      }
+    },
+    [applyOrderStatus, mode],
+  );
+
+  useEffect(() => {
+    if (mode !== "buscar-servicio") return;
+    refreshOrderStatus(null);
+  }, [mode, refreshOrderStatus]);
+
+  useEffect(() => {
+    if (
+      mode !== "buscar-servicio" ||
+      !createdOfertaId ||
+      searchStage === "selected"
+    ) {
       return;
     }
 
-    if (createdOfertaId) {
+    const interval = setInterval(
+      () => refreshOrderStatus(createdOfertaId, true),
+      15_000,
+    );
+    return () => clearInterval(interval);
+  }, [createdOfertaId, mode, refreshOrderStatus, searchStage]);
+
+  const selectedQuote = realQuotes.find(
+    (quote) => quote.id === selectedQuoteId,
+  );
+  const searchStepIndex =
+    searchStage === "selected"
+      ? 2
+      : searchStage === "quotes" || searchStage === "submitted"
+        ? 1
+        : 0;
+
+  const handleSearchPrimaryAction = async () => {
+    if (searchStage === "intake" && !searchReadiness.canCreate) {
       addMicaMessage(
-        `Tu pedido ya quedÃ³ enviado a prestadores compatibles. CÃ³digo de seguimiento: ${createdOfertaId}.`,
+        `Dale, antes de pedir presupuestos necesito un dato más.\n\n${getMissingQuestion(mode, insight, profileLocation)}`,
       );
       return;
     }
@@ -824,6 +866,7 @@ export default function MicaChat({ navigation, route }: Props) {
         addMicaMessage(
           `Listo, ya enviÃ© tu pedido a prestadores compatibles. Cuando respondan con presupuestos, vas a poder compararlos y confirmar el que prefieras.\n\nSeguimiento: ${request.oferta_id}`,
         );
+        await refreshOrderStatus(request.oferta_id, true);
       } catch (error) {
         const message =
           error instanceof Error
@@ -839,68 +882,115 @@ export default function MicaChat({ navigation, route }: Props) {
     }
 
     if (searchStage === "submitted") {
-      addMicaMessage(
-        "El pedido ya estÃ¡ cargado. Apenas entren presupuestos de prestadores, el siguiente paso es comparar y confirmar uno.",
-      );
+      const status = await refreshOrderStatus(createdOfertaId);
+      if (!status?.quotes.length) {
+        addMicaMessage(
+          "El pedido está activo. Todavía estamos esperando presupuestos reales de prestadores compatibles.",
+        );
+      }
       return;
     }
 
     if (searchStage === "quotes") {
       addMicaMessage(
-        "Elegí el profesional que te cierre mejor. Después coordinamos la visita y el pago queda para cuando estés conforme.",
-      );
-      return;
-    }
-
-    if (searchStage === "selected") {
-      addMicaMessage(
-        "Perfecto. Cuando termine el trabajo, podés pagar por transferencia, tarjeta o QR del profesional.",
+        "Compará monto, disponibilidad, experiencia y detalle. Elegí una opción para crear el chat interno con el profesional.",
       );
     }
   };
 
-  const handleQuoteSelect = (quote: SearchQuote) => {
+  const handleQuoteSelect = (quote: MicaOrderQuote) => {
     setSelectedQuoteId(quote.id);
     setSearchStage("selected");
     addMicaMessage(
-      `Perfecto, dejamos a ${quote.name} como opción elegida. Ahora el siguiente paso es coordinar la visita y pagar recién cuando el trabajo esté conforme.`,
+      `Elegiste la propuesta de ${quote.name}. Revisá los datos y confirmá para que MICA abra el chat seguro con el resumen del pedido.`,
     );
   };
 
-  const handlePaymentOption = (method: string) => {
-    setSearchStage("payment");
-    addMicaMessage(
-      `Perfecto. Dejamos ${method} como forma de pago preferida para cuando el servicio esté terminado.`,
-    );
+  const handleConfirmProvider = async () => {
+    if (!createdOfertaId || !selectedQuote) {
+      addMicaMessage("Primero elegí uno de los presupuestos recibidos.");
+      return;
+    }
+
+    setSelectingQuoteId(selectedQuote.id);
+    try {
+      const selection = await selectMicaOrderQuote(
+        createdOfertaId,
+        selectedQuote.id,
+      );
+      setRealQuotes((current) =>
+        current.map((quote) => ({
+          ...quote,
+          selected: quote.id === selection.quote.id,
+        })),
+      );
+      setActiveOrder((current) =>
+        current
+          ? {
+              ...current,
+              selectedBudgetId: selection.quote.id,
+              chatId: selection.chat.id,
+              phase: "selected",
+            }
+          : current,
+      );
+      addMicaMessage(
+        `Listo. Ya conecté a ambas partes y dejé el resumen del pedido en el chat interno con ${selection.chat.providerName}.`,
+      );
+      navigation.navigate("ChatIndividual", {
+        chatId: selection.chat.id,
+        nombre: selection.chat.providerName,
+        servicio: {
+          titulo: activeOrder?.category ?? insight.service ?? "Servicio",
+          descripcion: activeOrder?.description ?? insight.issue ?? "",
+          precio: selection.quote.amount,
+        },
+        servicioId: "",
+        usuarioId1: selection.chat.participantA,
+        usuarioId2: selection.chat.participantB,
+      });
+    } catch (error) {
+      addMicaMessage(
+        `No pude abrir el chat todavía. ${error instanceof Error ? error.message : "Intentá nuevamente."}`,
+      );
+    } finally {
+      setSelectingQuoteId(null);
+    }
   };
 
   const primaryAction = useMemo(() => {
     if (mode === "buscar-servicio") {
+      if (searchStage === "selected") {
+        return {
+          label: selectingQuoteId
+            ? "Abriendo chat seguro..."
+            : activeOrder?.chatId
+              ? "Abrir chat seguro"
+              : "Confirmar y abrir chat",
+          icon: "chatbubbles" as const,
+          onPress: handleConfirmProvider,
+        };
+      }
+
       return {
         label:
           isCreatingRequest
             ? "Enviando pedido..."
-            : createdOfertaId
-              ? "Pedido enviado"
+            : isRefreshingQuotes
+              ? "Actualizando..."
               : searchStage === "intake"
             ? searchReadiness.canCreate
               ? "Pedir presupuestos"
               : "Completar pedido"
             : searchStage === "quotes"
-              ? "Elegir profesional"
-              : searchStage === "selected"
-                ? "Coordinar y pagar luego"
-                : "Orden en seguimiento",
+              ? "Elegir un presupuesto"
+              : "Actualizar presupuestos",
         icon:
-          createdOfertaId
-            ? ("checkmark-circle" as const)
-            : searchStage === "intake"
+          searchStage === "intake"
             ? ("receipt" as const)
             : searchStage === "quotes"
               ? ("person-circle" as const)
-              : searchStage === "selected"
-                ? ("card" as const)
-                : ("checkmark-circle" as const),
+              : ("refresh-circle" as const),
         onPress: handleSearchPrimaryAction,
       };
     }
@@ -915,14 +1005,9 @@ export default function MicaChat({ navigation, route }: Props) {
 
     if (mode === "b2b") {
       return {
-        label: progress >= 60 ? "Pedir demo B2B" : "Hablar por WhatsApp",
-        icon: "logo-whatsapp" as const,
-        onPress: () => {
-          const message = `Hola, quiero información de SolucionesYa B2B. Estos son los datos iniciales: ${summarizeSignals(insight)}`;
-          Linking.openURL(
-            `https://wa.me/5493834035427?text=${encodeURIComponent(message)}`,
-          );
-        },
+        label: "Volver al inicio",
+        icon: "arrow-back" as const,
+        onPress: () => navigation.goBack(),
       };
     }
 
@@ -932,14 +1017,17 @@ export default function MicaChat({ navigation, route }: Props) {
       onPress: () => navigation.goBack(),
     };
   }, [
-    createdOfertaId,
+    activeOrder,
     insight,
     isCreatingRequest,
+    isRefreshingQuotes,
     mode,
     navigation,
     progress,
     searchReadiness,
     searchStage,
+    selectedQuote,
+    selectingQuoteId,
   ]);
 
   const sendMessage = async (text: string) => {
@@ -1143,7 +1231,11 @@ export default function MicaChat({ navigation, route }: Props) {
               </View>
             </View>
             <View style={styles.requestStatusBox}>
-              <Ionicons name="radio-outline" size={20} color={config.accent} />
+              {isRefreshingQuotes ? (
+                <ActivityIndicator size="small" color={config.accent} />
+              ) : (
+                <Ionicons name="radio-outline" size={20} color={config.accent} />
+              )}
               <View style={styles.requestStatusCopy}>
                 <Text style={styles.requestStatusTitle}>
                   Estamos esperando presupuestos reales
@@ -1159,6 +1251,24 @@ export default function MicaChat({ navigation, route }: Props) {
                 )}
               </View>
             </View>
+            {orderError ? (
+              <Text style={styles.orderErrorText}>{orderError}</Text>
+            ) : null}
+            <TouchableOpacity
+              activeOpacity={0.78}
+              disabled={isRefreshingQuotes}
+              onPress={() => refreshOrderStatus(createdOfertaId)}
+              style={styles.refreshQuotesButton}
+            >
+              <Ionicons name="refresh" size={16} color={config.accent} />
+              <Text
+                style={[styles.refreshQuotesText, { color: config.accent }]}
+              >
+                {isRefreshingQuotes
+                  ? "Actualizando propuestas..."
+                  : "Actualizar ahora"}
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1167,15 +1277,17 @@ export default function MicaChat({ navigation, route }: Props) {
             <View style={styles.quotesHeader}>
               <View>
                 <Text style={styles.panelEyebrow}>Presupuestos</Text>
-                <Text style={styles.panelTitle}>Opciones verificadas</Text>
+                <Text style={styles.panelTitle}>Propuestas reales</Text>
               </View>
               <View style={styles.verifiedBadge}>
-                <Ionicons name="shield-checkmark" size={14} color="#0f8f58" />
-                <Text style={styles.verifiedText}>Verificados</Text>
+                <Ionicons name="receipt" size={14} color="#0f8f58" />
+                <Text style={styles.verifiedText}>
+                  {realQuotes.length} recibidas
+                </Text>
               </View>
             </View>
 
-            {sampleQuotes.map((quote) => {
+            {realQuotes.map((quote) => {
               const isSelected = quote.id === selectedQuoteId;
 
               return (
@@ -1206,20 +1318,39 @@ export default function MicaChat({ navigation, route }: Props) {
                       <Text
                         style={[styles.quotePrice, { color: config.accent }]}
                       >
-                        {quote.price}
+                        {formatMicaOrderAmount(quote.amount)}
                       </Text>
                     </View>
                     <View style={styles.quoteMeta}>
                       <Ionicons name="star" size={12} color="#f5a524" />
-                      <Text style={styles.quoteMetaText}>{quote.rating}</Text>
+                      <Text style={styles.quoteMetaText}>
+                        {quote.rating ?? "Nuevo"}
+                      </Text>
                       <Text style={styles.quoteDot}>•</Text>
-                      <Text style={styles.quoteMetaText}>{quote.jobs}</Text>
+                      <Text style={styles.quoteMetaText}>
+                        {quote.jobs === 1
+                          ? "1 trabajo"
+                          : `${quote.jobs} trabajos`}
+                      </Text>
+                      {quote.verified ? (
+                        <>
+                          <Text style={styles.quoteDot}>•</Text>
+                          <Ionicons
+                            name="shield-checkmark"
+                            size={12}
+                            color="#0f8f58"
+                          />
+                          <Text style={styles.quoteVerifiedText}>
+                            Verificado
+                          </Text>
+                        </>
+                      ) : null}
                     </View>
                     <Text style={styles.quoteNote} numberOfLines={1}>
                       {quote.availability}
                     </Text>
-                    <Text style={styles.quoteIncluded} numberOfLines={1}>
-                      {quote.note}
+                    <Text style={styles.quoteIncluded} numberOfLines={2}>
+                      {quote.description}
                     </Text>
                   </View>
                   <Ionicons
@@ -1237,31 +1368,41 @@ export default function MicaChat({ navigation, route }: Props) {
           <View style={styles.paymentPanel}>
             <View style={styles.paymentHeader}>
               <Ionicons
-                name="calendar-outline"
+                name="chatbubbles-outline"
                 size={20}
                 color={config.accent}
               />
               <View style={styles.paymentCopy}>
                 <Text style={styles.paymentTitle}>
-                  Coordiná con {selectedQuote.name}
+                  Chat seguro con {selectedQuote.name}
                 </Text>
                 <Text style={styles.paymentText}>
-                  Cuando termine el trabajo, elegís cómo pagar.
+                  MICA enviará el resumen del pedido y ambos podrán coordinar
+                  fecha, materiales y confirmación sin salir de TOORI.
                 </Text>
               </View>
             </View>
-            <View style={styles.paymentOptions}>
-              {["Transferencia", "Tarjeta", "QR del profesional"].map(
-                (method) => (
-                  <TouchableOpacity
-                    key={method}
-                    style={styles.paymentOption}
-                    onPress={() => handlePaymentOption(method)}
-                  >
-                    <Text style={styles.paymentOptionText}>{method}</Text>
-                  </TouchableOpacity>
-                ),
-              )}
+            <View style={styles.selectionSummary}>
+              <View>
+                <Text style={styles.selectionSummaryLabel}>Presupuesto</Text>
+                <Text
+                  style={[
+                    styles.selectionSummaryValue,
+                    { color: config.accent },
+                  ]}
+                >
+                  {formatMicaOrderAmount(selectedQuote.amount)}
+                </Text>
+              </View>
+              <View style={styles.selectionSummaryDivider} />
+              <View style={styles.selectionSummaryCopy}>
+                <Text style={styles.selectionSummaryLabel}>
+                  Disponibilidad
+                </Text>
+                <Text style={styles.selectionSummaryText}>
+                  {selectedQuote.availability}
+                </Text>
+              </View>
             </View>
           </View>
         )}
@@ -1334,7 +1475,9 @@ export default function MicaChat({ navigation, route }: Props) {
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={primaryAction.onPress}
-          disabled={isCreatingRequest}
+          disabled={
+            isCreatingRequest || isRefreshingQuotes || Boolean(selectingQuoteId)
+          }
         >
           <LinearGradient
             colors={config.gradient}
@@ -1342,10 +1485,15 @@ export default function MicaChat({ navigation, route }: Props) {
             end={{ x: 1, y: 1 }}
             style={[
               styles.primaryAction,
-              isCreatingRequest && styles.primaryActionDisabled,
+              (isCreatingRequest ||
+                isRefreshingQuotes ||
+                Boolean(selectingQuoteId)) &&
+                styles.primaryActionDisabled,
             ]}
           >
-            {isCreatingRequest ? (
+            {isCreatingRequest ||
+            isRefreshingQuotes ||
+            Boolean(selectingQuoteId) ? (
               <ActivityIndicator color="#ffffff" size="small" />
             ) : (
               <Ionicons name={primaryAction.icon} size={18} color="#ffffff" />
@@ -1660,6 +1808,29 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 8,
   },
+  orderErrorText: {
+    marginTop: 9,
+    color: "#a33b2f",
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: "700",
+  },
+  refreshQuotesButton: {
+    minHeight: 40,
+    marginTop: 10,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "#f2fbfa",
+    borderWidth: 1,
+    borderColor: "#cfecea",
+  },
+  refreshQuotesText: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
   quoteCard: {
     minHeight: 82,
     borderRadius: 8,
@@ -1716,6 +1887,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginLeft: 3,
   },
+  quoteVerifiedText: {
+    color: "#0f8f58",
+    fontSize: 10,
+    fontWeight: "900",
+    marginLeft: 3,
+  },
   quoteDot: {
     color: "#91a4a6",
     fontSize: 11,
@@ -1765,6 +1942,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     marginTop: 2,
+  },
+  selectionSummary: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    marginTop: 4,
+    padding: 11,
+    borderRadius: 12,
+    backgroundColor: "#f2fbfa",
+    borderWidth: 1,
+    borderColor: "#cfecea",
+  },
+  selectionSummaryLabel: {
+    color: "#718488",
+    fontSize: 9,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  selectionSummaryValue: {
+    marginTop: 3,
+    fontSize: 16,
+    fontWeight: "900",
+  },
+  selectionSummaryDivider: {
+    width: 1,
+    marginHorizontal: 12,
+    backgroundColor: "#cde6e2",
+  },
+  selectionSummaryCopy: {
+    flex: 1,
+  },
+  selectionSummaryText: {
+    marginTop: 3,
+    color: "#344f55",
+    fontSize: 11,
+    lineHeight: 15,
+    fontWeight: "800",
   },
   paymentOptions: {
     gap: 8,

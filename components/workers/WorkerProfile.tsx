@@ -1,5 +1,5 @@
 import type React from "react";
-import { Suspense, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
     View,
     Text,
@@ -23,6 +23,7 @@ import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import type { Servicio } from "../../types/servicios";
 import ServicioSheetView from "../servicios/ServicioSheetView";
 import { withModalProvider } from "../sheet/withModalProvider";
+import ReportServiceModal from "../servicios/ReporteModal";
 
 export interface UserProfile {
     id: string;
@@ -46,7 +47,7 @@ const WorkerProfile: React.FC<Props> = ({
     const [servicesCount, setServicesCount] = useState(0);
     const [servicioSeleccionado, setServicioSeleccionado] = useState<Servicio | null>(null);
     const [imageError, setImageError] = useState(false);
-    const { id, name, profileImage } = route.params;
+    const { id, name, profileImage, isVerified } = route.params;
     const { data: count } = useQuery(userServiceCountQueryOptions(id));
 
     useEffect(() => {
@@ -60,17 +61,11 @@ const WorkerProfile: React.FC<Props> = ({
         present();
     };
 
-    const handleContratar = () => {
-        // TODO: Implement hiring logic
-        console.log("Hiring service:", servicioSeleccionado?.titulo);
-        dismiss();
-    };
-
     const handleReportar = () => {
-        // TODO: Implement report logic
-        console.log("Reporting service:", servicioSeleccionado?.titulo);
         dismiss();
+        setReportVisible(true);
     };
+    const [reportVisible, setReportVisible] = useState(false);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -90,7 +85,7 @@ const WorkerProfile: React.FC<Props> = ({
                                 onError={() => setImageError(true)}
                             />
                         )}
-                        {true && (
+                        {isVerified === true && (
                             <View style={styles.verifiedBadge}>
                                 <MaterialIcons name="check" size={16} color="#ffffff" />
                             </View>
@@ -118,8 +113,21 @@ const WorkerProfile: React.FC<Props> = ({
 
             </ScrollView>
             <BottomSheetModal {...modalProps}>
-                {servicioSeleccionado && <ServicioSheetView servicio={servicioSeleccionado} onHire={handleContratar} onCancel={() => dismiss()} />}
+                {servicioSeleccionado && (
+                    <ServicioSheetView
+                        servicio={servicioSeleccionado}
+                        onCancel={() => dismiss()}
+                        onReport={handleReportar}
+                    />
+                )}
             </BottomSheetModal>
+            {servicioSeleccionado && (
+                <ReportServiceModal
+                    visible={reportVisible}
+                    onClose={() => setReportVisible(false)}
+                    servicio={servicioSeleccionado}
+                />
+            )}
         </SafeAreaView>
     );
 };

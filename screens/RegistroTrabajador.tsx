@@ -28,8 +28,18 @@ import * as FileSystem from "expo-file-system";
 import * as DocumentPicker from "expo-document-picker";
 import { AuthContext } from "../lib/context/AppContext";
 import { syncPrestadorConToori } from "../lib/tooriApi";
+import vexo from "../lib/vexo";
+import type { UserUpdate } from "../types/db.overrides.types";
 
 type NavigationProp = NativeStackNavigationProp<MainStackParamList>;
+type SelectedFile = {
+  uri: string;
+  tipo: "imagen" | "pdf";
+  nombre: string;
+};
+type RegistrationUpdate = UserUpdate & {
+  perfilPublico?: boolean;
+};
 
 export default function RegistroTrabajadorSimplificado() {
   const [categorias, setCategorias] = useState<string[]>([]);
@@ -41,8 +51,8 @@ export default function RegistroTrabajadorSimplificado() {
   const [provincia, setProvincia] = useState("");
   const [ciudad, setCiudad] = useState("");
   const [barrio, setBarrio] = useState("");
-  const [matriculaArchivos, setMatriculaArchivos] = useState<any[]>([]);
-  const [antecedentesArchivos, setAntecedentesArchivos] = useState<any[]>([]);
+  const [matriculaArchivos, setMatriculaArchivos] = useState<SelectedFile[]>([]);
+  const [antecedentesArchivos, setAntecedentesArchivos] = useState<SelectedFile[]>([]);
   const [antiguedad, setAntiguedad] = useState("");
 
   const navigation = useNavigation<NavigationProp>();
@@ -55,6 +65,7 @@ export default function RegistroTrabajadorSimplificado() {
   const [fotoPerfil, setFotoPerfil] = useState<string | null>(null);
   const [mostrarModal, setMostrarModal] = useState(true);
   const [procesandoModal, setProcesandoModal] = useState(false);
+  const [mostrarOpcionales, setMostrarOpcionales] = useState(false);
 
   const isInBolivia = (lat: number, lon: number) => {
     return lat >= -23.0 && lat <= -9.5 && lon >= -69.6 && lon <= -57.5;
@@ -120,8 +131,8 @@ export default function RegistroTrabajadorSimplificado() {
   };
 
   const seleccionarArchivos = async (
-    lista: any[],
-    setLista: (v: any[]) => void,
+    lista: SelectedFile[],
+    setLista: (v: SelectedFile[]) => void,
     tipo: "imagen" | "pdf"
   ) => {
     if (lista.length >= 3) {
@@ -177,7 +188,7 @@ export default function RegistroTrabajadorSimplificado() {
     return await subirArchivo(uri, "perfil.jpg", "image/jpeg");
   };
 
-  const subirListaArchivos = async (lista: any[]) => {
+  const subirListaArchivos = async (lista: SelectedFile[]) => {
     const urls: string[] = [];
     for (const archivo of lista) {
       const contentType = archivo.tipo === "pdf" ? "application/pdf" : "image/jpeg";
@@ -189,20 +200,33 @@ export default function RegistroTrabajadorSimplificado() {
 
   const handleSubmit = async () => {
     if (
-      !nombre.trim() || !edad || !numeroCelular.trim() ||
-      categoriasSeleccionadas.length === 0 || !dni.trim() ||
-      !ciudad.trim() || !provincia.trim() || !antiguedad.trim()
+      !nombre.trim() ||
+      !numeroCelular.trim() ||
+      categoriasSeleccionadas.length === 0 ||
+      !ciudad.trim() ||
+      !provincia.trim()
     ) {
-      Alert.alert("Error", "Todos los campos obligatorios deben completarse.");
+      Alert.alert(
+        "Faltan datos básicos",
+        "Completá nombre, celular, especialidad, provincia y ciudad.",
+      );
       return;
     }
-    const edadNum = parseInt(edad);
-    if (isNaN(edadNum) || edadNum < 18 || edadNum > 100) {
+    const edadNum = edad.trim() ? Number.parseInt(edad, 10) : null;
+    if (
+      edadNum !== null &&
+      (Number.isNaN(edadNum) || edadNum < 18 || edadNum > 100)
+    ) {
       Alert.alert("Edad inválida", "Debes ser mayor de 18 años.");
       return;
     }
-    const antiguedadNum = parseFloat(antiguedad.replace(",", "."));
-    if (isNaN(antiguedadNum) || antiguedadNum < 0) {
+    const antiguedadNum = antiguedad.trim()
+      ? Number.parseFloat(antiguedad.replace(",", "."))
+      : null;
+    if (
+      antiguedadNum !== null &&
+      (Number.isNaN(antiguedadNum) || antiguedadNum < 0)
+    ) {
       Alert.alert("Antigüedad inválida", "Ingresa un número válido.");
       return;
     }
@@ -214,11 +238,6 @@ export default function RegistroTrabajadorSimplificado() {
       Alert.alert("Debes aceptar los términos y condiciones.");
       return;
     }
-    if (!location) {
-      Alert.alert("Ubicación requerida", "No se pudo obtener tu ubicación.");
-      return;
-    }
-
     setLoading(true);
     try {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -244,37 +263,67 @@ export default function RegistroTrabajadorSimplificado() {
         antecedentesUrls = await subirListaArchivos(antecedentesArchivos);
       }
 
-      const verificado = matriculaUrls.length > 0 && antecedentesUrls.length > 0;
-      const enBolivia = isInBolivia(location.latitude, location.longitude);
-      const domicilio = `${ciudad}, ${provincia}${barrio ? ", " + barrio : ""}`;
+      // Cargar documentos no equivale a validarlos. La verificación se realiza
+      // por separado para evitar insignias engañosas.
+      const verificado = false;
+      const enBolivia = location
+        ? isInBolivia(location.latitude, location.longitude)
+        : false;
+      const domicilio = `${ciudad}, ${provincia}${barrio ? `, ${barrio}` : ""}`;
 
-      const updateData: any = {
+      const updateData: RegistrationUpdate = {
         rol: "worker",
-        nombre,
-        edad: edadNum,
-        celular: numeroCelular,
+        nombre: nombre.trim(),
+        celular: numeroCelular.trim(),
         categoria: categoriasSeleccionadas,
-        dni,
         domicilio,
-        ciudad,
-        provincia,
+        ciudad: ciudad.trim(),
+        provincia: provincia.trim(),
         barrio: barrio || null,
-        antiguedad: antiguedadNum,
-        matricula: matriculaUrls.length > 0 ? matriculaUrls[0] : null,
-        antecedentes: antecedentesUrls.length > 0 ? antecedentesUrls[0] : null,
-        verificado,
+        verificado: false,
         perfil_completo: true,
-        dni_verificado: true,
+        perfilPublico: true,
+        dni_verificado: false,
         pago: !enBolivia,
         creditos: 0,
       };
 
+      if (edadNum !== null) updateData.edad = edadNum;
+      if (dni.trim()) updateData.dni = dni.trim();
+      if (antiguedadNum !== null) updateData.antiguedad = antiguedadNum;
+      if (matriculaUrls.length > 0) updateData.matricula = matriculaUrls[0];
+      if (antecedentesUrls.length > 0) {
+        updateData.antecedentes = antecedentesUrls[0];
+      }
       if (urlFotoPerfil) updateData.foto_perfil = urlFotoPerfil;
 
       const { error } = await supabase.from("usuarios").update(updateData).eq("id", user.id);
       if (error) {
         Alert.alert("Error", "No se pudo guardar la información.");
         return;
+      }
+
+      const now = new Date();
+      const availableUntil = new Date(
+        now.getTime() + 12 * 60 * 60 * 1000,
+      ).toISOString();
+      const { error: availabilityError } = await supabase
+        .from("workers")
+        .upsert(
+          {
+            user_id: user.id,
+            status: "ONLINE",
+            last_seen_at: now.toISOString(),
+            available_until: availableUntil,
+            availability_duration_hours: 12,
+          },
+          { onConflict: "user_id" },
+        );
+      if (availabilityError) {
+        console.warn(
+          "El perfil se publicó, pero no se pudo confirmar disponibilidad:",
+          availabilityError,
+        );
       }
 
       const syncResult = await syncPrestadorConToori({
@@ -293,9 +342,18 @@ export default function RegistroTrabajadorSimplificado() {
         console.warn("No se pudo sincronizar prestador con Toori/Mica", syncResult.error, syncResult.raw);
       }
 
-      const redirectTo = enBolivia ? "pagoInicial" : "Home";
-      Alert.alert("Registro completado", "Tus datos se guardaron correctamente.", [
-        { text: "OK", onPress: () => navigation.navigate(redirectTo as any) },
+      vexo.marketplace("basic_provider_registered", {
+        categorias: categoriasSeleccionadas.length,
+        provincia: provincia.trim(),
+        documentos_cargados:
+          matriculaUrls.length > 0 || antecedentesUrls.length > 0,
+      });
+
+      const redirectTo: "pagoInicial" | "Home" = enBolivia
+        ? "pagoInicial"
+        : "Home";
+      Alert.alert("Perfil publicado", "Ya podés recibir consultas. Completá tus datos opcionales cuando quieras para sumar confianza.", [
+        { text: "OK", onPress: () => navigation.navigate(redirectTo) },
       ]);
     } catch (err) {
       Alert.alert("Error", "Ocurrió un error al registrar tus datos.");
@@ -314,7 +372,7 @@ export default function RegistroTrabajadorSimplificado() {
       }).eq("id", user.id);
       if (error) { Alert.alert("Error", "No se pudo actualizar el perfil."); return; }
       setMostrarModal(false);
-      navigation.reset({ index: 0, routes: [{ name: "Home" as any }] });
+      navigation.reset({ index: 0, routes: [{ name: "Home" }] });
     } catch (e) {
       Alert.alert("Error", "Ocurrió un problema.");
     } finally {
@@ -343,29 +401,20 @@ export default function RegistroTrabajadorSimplificado() {
             </Modal>
 
             <View style={styles.overlay}>
-              <Text style={styles.title}>Registro</Text>
+              <Text style={styles.title}>Publicá tu perfil</Text>
+              <View style={styles.basicInfoCard}>
+                <Text style={styles.basicInfoTitle}>Primero, lo esencial</Text>
+                <Text style={styles.basicInfoText}>
+                  Con estos datos ya podrás aparecer en tu zona. La documentación es opcional.
+                </Text>
+              </View>
 
-              {/* Foto de perfil */}
-              <Text style={styles.label}>Foto de perfil</Text>
-              <TouchableOpacity onPress={seleccionarFotoPerfil} style={styles.fotoButton}>
-                <Text style={styles.fotoButtonText}>Seleccionar foto</Text>
-              </TouchableOpacity>
-              {fotoPerfil && (
-                <View style={{ alignItems: "center", marginBottom: 20 }}>
-                  <Image source={{ uri: fotoPerfil }} style={styles.avatarPreview} />
-                </View>
-              )}
-
-              {/* Campos básicos */}
               <TextInput placeholder="Nombre completo" placeholderTextColor="#4e827d" value={nombre} onChangeText={setNombre} style={styles.input} />
-              <TextInput placeholder="Edad" placeholderTextColor="#4e827d" value={edad} onChangeText={setEdad} keyboardType="numeric" style={styles.input} />
               <TextInput placeholder="Número de celular (con código de país)" placeholderTextColor="#4e827d" value={numeroCelular} onChangeText={setNumeroCelular} keyboardType="phone-pad" style={styles.input} />
-              <TextInput placeholder="DNI" placeholderTextColor="#4e827d" value={dni} onChangeText={setDni} keyboardType="numeric" style={styles.input} />
 
               {/* Ubicación */}
               <TextInput placeholder="Provincia" placeholderTextColor="#4e827d" value={provincia} onChangeText={setProvincia} style={styles.input} />
               <TextInput placeholder="Ciudad" placeholderTextColor="#4e827d" value={ciudad} onChangeText={setCiudad} style={styles.input} />
-              <TextInput placeholder="Barrio (opcional)" placeholderTextColor="#4e827d" value={barrio} onChangeText={setBarrio} style={styles.input} />
 
               {/* Categorías con buscador */}
               <Text style={styles.label}>Especialidad (hasta 3)</Text>
@@ -399,7 +448,41 @@ export default function RegistroTrabajadorSimplificado() {
                 ))}
               </View>
 
-              <TextInput placeholder="Años de antigüedad (ej: 2,5)" placeholderTextColor="#4e827d" value={antiguedad} onChangeText={setAntiguedad} keyboardType="numeric" style={styles.input} />
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => setMostrarOpcionales((current) => !current)}
+                style={styles.optionalToggle}
+              >
+                <Text style={styles.optionalToggleText}>
+                  {mostrarOpcionales
+                    ? "Ocultar datos opcionales"
+                    : "Sumar foto, experiencia y documentos"}
+                </Text>
+                <Text style={styles.optionalToggleIcon}>
+                  {mostrarOpcionales ? "−" : "+"}
+                </Text>
+              </TouchableOpacity>
+
+              {mostrarOpcionales && (
+                <View style={styles.optionalSection}>
+              <Text style={styles.optionalIntro}>
+                Estos datos ayudan a generar confianza, pero no son obligatorios para estar disponible.
+              </Text>
+
+              <Text style={styles.label}>Foto de perfil</Text>
+              <TouchableOpacity onPress={seleccionarFotoPerfil} style={styles.fotoButton}>
+                <Text style={styles.fotoButtonText}>Seleccionar foto</Text>
+              </TouchableOpacity>
+              {fotoPerfil && (
+                <View style={{ alignItems: "center", marginBottom: 20 }}>
+                  <Image source={{ uri: fotoPerfil }} style={styles.avatarPreview} />
+                </View>
+              )}
+
+              <TextInput placeholder="Edad (opcional)" placeholderTextColor="#4e827d" value={edad} onChangeText={setEdad} keyboardType="numeric" style={styles.input} />
+              <TextInput placeholder="DNI (opcional)" placeholderTextColor="#4e827d" value={dni} onChangeText={setDni} keyboardType="numeric" style={styles.input} />
+              <TextInput placeholder="Barrio (opcional)" placeholderTextColor="#4e827d" value={barrio} onChangeText={setBarrio} style={styles.input} />
+              <TextInput placeholder="Años de experiencia (opcional)" placeholderTextColor="#4e827d" value={antiguedad} onChangeText={setAntiguedad} keyboardType="numeric" style={styles.input} />
 
               {/* Matrícula */}
               <Text style={styles.label}>Matrícula (opcional, hasta 3 archivos)</Text>
@@ -413,7 +496,7 @@ export default function RegistroTrabajadorSimplificado() {
               </View>
               <View style={styles.archivosPreview}>
                 {matriculaArchivos.map((a, i) => (
-                  <View key={i} style={styles.archivoChip}>
+                  <View key={`${a.uri}-${a.nombre}`} style={styles.archivoChip}>
                     <Text style={styles.archivoChipText} numberOfLines={1}>{a.nombre}</Text>
                     <TouchableOpacity onPress={() => setMatriculaArchivos(matriculaArchivos.filter((_, idx) => idx !== i))}>
                       <Text style={styles.tagClose}>✕</Text>
@@ -421,6 +504,8 @@ export default function RegistroTrabajadorSimplificado() {
                   </View>
                 ))}
               </View>
+                </View>
+              )}
 
               {/* Antecedentes */}
               <Text style={styles.label}>Antecedentes penales (opcional, hasta 3 archivos)</Text>
@@ -434,7 +519,7 @@ export default function RegistroTrabajadorSimplificado() {
               </View>
               <View style={styles.archivosPreview}>
                 {antecedentesArchivos.map((a, i) => (
-                  <View key={i} style={styles.archivoChip}>
+                  <View key={`${a.uri}-${a.nombre}`} style={styles.archivoChip}>
                     <Text style={styles.archivoChipText} numberOfLines={1}>{a.nombre}</Text>
                     <TouchableOpacity onPress={() => setAntecedentesArchivos(antecedentesArchivos.filter((_, idx) => idx !== i))}>
                       <Text style={styles.tagClose}>✕</Text>
@@ -452,7 +537,7 @@ export default function RegistroTrabajadorSimplificado() {
               </View>
 
               <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
-                <Text style={styles.buttonText}>{loading ? "Guardando..." : "Finalizar Registro"}</Text>
+                <Text style={styles.buttonText}>{loading ? "Publicando..." : "Publicar perfil básico"}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -473,6 +558,9 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
   },
   title: { fontSize: 24, color: "#4A7C84", fontWeight: "bold", marginBottom: 24, textAlign: "center" },
+  basicInfoCard: { width: "100%", marginBottom: 12, padding: 14, borderRadius: 14, backgroundColor: "#e8f7f5", borderWidth: 1, borderColor: "#b6e4df" },
+  basicInfoTitle: { color: "#047a8f", fontSize: 16, fontWeight: "800", marginBottom: 4 },
+  basicInfoText: { color: "#456b70", fontSize: 13, lineHeight: 18 },
   label: { fontSize: 15, fontWeight: "600", color: "#4A7C84", marginBottom: 6, alignSelf: "flex-start" },
   input: {
     backgroundColor: "#fff",
@@ -520,6 +608,11 @@ const styles = StyleSheet.create({
   archivosPreview: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12, width: "100%" },
   archivoChip: { flexDirection: "row", alignItems: "center", backgroundColor: "#e8f4f8", borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, gap: 6, maxWidth: "48%" },
   archivoChipText: { color: "#4b4e6d", fontSize: 12, flex: 1 },
+  optionalToggle: { width: "100%", minHeight: 52, marginTop: 8, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, borderRadius: 14, borderWidth: 1, borderColor: "#8dcbd1", backgroundColor: "#f4fbfb" },
+  optionalToggleText: { flex: 1, color: "#047a8f", fontSize: 14, fontWeight: "800" },
+  optionalToggleIcon: { color: "#047a8f", fontSize: 24, fontWeight: "500", marginLeft: 10 },
+  optionalSection: { width: "100%", padding: 14, borderRadius: 16, backgroundColor: "rgba(244,251,251,0.88)", borderWidth: 1, borderColor: "#d3e7e9" },
+  optionalIntro: { color: "#5f7478", fontSize: 12, lineHeight: 17, marginBottom: 14 },
   modalContainer: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
   modalBox: { width: "85%", backgroundColor: "#fff", borderRadius: 20, padding: 24, alignItems: "center" },
   modalTitle: { fontSize: 22, fontWeight: "700", color: "#4A7C84", marginBottom: 24 },

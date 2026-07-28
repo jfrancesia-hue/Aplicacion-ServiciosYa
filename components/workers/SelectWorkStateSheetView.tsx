@@ -1,7 +1,7 @@
 import { Text, StyleSheet, Pressable, View } from "react-native";
 import colors from "../../lib/constants/colors";
 import SheetContainer from "../sheet/SheetContainer";
-import type { WorkerStatus, WorkerStatusLabels } from "../../types/worker";
+import type { WorkerStatus } from "../../types/worker";
 import {
   type QueryClient,
   useMutation,
@@ -18,31 +18,81 @@ import {
 import showToast from "../../lib/toast";
 import { useBottomSheetModal } from "@gorhom/bottom-sheet";
 import { getUserFromClient } from "../../lib/utils/user";
+import vexo from "../../lib/vexo";
 
-const workStatusLabels: WorkerStatusLabels = {
-  ONLINE: "En línea",
-  OFFLINE: "Desconectado",
-  BUSY: "Ocupado",
-  ON_BREAK: "En descanso",
+type AvailabilityChoice = {
+  key: string;
+  status: WorkerStatus;
+  durationHours?: 8 | 12 | 24;
+  label: string;
+  description: string;
 };
 
-const workStatusDescriptions: Record<WorkerStatus, string> = {
-  ONLINE: "Disponible para recibir nuevos trabajos.",
-  OFFLINE: "No visible para clientes, no recibirá solicitudes.",
-  BUSY: "Actualmente atendiendo un servicio.",
-  ON_BREAK: "Tomando un descanso, no recibirá nuevas solicitudes.",
-};
+const availabilityChoices: AvailabilityChoice[] = [
+  {
+    key: "online-8",
+    status: "ONLINE",
+    durationHours: 8,
+    label: "Disponible por 8 horas",
+    description: "Ideal para una jornada de trabajo.",
+  },
+  {
+    key: "online-12",
+    status: "ONLINE",
+    durationHours: 12,
+    label: "Disponible por 12 horas",
+    description: "La opción recomendada para hoy.",
+  },
+  {
+    key: "online-24",
+    status: "ONLINE",
+    durationHours: 24,
+    label: "Disponible por 24 horas",
+    description: "Seguirás apareciendo primero hasta mañana.",
+  },
+  {
+    key: "busy",
+    status: "BUSY",
+    label: "Estoy ocupado",
+    description: "Los clientes podrán consultar tu próximo horario.",
+  },
+  {
+    key: "break",
+    status: "ON_BREAK",
+    label: "En descanso",
+    description: "Pausá temporalmente las solicitudes nuevas.",
+  },
+  {
+    key: "offline",
+    status: "OFFLINE",
+    label: "No disponible",
+    description: "Tu perfil seguirá publicado, con disponibilidad a confirmar.",
+  },
+];
 
-// Dummy async function to simulate status update
-async function updateWorkerStatus(status: WorkerStatus, client: QueryClient) {
+export async function updateWorkerAvailability(
+  {
+    status,
+    durationHours,
+  }: Pick<AvailabilityChoice, "status" | "durationHours">,
+  client: QueryClient,
+) {
   const user = getUserFromClient(client);
   const location = await getLocationParamsFromClient(client);
-  
+  const now = new Date();
+  const availableUntil =
+    status === "ONLINE" && durationHours
+      ? new Date(now.getTime() + durationHours * 60 * 60 * 1000).toISOString()
+      : null;
+
   const { error } = await supabase.from("workers").upsert(
     {
       user_id: user.id,
-      status: status,
-      last_seen_at: new Date().toISOString(),
+      status,
+      last_seen_at: now.toISOString(),
+      available_until: availableUntil,
+      availability_duration_hours:
+        status === "ONLINE" ? durationHours ?? 12 : null,
       location: locationQueryString(
         location.search_lat || 0,
         location.search_lon || 0,
@@ -53,13 +103,19 @@ async function updateWorkerStatus(status: WorkerStatus, client: QueryClient) {
   if (error) {
     throw new Error(error.message);
   }
+
+  vexo.marketplace("availability_updated", {
+    estado: status,
+    duracion_horas: durationHours ?? 0,
+  });
 }
 
 function SelectWorkStateSheetView() {
   const client = useQueryClient();
   const { dismiss } = useBottomSheetModal();
   const { mutate, isPending } = useMutation({
-    mutationFn: (status: WorkerStatus) => updateWorkerStatus(status, client),
+    mutationFn: (choice: AvailabilityChoice) =>
+      updateWorkerAvailability(choice, client),
     onSuccess: () => {
       client.invalidateQueries({
         queryKey: workerStatusQueryOptions.queryKey,
@@ -74,20 +130,24 @@ function SelectWorkStateSheetView() {
   return (
     <SheetContainer>
       <Text style={styles.sheetTitle}>Actualizar disponibilidad</Text>
+      <Text style={styles.sheetSubtitle}>
+        Elegí cuánto tiempo querés aparecer como disponible. Al vencer, tu
+        perfil seguirá publicado para consultas.
+      </Text>
       <View style={styles.contentContainer}>
-        {Object.entries(workStatusLabels).map(([key, label]) => (
+        {availabilityChoices.map((choice) => (
           <Pressable
-            key={key}
+            key={choice.key}
             style={({ pressed }) => [
               styles.statusButton,
               pressed && styles.statusButtonPressed,
             ]}
-            onPress={() => mutate(key as WorkerStatus)}
+            onPress={() => mutate(choice)}
             disabled={isPending}
           >
-            <Text style={styles.statusLabel}>{label}</Text>
+            <Text style={styles.statusLabel}>{choice.label}</Text>
             <Text style={styles.statusDescription}>
-              {workStatusDescriptions[key as WorkerStatus]}
+              {choice.description}
             </Text>
           </Pressable>
         ))}
@@ -109,13 +169,21 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.text,
     marginTop: 12,
-    marginBottom: 18,
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  sheetSubtitle: {
+    marginBottom: 16,
+    paddingHorizontal: 8,
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
     textAlign: "center",
   },
   contentContainer: {
     flex: 1,
     alignItems: "stretch",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     gap: 10, // Less vertical gap
   },
   statusButton: {

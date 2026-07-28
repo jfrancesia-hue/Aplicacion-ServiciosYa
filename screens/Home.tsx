@@ -39,6 +39,7 @@ import { useHomeEventsStore } from "../store/homeEventsStore";
 import usePrefetchData from "../lib/hooks/usePrefetchData";
 import WorkerHomeView from "../components/home/WorkerHomeView";
 import type { MicaChatMode } from "../types/navigation";
+import vexo from "../lib/vexo";
 
 type Props = NativeStackScreenProps<MainStackParamList, "Home">;
 
@@ -84,6 +85,8 @@ function Home({ navigation }: Props) {
     if (isGuest) {
       return;
     }
+
+    vexo.marketplace("category_opened", { categoria });
 
     // Registrar evento
     fetch("https://insightpulse.store/api/registrar_evento.php", {
@@ -170,7 +173,6 @@ function Home({ navigation }: Props) {
           <SideQuickAccessMenu
             onBuscarServicioPress={() => handleMicaModePress("buscar-servicio")}
             onOfrecerServicioPress={() => handleMicaModePress("ofrecer-servicio")}
-            onB2BPress={() => handleMicaModePress("b2b")}
           />
           <ChatBotModal
             visible={chatVisible}

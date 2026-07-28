@@ -19,3 +19,28 @@ entrypoint = "./functions/process-urgent-work-alerts/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/mica-chat/index.ts"
+
+[functions.chat-audio]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/chat-audio/index.ts"
+
+[functions.mica-order]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/mica-order/index.ts"
+
+[functions.available-providers]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/available-providers/index.ts"
+
+[functions.create-payment-preference]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/create-payment-preference/index.ts"
+
+[functions.verify-payment]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/verify-payment/index.ts"

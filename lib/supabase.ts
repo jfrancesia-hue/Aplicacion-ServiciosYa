@@ -5,7 +5,7 @@ import type { Database } from "../types/db.overrides.types";
 // Configuración de Supabase (asegúrate de reemplazar con tus claves de Supabase)
 const supabaseUrl = "https://dhhhftzdfpqthzvkrqoz.supabase.co"; // Reemplaza con tu URL de Supabase
 const supabaseKey =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRoaGhmdHpkZnBxdGh6dmtycW96Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ2OTQyODUsImV4cCI6MjA2MDI3MDI4NX0.-atBYl9Uica9quKZQzqmgWQ8wNd1PFB4ivLrSNv89OQ"; // Reemplaza con tu clave de Supabase
+  "sb_publishable_KKEalDuwBI5TvVta4LLO8A_bLFmnFA0"; // Clave pública vigente del proyecto
 export const supabase = createClient<Database>(supabaseUrl, supabaseKey, {
   auth: {
     storage: AsyncStorage,

@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from "react";
-import { deleteChat, fetchUserChatQueryOptions, type ChatItem } from "../lib/utils/chat";
+import { fetchUserChatQueryOptions, type ChatItem } from "../lib/utils/chat";
 import { useQuery } from "@tanstack/react-query";
-import { StyleSheet, View, Text, FlatList, Alert, TouchableOpacity, Image } from "react-native";
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, Image } from "react-native";
 import BotonVolver from "../components/BotonVolver";
 import { Ionicons } from "@expo/vector-icons";
 import { getUserID } from "../store/authStore";
@@ -18,7 +18,7 @@ function ChatList() {
     const navigation = useNavigation<NavigationProp>();
     const { data, refetch, isLoading } = useQuery({
         ...fetchUserChatQueryOptions,
-        staleTime: 200,
+        staleTime: 5_000,
     });
 
     useFocusEffect(
@@ -29,9 +29,14 @@ function ChatList() {
 
     useEffect(() => {
         const userId = getUserID();
-
         const channel = supabase.channel(`realtime-chats-${userId}`);
         const messagesChannel = supabase.channel(`realtime-mensajes-${userId}`);
+        let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const scheduleRefetch = () => {
+            if (refetchTimer) clearTimeout(refetchTimer);
+            refetchTimer = setTimeout(() => refetch(), 250);
+        };
 
         channel
             .on(
@@ -40,64 +45,44 @@ function ChatList() {
                     event: '*',
                     schema: 'public',
                     table: 'chats',
+                    filter: `participant_a=eq.${userId}`,
                 },
-                (payload) => {
-                    const newRecord = payload.new as any;
-                    const oldRecord = payload.old as any;
-
-                    const involvesUser =
-                        (newRecord?.participant_a === userId || newRecord?.participant_b === userId) ||
-                        (oldRecord?.participant_a === userId || oldRecord?.participant_b === userId);
-
-                    if (involvesUser) {
-                        refetch();
-                    }
-                }
+                scheduleRefetch,
             )
-            .subscribe();
-
-        messagesChannel
             .on(
                 'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'mensajes' },
-                async () => {
-                    // El nuevo schema de mensajes no tiene receptor_id.
-                    // Refetch siempre: el query del lado del cliente ya filtra solo chats del usuario.
-                    refetch();
-                }
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'chats',
+                    filter: `participant_b=eq.${userId}`,
+                },
+                scheduleRefetch,
             )
             .subscribe();
+
+        for (const chat of data ?? []) {
+            messagesChannel.on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'mensajes',
+                    filter: `chat_id=eq.${chat.id}`,
+                },
+                scheduleRefetch,
+            );
+        }
+        messagesChannel.subscribe();
+
         return () => {
+            if (refetchTimer) clearTimeout(refetchTimer);
             supabase.removeChannel(channel);
             supabase.removeChannel(messagesChannel);
         };
-    }, [refetch]);
-
-    const eliminarChat = async (item: ChatItem) => {
-        try {
-            await deleteChat("", item.id);
-            refetch();
-        } catch (error) {
-            console.log(error);
-            Alert.alert("Error", "No se pudo eliminar el chat");
-        }
-    };
+    }, [data, refetch]);
 
     const renderItem = ({ item }: { item: ChatItem }) => {
-        const handleEliminar = () => {
-            Alert.alert(
-                "Eliminar chat",
-                "¿Seguro que deseas eliminar este chat? No podrás ver los mensajes antiguos.",
-                [
-                    { text: "Cancelar", style: "cancel" },
-                    {
-                        text: "Eliminar",
-                        style: "destructive",
-                        onPress: async () => await eliminarChat(item)
-                    }
-                ]
-            );
-        };
         return (
             <TouchableOpacity
                 style={styles.chatItem}
@@ -109,7 +94,6 @@ function ChatList() {
                     usuarioId2: item.usuario_2,
                     servicioId: String(item.servicio.id ?? ""),
                 })}
-                onLongPress={handleEliminar}
             >
                 <Image source={{ uri: item.avatar }} style={styles.avatar} />
                 <View style={styles.textos}>

@@ -8,14 +8,13 @@ import {
   StyleSheet,
   SafeAreaView,
   TextInput,
-  Linking
 } from 'react-native';
-import { FontAwesome } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 
 const preguntasFrecuentes = [
   { id: '1', pregunta: '¿Cómo publicar un servicio?', respuesta: 'Ingresa a la sección "Ofrecer Servicio", completa los campos requeridos como título, descripción y categoría, y pulsa "Publicar".' },
   { id: '2', pregunta: '¿Cómo elimino un servicio?', respuesta: 'Ve a la pantalla "Mis Servicios", selecciona el servicio que deseas eliminar y pulsa el botón "Eliminar".' },
-  { id: '3', pregunta: '¿Dónde contacto a soporte?', respuesta: 'Puedes escribirnos a soporte@solucionesya.com o llamarnos al 1234-5678 de lunes a viernes de 9 a 18 h.' },
+  { id: '3', pregunta: '¿Dónde contacto a soporte?', respuesta: 'Usá MICA o el chat interno de la aplicación. Así tu consulta y las respuestas quedan protegidas dentro de TOORI.' },
   { id: '4', pregunta: '¿Cómo edito un servicio publicado?', respuesta: 'En "Mis Servicios", pulsa sobre el servicio que quieres modificar y elige la opción "Editar".' },
   { id: '5', pregunta: '¿Cómo pausar un servicio?', respuesta: 'Desde "Mis Servicios", selecciona el servicio y toca "Pausar". Esto ocultará el servicio temporalmente sin eliminarlo.' },
   { id: '6', pregunta: '¿Cómo veo los servicios por categoría?', respuesta: 'En la pantalla principal (Home), verás un listado de categorías. Al tocar una, verás los servicios disponibles en esa categoría.' },
@@ -46,23 +45,6 @@ export default function ChatBotModal({ visible, onClose }) {
   const preguntasFiltradas = preguntasFrecuentes.filter((p) =>
     p.pregunta.toLowerCase().includes(filtro.toLowerCase())
   );
-
-  const sendWhatsapp = () => { 
-    const phoneNumber = '5493834035427';
-    const defaultMessage = 'Hola, tengo una pregunta sobre la app'; // Mensaje personalizado
-    
-    const url = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(defaultMessage)}`;
-    
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (!supported) {
-          const webUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(defaultMessage)}`;
-          return Linking.openURL(webUrl);
-        }
-        return Linking.openURL(url);
-      })
-      .catch((err) => console.error('Error al abrir WhatsApp:', err));
-  };
 
   return (
     <Modal animationType="slide" transparent={true} visible={visible} onRequestClose={onClose}>
@@ -108,18 +90,14 @@ export default function ChatBotModal({ visible, onClose }) {
             </View>
           </ScrollView>
 
-          {/* Preguntas frecuentes en dos filas */}
+          {/* El soporte se mantiene dentro de la aplicación */}
           <View style={[styles.container, {borderTopWidth: 1, borderColor: '#ccc'}]}>
-            <Text style={styles.titleText}>Para pregunta más personalizada escríbenos</Text>
-            
-            <TouchableOpacity 
-              style={styles.whatsappButton} 
-              onPress={sendWhatsapp}
-              activeOpacity={0.7}
-            >
-              <FontAwesome name="whatsapp" size={20} color="white" />
-              <Text style={styles.buttonText}>WhatsApp</Text>
-            </TouchableOpacity>
+            <View style={styles.supportNote}>
+              <Ionicons name="shield-checkmark" size={20} color="#047a8f" />
+              <Text style={styles.titleText}>
+                Tus consultas y datos de contacto permanecen dentro de TOORI.
+              </Text>
+            </View>
           </View>
           <View style={styles.preguntasContainer}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -165,26 +143,16 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textAlign: 'center',
   },
-  whatsappButton: {
-    width:'50%',
+  supportNote: {
+    width:'100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#25D366',
-    paddingVertical: 6,
-    paddingHorizontal: 24,
+    backgroundColor: '#e8f7fa',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
     borderRadius: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  buttonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    marginLeft: 10,
-    fontSize: 16,
+    gap: 8,
   },
   modalOverlay: {
     flex: 1,

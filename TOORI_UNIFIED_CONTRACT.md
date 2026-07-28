@@ -18,7 +18,7 @@ La app puede seguir usando tablas propias para experiencia móvil (`usuarios`, `
 - Landing/comercial.
 - Registro y perfil web.
 - Panel/admin operativo.
-- Mica/WhatsApp.
+- MICA/chat interno.
 - Outreach a prestadores.
 - Estado de pedidos, presupuestos, pagos y escalamiento humano.
 
@@ -32,10 +32,15 @@ La app puede seguir usando tablas propias para experiencia móvil (`usuarios`, `
 
 ### Mica
 
-- Atiende WhatsApp.
+- Atiende pedidos desde la app y la web.
 - Crea/actualiza `nuevaOferta`.
 - Busca prestadores.
-- Recibe respuestas por WhatsApp.
+- Consulta presupuestos reales mediante la Edge Function autenticada
+  `mica-order`.
+- Al elegir un prestador, crea o reutiliza el chat interno y publica un resumen
+  de traspaso visible para ambas partes.
+- Puede intervenir a pedido dentro del chat para resumir acuerdos, interpretar
+  transcripciones y proponer el siguiente paso.
 - Debe quedar sincronizada con las respuestas que entren desde la app.
 
 ## Puente app ↔ web
@@ -63,12 +68,17 @@ EXPO_PUBLIC_TOORI_APP_SYNC_TOKEN=<mismo token que TOORI_APP_SYNC_TOKEN en webhoo
 
 1. Prestador se registra/completa perfil en app o web.
 2. Si publica un servicio en app, la app intenta sincronizarlo a `sy_perfiles` vía `sync-prestador.php`.
-3. Cliente pide servicio por WhatsApp/Mica o web.
+3. Cliente pide servicio por MICA, el chat interno o la web.
 4. Mica crea `nuevaOferta`.
 5. Prestador ve pedidos compatibles en app → `pedidos-disponibles.php`.
-6. Prestador responde presupuesto/NO desde app → `responder-pedido.php`.
-7. Web/Mica mantiene top 3, pagos, seguimiento y escalamiento.
-8. Panel web/admin ve el estado real.
+6. Prestador responde presupuesto/NO desde app mediante `mica-order`; el
+   endpoint `responder-pedido.php` queda como compatibilidad del flujo web.
+7. Cliente recibe propuestas reales en MICA y selecciona una mediante
+   `mica-order`.
+8. MICA abre el chat interno, deja el resumen del pedido y acompaña la
+   coordinación.
+9. Web/Mica mantiene pagos, seguimiento y escalamiento.
+10. Panel web/admin ve el estado real.
 
 ## Regla de desarrollo
 
@@ -80,7 +90,7 @@ Antes de publicar Android/iOS/Web:
   - app abre standalone,
   - `Mis servicios` muestra estado puente,
   - web endpoints `api/app/*` pasan `php -l`,
-  - un pedido de prueba puede ser listado/respondido sin enviar WhatsApps reales salvo autorización.
+  - un pedido de prueba puede ser listado/respondido sin enviar comunicaciones externas reales.
 
 ## Pendientes técnicos importantes
 

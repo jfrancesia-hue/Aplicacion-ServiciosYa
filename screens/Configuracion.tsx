@@ -7,13 +7,11 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Linking,
 } from "react-native";
 import { supabase } from "../lib/supabase";
 import { removeCredentials } from "../lib/storage";
 import { useUserSettings } from "../lib/hooks/useUserSettings";
 import BotonVolver from "../components/BotonVolver";
-import { FontAwesome } from "@expo/vector-icons";
 import { withModalProvider } from "../components/sheet/withModalProvider";
 import { LinearGradient } from "expo-linear-gradient";
 import { useBottomSheetModal } from "../lib/hooks/useBottomSheetModal";
@@ -22,6 +20,7 @@ import type { MainStackParamList } from "../types/navigation";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import InviteSheetView from "../components/InvitarSheet";
 import { useSuspenseProfile } from "../lib/hooks/useUser";
+import BlockedUsersSection from "../components/trust/BlockedUsersSection";
 
 
 type Props = NativeStackScreenProps<
@@ -93,28 +92,6 @@ function Configuracion({ navigation }: Props) {
 
   const invitarAmigo = () => {
     present();
-  };
-
-  const sendWhatsapp = () => {
-    const phoneNumber = "5493834035427";
-    const defaultMessage = "Hola, necesito soporte"; // Mensaje opcional
-
-    // Formatea la URL de WhatsApp
-    const url = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(defaultMessage)}`;
-
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (!supported) {
-          // Si WhatsApp no está instalado, abrir en navegador
-          const webUrl = `https://wa.me/${phoneNumber}?text=${encodeURIComponent(defaultMessage)}`;
-          return Linking.openURL(webUrl);
-        }
-        return Linking.openURL(url);
-      })
-      .catch((err) => {
-        console.error("Error al abrir WhatsApp:", err);
-        Alert.alert("Error", "No se pudo abrir WhatsApp");
-      });
   };
 
   const handleLogout = async () => {
@@ -277,22 +254,22 @@ function Configuracion({ navigation }: Props) {
             </View>)}
 
 
-            {/* Whatsapp */}
+            {/* Soporte dentro de la app */}
             <View style={styles.section}>
-              <Text style={styles.optionText}>Para soporte escríbenos</Text>
+              <Text style={styles.optionText}>¿Necesitás ayuda?</Text>
               <TouchableOpacity
-                style={styles.buttonWhatsapp}
-                onPress={sendWhatsapp}
+                style={styles.buttonTurquoise}
+                onPress={() =>
+                  navigation.navigate("MicaChat", {
+                    mode: rol === "worker" ? "ofrecer-servicio" : "buscar-servicio",
+                  })
+                }
               >
-                <FontAwesome
-                  name="whatsapp"
-                  size={20}
-                  color="white"
-                  style={styles.icon}
-                />
-                <Text style={styles.buttonText}> Whatsapp</Text>
+                <Text style={styles.buttonText}>Abrir MICA</Text>
               </TouchableOpacity>
             </View>
+
+            {rol !== "guest" && <BlockedUsersSection />}
 
             {/* CERRAR SESIÓN */}
             <View style={styles.section}>
@@ -382,20 +359,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     elevation: 3,
     shadowColor: "#069eb3",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 7,
-  },
-  buttonWhatsapp: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#25D366",
-    paddingVertical: 14,
-    borderRadius: 24,
-    marginBottom: 10,
-    elevation: 3,
-    shadowColor: "#25D366",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 7,

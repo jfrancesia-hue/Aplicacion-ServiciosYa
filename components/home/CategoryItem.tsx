@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Text, TouchableOpacity, StyleSheet, Image, View } from "react-native";
 import { iconosCategoria } from "../../lib/utils/categorias";
 
-const fallbackIcon = require("../../assets/logo.png");
+const fallbackIcon = require("../../assets/serviciosya-logo-2026.png");
 
 const capitalize = (s: string) => {
   const t = s.trim();

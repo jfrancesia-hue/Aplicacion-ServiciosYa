@@ -24,13 +24,11 @@ interface QuickAccessItem {
 interface SideQuickAccessMenuProps {
   onBuscarServicioPress?: () => void;
   onOfrecerServicioPress?: () => void;
-  onB2BPress?: () => void;
 }
 
 const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
   onBuscarServicioPress,
   onOfrecerServicioPress,
-  onB2BPress,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
@@ -120,20 +118,12 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
       onPress: () => onBuscarServicioPress?.(),
     },
     {
-      label: "Ofrecer servicio",
+      label: "Ofrecer trabajo",
       subtitle: "Armá tu perfil de prestador",
       icon: "briefcase-outline",
       gradient: ["#ffb04a", "#fe971a", "#d86f00"],
       badge: "PRO",
       onPress: () => onOfrecerServicioPress?.(),
-    },
-    {
-      label: "SolucionesYa B2B",
-      subtitle: "Para consorcios y empresas",
-      icon: "business-outline",
-      gradient: ["#48dfc8", "#19b7a7", "#08786f"],
-      badge: "B2B",
-      onPress: () => onB2BPress?.(),
     },
   ];
 

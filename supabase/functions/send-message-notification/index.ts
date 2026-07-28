@@ -18,6 +18,46 @@ interface WebhookPayload {
 
 const URGENT_WORK_CHANNEL_ID = "urgent-work";
 const URGENT_WORK_SOUND = "urgent_work.wav";
+const AUDIO_MESSAGE_PREFIX = "__TOORI_AUDIO_V1__:";
+const MICA_MESSAGE_PREFIXES = [
+  "__TOORI_MICA_HANDOFF_V1__:",
+  "__TOORI_MICA_ASSIST_V1__:",
+];
+
+function getNotificationBody(content: string) {
+  const micaPrefix = MICA_MESSAGE_PREFIXES.find((prefix) =>
+    content?.startsWith(prefix),
+  );
+  if (micaPrefix) {
+    try {
+      const message = JSON.parse(content.slice(micaPrefix.length));
+      const text =
+        typeof message?.text === "string"
+          ? message.text.replace(/\s+/g, " ").trim()
+          : "";
+      return text ? `MICA: ${text.slice(0, 140)}` : "MICA intervino en el chat";
+    } catch {
+      return "MICA intervino en el chat";
+    }
+  }
+
+  if (!content?.startsWith(AUDIO_MESSAGE_PREFIX)) {
+    return content || "Nuevo mensaje de trabajo.";
+  }
+
+  try {
+    const audio = JSON.parse(content.slice(AUDIO_MESSAGE_PREFIX.length));
+    const transcript =
+      typeof audio?.transcript === "string"
+        ? audio.transcript.replace(/\s+/g, " ").trim()
+        : "";
+    return transcript
+      ? `🎤 ${transcript.slice(0, 140)}`
+      : "🎤 Recibiste un mensaje de voz";
+  } catch {
+    return "🎤 Recibiste un mensaje de voz";
+  }
+}
 
 const supabase = createClient(
   Deno.env.get("SUPABASE_URL")!,
@@ -78,8 +118,9 @@ Deno.serve(async (req) => {
     }
 
     const title = remitente?.nombre
-      ? `Trabajo urgente: ${remitente.nombre}`
-      : "Tenes trabajo urgente";
+      ? `Nuevo mensaje de ${remitente.nombre}`
+      : "Nuevo mensaje en TOORI";
+    const notificationBody = getNotificationBody(msg.contenido);
 
     const expoRes = await fetch("https://exp.host/--/api/v2/push/send", {
       method: "POST",
@@ -93,7 +134,7 @@ Deno.serve(async (req) => {
         channelId: URGENT_WORK_CHANNEL_ID,
         sound: URGENT_WORK_SOUND,
         title,
-        body: msg.contenido,
+        body: notificationBody,
         data: {
           screen: "ChatIndividual",
           params: {
@@ -112,7 +153,7 @@ Deno.serve(async (req) => {
         cliente_id: msg.remitente_id,
         chat_id: msg.chat_id,
         title,
-        body: msg.contenido || "Nuevo mensaje de trabajo. Respondelo cuanto antes.",
+        body: notificationBody,
         metadata: {
           mensaje_id: msg.id,
         },

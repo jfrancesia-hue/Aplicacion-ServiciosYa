@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import fondo from '../assets/fondo.png';
-import logo from '../assets/logo.png';
+import logo from '../assets/serviciosya-logo-2026.png';
 import { supabase } from '../lib/supabase'; 
 import BotonVolver from '../components/BotonVolver';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'
@@ -201,8 +201,8 @@ const styles = StyleSheet.create({
     elevation: 7,
   },
   logo: {
-    width: 110,
-    height: 110,
+    width: 150,
+    height: 150,
     alignSelf: 'center',
     marginBottom: 10,
     borderRadius: 20,

@@ -21,6 +21,11 @@ import { useHomeEventsStore } from "../../store/homeEventsStore";
 import { supabase } from "../../lib/supabase";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { categoriasQueryOptions } from "../../lib/queryOptions";
+import {
+  getAvailableProviderCounts,
+  providerCategoryKey,
+} from "../../lib/availableProviders";
+import { useLocationStore } from "../../store/locationStore";
 
 interface CategoryListProps {
   busqueda: string;
@@ -33,7 +38,7 @@ const AnimatedSectionList =
   Animated.createAnimatedComponent(SectionList);
 
 const normalize = (s: string) =>
-  s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").trim();
+  s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").trim();
 
 const EXCLUDED_CATEGORIES = new Set(
   ["general", "mi primer trabajo"].map(normalize),
@@ -51,6 +56,7 @@ const CategoryList = ({
   const setHomeDataReady = useHomeEventsStore(s => s.setHomeDataReady);
   const [workerCounts, setWorkerCounts] = useState<Record<string, number>>({});
   const { data: categoriasDB } = useSuspenseQuery(categoriasQueryOptions);
+  const effectiveLocation = useLocationStore((state) => state.effectiveLocation);
 
   const { dbByNormalized, iconUrls } = useMemo(() => {
     const map = new Map<string, string>();
@@ -65,26 +71,73 @@ const CategoryList = ({
     return { dbByNormalized: map, iconUrls: urls };
   }, [categoriasDB]);
 
-  useEffect(() => {
-    supabase
+  const loadWorkerCounts = useCallback(async () => {
+    try {
+      const counts = await getAvailableProviderCounts({
+        city: effectiveLocation?.city,
+        province: effectiveLocation?.province,
+        locality: effectiveLocation?.locality,
+      });
+      const mappedCounts: Record<string, number> = {};
+      for (const category of categoriasDB) {
+        if (!category?.nombre) continue;
+        mappedCounts[category.nombre] =
+          counts[providerCategoryKey(category.nombre)] ?? 0;
+      }
+      setWorkerCounts(mappedCounts);
+      return;
+    } catch (unifiedError) {
+      console.warn(
+        "[CategoryList] conteo histórico no disponible; se usa el perfil actual:",
+        unifiedError,
+      );
+    }
+
+    const { data } = await supabase
       .from("usuarios")
       .select("categoria")
       .eq("rol", "worker")
-      .eq("perfilPublico", true)
-      .then(({ data }) => {
-        if (!data) return;
-        const counts: Record<string, number> = {};
-        for (const u of data) {
-          let cat = u.categoria;
-          if (typeof cat === "string") { try { cat = JSON.parse(cat); } catch {} }
-          const cats: string[] = Array.isArray(cat) ? cat.filter(Boolean) : cat ? [cat] : [];
-          for (const c of cats) {
-            counts[c] = (counts[c] || 0) + 1;
-          }
+      .eq("perfilPublico", true);
+    if (!data) return;
+
+    const countsByKey: Record<string, number> = {};
+    for (const user of data) {
+      let categories: unknown = user.categoria;
+      if (typeof categories === "string") {
+        try {
+          categories = JSON.parse(categories);
+        } catch {
+          categories = [categories];
         }
-        setWorkerCounts(counts);
-      });
-  }, []);
+      }
+      const values: string[] = Array.isArray(categories)
+        ? categories.map(String).filter(Boolean)
+        : categories
+          ? [String(categories)]
+          : [];
+      for (const category of values) {
+        const key = providerCategoryKey(category);
+        if (key) countsByKey[key] = (countsByKey[key] || 0) + 1;
+      }
+    }
+
+    const mappedCounts: Record<string, number> = {};
+    for (const category of categoriasDB) {
+      if (!category?.nombre) continue;
+      mappedCounts[category.nombre] =
+        countsByKey[providerCategoryKey(category.nombre)] ?? 0;
+    }
+    setWorkerCounts(mappedCounts);
+  }, [
+    categoriasDB,
+    effectiveLocation?.city,
+    effectiveLocation?.locality,
+    effectiveLocation?.province,
+  ]);
+
+  useEffect(() => {
+    loadWorkerCounts();
+  }, [loadWorkerCounts]);
 
   // 2. Data Destructuring
   const {
@@ -153,13 +206,13 @@ const CategoryList = ({
     if (!refetch) return;
     try {
       setIsPullingToRefresh(true);
-      await refetch();
+      await Promise.all([refetch(), loadWorkerCounts()]);
     } catch (e) {
       console.error("Refresh failed:", e);
     } finally {
       setIsPullingToRefresh(false);
     }
-  }, [refetch]);
+  }, [loadWorkerCounts, refetch]);
 
   // 5. Render Logic
   if (isLoading) {

@@ -56,23 +56,32 @@ type PresupuestoRow = {
   estado: string | null;
 };
 
-type UsuarioRowOverride = DatabaseGenerated["public"]["Tables"]["usuarios"]["Row"] & {
+type UsuarioRowOverride = Omit<
+  DatabaseGenerated["public"]["Tables"]["usuarios"]["Row"],
+  "celular" | "categoria"
+> & {
   barrio: string | null;
   celular: string | null;
+  categoria: string[] | string | null;
   verificado: boolean | null;
   matricula: Json | string | null;
   antecedentes: Json | string | null;
+  antiguedad: number | null;
+  perfilPublico: boolean | null;
 };
 
 type UsuarioInsertOverride = Omit<
   DatabaseGenerated["public"]["Tables"]["usuarios"]["Insert"],
-  "celular"
+  "celular" | "categoria"
 > & {
   barrio?: string | null;
   celular?: string | null;
+  categoria?: string[] | string | null;
   verificado?: boolean | null;
   matricula?: Json | string | null;
   antecedentes?: Json | string | null;
+  antiguedad?: number | null;
+  perfilPublico?: boolean | null;
 };
 
 type MensajeRowOverride = DatabaseGenerated["public"]["Tables"]["mensajes"]["Row"] & {
@@ -102,6 +111,30 @@ type UrgentWorkAlertRow = {
   last_sent_at: string | null;
   escalation_ready_at: string | null;
   metadata: Json;
+};
+
+type WorkerRowOverride =
+  DatabaseGenerated["public"]["Tables"]["workers"]["Row"] & {
+    available_until: string | null;
+    availability_duration_hours: number | null;
+  };
+
+type UserBlockRow = {
+  id: string;
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+};
+
+type ProfileReportRow = {
+  id: string;
+  reporter_id: string;
+  provider_id: string;
+  service_id: number | null;
+  reason_category: string;
+  details: string | null;
+  status: string;
+  created_at: string;
 };
 
 export type Database = MergeDeep<
@@ -144,6 +177,31 @@ export type Database = MergeDeep<
             body: string;
           };
           Update: Partial<UrgentWorkAlertRow>;
+          Relationships: [];
+        };
+        workers: {
+          Row: WorkerRowOverride;
+          Insert: Partial<WorkerRowOverride> & { user_id: string };
+          Update: Partial<WorkerRowOverride>;
+          Relationships: [];
+        };
+        user_blocks: {
+          Row: UserBlockRow;
+          Insert: Partial<UserBlockRow> & {
+            blocker_id: string;
+            blocked_id: string;
+          };
+          Update: Partial<UserBlockRow>;
+          Relationships: [];
+        };
+        profile_reports: {
+          Row: ProfileReportRow;
+          Insert: Partial<ProfileReportRow> & {
+            reporter_id: string;
+            provider_id: string;
+            reason_category: string;
+          };
+          Update: Partial<ProfileReportRow>;
           Relationships: [];
         };
       };

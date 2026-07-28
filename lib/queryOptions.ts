@@ -124,11 +124,16 @@ export const workerStatusQueryOptions = queryOptions({
   queryFn: async () => {
     const { data } = await supabase
       .from("workers")
-      .select("status")
+      .select("status,last_seen_at,available_until,availability_duration_hours")
       .eq("user_id", getUserID())
-      .single();
+      .maybeSingle();
     console.log(`Worker status: ${data?.status}`);
-    return data ? data.status : "OFFLINE";
+    return {
+      status: data?.status ?? "OFFLINE",
+      lastSeenAt: data?.last_seen_at ?? null,
+      availableUntil: data?.available_until ?? null,
+      durationHours: data?.availability_duration_hours ?? null,
+    };
   },
 });
 

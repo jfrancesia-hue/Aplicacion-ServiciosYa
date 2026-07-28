@@ -7,7 +7,7 @@ import {
 import { supabase } from '../lib/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import fondo from '../assets/fondo.png';
-import logo from '../assets/logo.png';
+import logo from '../assets/serviciosya-logo-2026.png';
 // import useAuthSession from '../lib/hooks/useAuthSession';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -325,8 +325,8 @@ const styles = StyleSheet.create({
     color: '#047a8f',
   },
   logo: {
-    width: 88,
-    height: 88,
+    width: 150,
+    height: 150,
     resizeMode: 'contain',
   },
   appTitle: {

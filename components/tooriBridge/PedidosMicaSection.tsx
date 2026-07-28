@@ -14,8 +14,8 @@ import showToast from "../../lib/toast";
 import {
   getPedidosDisponibles,
   isTooriBridgeConfigured,
-  responderPedido,
 } from "../../lib/tooriBridge";
+import { respondToMicaOrder } from "../../lib/micaOrder";
 import { getUserID } from "../../store/authStore";
 import type { TooriBridgePedido } from "../../types/tooriBridge";
 
@@ -28,9 +28,7 @@ const colors = {
   soft: "#F0FDFA",
 };
 
-function normalizeOficios(
-  values: Array<string | string[] | null | undefined>,
-) {
+function normalizeOficios(values: Array<string | string[] | null | undefined>) {
   const flattened = values.flatMap((value) =>
     Array.isArray(value) ? value : [value],
   );
@@ -76,13 +74,16 @@ async function getMicaAppFallbackPedidos(ctx: {
   ciudad?: string;
   provincia?: string;
 }) {
-  const { data, error } = await supabase.rpc("get_mica_app_requests_for_worker", {
-    p_app_user_id: ctx.appUserId,
-    p_oficios: ctx.oficios,
-    p_ciudad: ctx.ciudad ?? null,
-    p_provincia: ctx.provincia ?? null,
-    p_limit: 10,
-  });
+  const { data, error } = await supabase.rpc(
+    "get_mica_app_requests_for_worker",
+    {
+      p_app_user_id: ctx.appUserId,
+      p_oficios: ctx.oficios,
+      p_ciudad: ctx.ciudad ?? null,
+      p_provincia: ctx.provincia ?? null,
+      p_limit: 10,
+    },
+  );
 
   if (error) throw error;
 
@@ -123,6 +124,8 @@ export default function PedidosMicaSection() {
       "pedidosDisponibles",
       contextQuery.data?.appUserId,
       contextQuery.data?.oficios,
+      contextQuery.data?.ciudad,
+      contextQuery.data?.provincia,
     ],
     queryFn: async () => {
       const ctx = contextQuery.data;
@@ -141,7 +144,10 @@ export default function PedidosMicaSection() {
         });
         bridgePedidos = response.pedidos ?? [];
       } catch (error) {
-        console.warn("[MICA] puente web no disponible, usando fallback RPC:", error);
+        console.warn(
+          "[MICA] puente web no disponible, usando fallback RPC:",
+          error,
+        );
       }
 
       const fallbackPedidos = await getMicaAppFallbackPedidos(ctx);
@@ -167,24 +173,16 @@ export default function PedidosMicaSection() {
         if (!montoNumero || montoNumero <= 0) {
           throw new Error("Ingresá un monto válido");
         }
-        return responderPedido({
-          ofertaId: pedido.id,
-          appUserId: ctx.appUserId,
-          nombre: ctx.nombre,
-          telefono: ctx.telefono,
-          accion: "presupuesto",
-          monto: montoNumero,
-          horariosDisponibles: horario,
-          descripcion: descripcion || "Presupuesto enviado desde la app Toori",
+        return respondToMicaOrder(String(pedido.id), {
+          type: "budget",
+          amount: montoNumero,
+          availability: horario,
+          description: descripcion || "Presupuesto enviado desde la app TOORI",
         });
       }
 
-      return responderPedido({
-        ofertaId: pedido.id,
-        appUserId: ctx.appUserId,
-        nombre: ctx.nombre,
-        telefono: ctx.telefono,
-        accion: "no_disponible",
+      return respondToMicaOrder(String(pedido.id), {
+        type: "decline",
       });
     },
     onSuccess: () => {
@@ -208,7 +206,7 @@ export default function PedidosMicaSection() {
     if (!enabled) return "Conexión Web/Mica pendiente de URL.";
     if (contextQuery.data?.oficios.length === 0)
       return "Publicá o cargá al menos un oficio para recibir pedidos compatibles.";
-    return "Pedidos generados por Mica/WhatsApp y visibles también en la web.";
+    return "Pedidos generados por MICA y coordinados desde el chat interno.";
   }, [enabled, contextQuery.data?.oficios.length]);
 
   return (

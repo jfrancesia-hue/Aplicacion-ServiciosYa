@@ -63,7 +63,10 @@ function HomeHeader({ onSearch, onShowCountsOnlyChange }: HomeHeaderProps) {
       <View style={styles.container}>
         <View style={styles.headerTop}>
           <View style={styles.logoAndTextContainer}>
-            <Image source={require("../assets/logo.png")} style={styles.headerLogo} />
+            <Image
+              source={require("../assets/serviciosya-logo-2026.png")}
+              style={styles.headerLogo}
+            />
             <View style={styles.saludoContainer}>
               <Text style={styles.tooriLogo}>TOORI</Text>
               <Text style={styles.serviciosYa}>Servicios Ya</Text>

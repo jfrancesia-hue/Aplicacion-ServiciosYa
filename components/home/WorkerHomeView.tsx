@@ -6,7 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   Animated,
-  Linking,
   FlatList,
   ActivityIndicator,
   Image,
@@ -22,6 +21,7 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import CategoryList from "./CategoryList";
 import { supabase } from "../../lib/supabase";
 import { obtenerPedidosDisponibles, responderPedidoMica } from "../../lib/tooriApi";
+import WorkerState from "./WorkerState";
 
 type Tab = "calendario" | "ofertas" | "contratar";
 
@@ -40,6 +40,7 @@ export default function WorkerHomeView({ navigation, onCategoryPress, busqueda =
 
   return (
     <View style={styles.container}>
+      <WorkerState style={styles.availabilityCard} />
       {/* Tab buttons */}
       <View style={styles.tabBar}>
         {tabs.map((tab) => {
@@ -70,7 +71,7 @@ export default function WorkerHomeView({ navigation, onCategoryPress, busqueda =
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} bounces={true}>
           {activeTab === "calendario" && <CalendarioView />}
-          {activeTab === "ofertas" && <OfertasView />}
+          {activeTab === "ofertas" && <OfertasView navigation={navigation} />}
         </ScrollView>
       )}
     </View>
@@ -135,7 +136,7 @@ function CalendarioView() {
   );
 }
 
-function OfertasView() {
+function OfertasView({ navigation }: { navigation: any }) {
   const [ofertas, setOfertas] = useState<any[]>([]);
   const [presupuestos, setPresupuestos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -380,10 +381,12 @@ function OfertasView() {
           <TouchableOpacity
             style={styles.soporteButton}
             activeOpacity={0.8}
-            onPress={() => Linking.openURL("https://wa.me/543512139046?text=Hola%2C%20necesito%20ayuda%20con%20las%20ofertas")}
+            onPress={() =>
+              navigation.navigate("MicaChat", { mode: "ofrecer-servicio" })
+            }
           >
             <MaterialIcons name="support-agent" size={20} color="#fff" />
-            <Text style={styles.soporteButtonText}>Contactar soporte</Text>
+            <Text style={styles.soporteButtonText}>Consultar a MICA</Text>
           </TouchableOpacity>
         </>
       ) : (
@@ -567,6 +570,11 @@ function ContratarView({ navigation, onCategoryPress, busqueda }: { navigation: 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  availabilityCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 2,
   },
   tabBar: {
     flexDirection: "row",

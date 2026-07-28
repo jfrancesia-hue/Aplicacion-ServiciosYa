@@ -10,8 +10,8 @@ export function useUser() {
   const settings = useUserSettings();
   const user = session?.user;
   const isLoggedIn = Boolean(user);
-  const isProfileComplete = profile?.perfil_completo || true;
-  const isDniVerified = profile?.dni_verificado || true;
+  const isProfileComplete = profile?.perfil_completo ?? false;
+  const isDniVerified = profile?.dni_verificado ?? false;
 
   return {
     user,

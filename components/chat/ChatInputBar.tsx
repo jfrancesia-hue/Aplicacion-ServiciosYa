@@ -1,19 +1,32 @@
-import React, { useRef, useEffect, memo } from "react";
+import React, { useCallback, useRef, useEffect, memo } from "react";
 import CustomTextInput from "../inputs/CustomTextInput";
-import { TouchableOpacity, View, StyleSheet, Text, Modal, TextInput, KeyboardAvoidingView, Platform, Animated, ScrollView } from "react-native";
+import { TouchableOpacity, View, StyleSheet, Text, Modal, TextInput, KeyboardAvoidingView, Platform, Animated, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Audio } from "expo-av";
 import { createQuoteMessage } from "../../lib/utils/quoteMessage";
+import {
+  CHAT_AUDIO_MAX_SECONDS,
+  formatAudioDuration,
+} from "../../lib/utils/audioMessage";
 
 interface ChatInputBarProps {
   onSend: (message: string) => void | Promise<void>;
+  onSendAudio: (audio: {
+    uri: string;
+    durationMs: number;
+    mimeType: string;
+  }) => void | Promise<void>;
   serviceId?: string;
 }
 
-function ChatInputBar({ onSend }: ChatInputBarProps) {
+function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
   const [message, setMessage] = React.useState("");
   const [sending, setSending] = React.useState(false);
+  const [sendingAudio, setSendingAudio] = React.useState(false);
+  const [isRecording, setIsRecording] = React.useState(false);
+  const [recordingSeconds, setRecordingSeconds] = React.useState(0);
   const [presupuestoVisible, setPresupuestoVisible] = React.useState(false);
   const [monto, setMonto] = React.useState("");
   const [alcance, setAlcance] = React.useState("");
@@ -26,6 +39,89 @@ function ChatInputBar({ onSend }: ChatInputBarProps) {
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const shimmerAnim = useRef(new Animated.Value(-1)).current;
+  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingStartedAtRef = useRef(0);
+
+  const stopRecording = useCallback(async (cancelled = false) => {
+    const activeRecording = recordingRef.current;
+    if (!activeRecording) return;
+
+    recordingRef.current = null;
+    setIsRecording(false);
+
+    try {
+      const status = await activeRecording.stopAndUnloadAsync();
+      const uri = activeRecording.getURI();
+      const durationMs =
+        status.durationMillis ?? Date.now() - recordingStartedAtRef.current;
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+      });
+
+      if (cancelled) return;
+      if (!uri || durationMs < 700) {
+        Alert.alert(
+          "Audio muy corto",
+          "Mantené la grabación al menos un segundo antes de enviarla.",
+        );
+        return;
+      }
+
+      setSendingAudio(true);
+      await onSendAudio({
+        uri,
+        durationMs,
+        mimeType: "audio/mp4",
+      });
+    } catch (error) {
+      if (!cancelled) {
+        Alert.alert(
+          "No se pudo enviar el audio",
+          error instanceof Error ? error.message : "Intentá nuevamente.",
+        );
+      }
+    } finally {
+      setSendingAudio(false);
+      setRecordingSeconds(0);
+    }
+  }, [onSendAudio]);
+
+  const startRecording = useCallback(async () => {
+    if (sendingAudio || recordingRef.current) return;
+
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          "Permiso de micrófono",
+          "Necesitamos acceso al micrófono para enviar mensajes de voz.",
+        );
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+      });
+
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY,
+      );
+      recordingRef.current = recording;
+      recordingStartedAtRef.current = Date.now();
+      setRecordingSeconds(0);
+      setIsRecording(true);
+    } catch (error) {
+      Alert.alert(
+        "No se pudo grabar",
+        error instanceof Error ? error.message : "Revisá el permiso del micrófono.",
+      );
+    }
+  }, [sendingAudio]);
 
   useEffect(() => {
     // Pulso suave de escala
@@ -40,6 +136,32 @@ function ChatInputBar({ onSend }: ChatInputBarProps) {
       Animated.timing(shimmerAnim, { toValue: 2, duration: 2000, delay: 600, useNativeDriver: true })
     ).start();
   }, []);
+
+  useEffect(() => {
+    if (!isRecording) return;
+
+    const interval = setInterval(() => {
+      const elapsed = Math.floor(
+        (Date.now() - recordingStartedAtRef.current) / 1000,
+      );
+      setRecordingSeconds(elapsed);
+      if (elapsed >= CHAT_AUDIO_MAX_SECONDS) {
+        clearInterval(interval);
+        stopRecording(false);
+      }
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [isRecording, stopRecording]);
+
+  useEffect(
+    () => () => {
+      const activeRecording = recordingRef.current;
+      recordingRef.current = null;
+      activeRecording?.stopAndUnloadAsync().catch(() => undefined);
+    },
+    [],
+  );
 
   const handleSend = async () => {
     if (!message.trim() || sending) return;
@@ -111,27 +233,71 @@ function ChatInputBar({ onSend }: ChatInputBarProps) {
       </Animated.View>
 
       <View style={styles.inputBarContainer}>
-        <CustomTextInput
-          containerStyle={{
-            flex: 1,
-            marginRight: 10,
-            borderRadius: 20,
-            height: "auto",
-          }}
-          inputStyle={{ minHeight: 40, maxHeight: 120 }}
-          value={message}
-          onChangeText={setMessage}
-          placeholder="Escribe un mensaje..."
-          multiline={true}
-        />
-        <TouchableOpacity
-          onPress={handleSend}
-          disabled={sending}
-          style={styles.botonEnviar}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="send" size={22} color="#fff" />
-        </TouchableOpacity>
+        {isRecording ? (
+          <View style={styles.recordingPill}>
+            <View style={styles.recordingDot} />
+            <View style={styles.recordingCopy}>
+              <Text style={styles.recordingTitle}>Grabando audio</Text>
+              <Text style={styles.recordingTime}>
+                {formatAudioDuration(recordingSeconds * 1000)} /{" "}
+                {formatAudioDuration(CHAT_AUDIO_MAX_SECONDS * 1000)}
+              </Text>
+            </View>
+            <TouchableOpacity
+              accessibilityLabel="Cancelar grabación"
+              onPress={() => stopRecording(true)}
+              style={styles.cancelRecordingButton}
+            >
+              <Ionicons name="trash-outline" size={19} color="#b42318" />
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <CustomTextInput
+            containerStyle={{
+              flex: 1,
+              marginRight: 10,
+              borderRadius: 20,
+              height: "auto",
+            }}
+            inputStyle={{ minHeight: 40, maxHeight: 120 }}
+            value={message}
+            onChangeText={setMessage}
+            placeholder="Escribí un mensaje..."
+            multiline={true}
+          />
+        )}
+        {message.trim() && !isRecording ? (
+          <TouchableOpacity
+            accessibilityLabel="Enviar mensaje"
+            onPress={handleSend}
+            disabled={sending || sendingAudio}
+            style={styles.botonEnviar}
+            activeOpacity={0.7}
+          >
+            {sending ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="send" size={22} color="#fff" />
+            )}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            accessibilityLabel={isRecording ? "Enviar audio" : "Grabar audio"}
+            onPress={isRecording ? () => stopRecording(false) : startRecording}
+            disabled={sendingAudio}
+            style={[
+              styles.audioButton,
+              isRecording && styles.audioButtonRecording,
+            ]}
+            activeOpacity={0.72}
+          >
+            {sendingAudio ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name={isRecording ? "send" : "mic"} size={23} color="#fff" />
+            )}
+          </TouchableOpacity>
+        )}
       </View>
       {/* Modal presupuesto */}
       <Modal visible={presupuestoVisible} transparent animationType="fade" onRequestClose={() => setPresupuestoVisible(false)}>
@@ -287,6 +453,63 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 5,
+  },
+  audioButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#069eb3",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#047a8f",
+    shadowOpacity: 0.22,
+    shadowOffset: { width: 0, height: 3 },
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  audioButtonRecording: {
+    backgroundColor: "#d92d20",
+  },
+  recordingPill: {
+    flex: 1,
+    minHeight: 48,
+    marginRight: 10,
+    paddingHorizontal: 12,
+    borderRadius: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    borderColor: "#f5b8b3",
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#d92d20",
+    marginRight: 9,
+  },
+  recordingCopy: {
+    flex: 1,
+  },
+  recordingTitle: {
+    color: "#7a271a",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  recordingTime: {
+    color: "#9e3d32",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 1,
+  },
+  cancelRecordingButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fff1f0",
   },
   presupuestoBtnWrapper: {
     marginHorizontal: 12,

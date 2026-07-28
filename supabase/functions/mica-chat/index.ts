@@ -3,7 +3,11 @@ declare const Deno: {
   serve(handler: (req: Request) => Response | Promise<Response>): void;
 };
 
-type MicaMode = "buscar-servicio" | "ofrecer-servicio" | "b2b";
+type MicaMode =
+  | "buscar-servicio"
+  | "ofrecer-servicio"
+  | "b2b"
+  | "intermediar-chat";
 
 type ChatMessage = {
   author: "mica" | "user";
@@ -19,7 +23,8 @@ type MicaRequest = {
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -28,9 +33,17 @@ const modeInstructions: Record<MicaMode, string> = {
     "Ayudas a clientes a describir un problema del hogar o empresa y conseguir presupuestos. Tenes que sonar humano, directo y calido, como un buen operador experto. No digas que sos bot ni repitas tu nombre. Junta rubro, problema, zona, urgencia, disponibilidad y fotos si sirven. No inventes profesionales ni precios reales.",
   "ofrecer-servicio":
     "Ayudas a prestadores a inscribirse en SolucionesYa. Sonas como una persona del equipo: clara, practica y motivadora. Junta rubro, zona, experiencia, celular, documentacion, fotos, precios orientativos y disponibilidad. No prometas aprobacion automatica.",
-  b2b:
-    "Ayudas a inmobiliarias, consorcios y empresas a usar SolucionesYa B2B. Sonas ejecutivo pero cercano. Junta tipo de organizacion, cantidad de unidades, rubros frecuentes, urgencias, responsables, forma de aprobacion y canal de seguimiento.",
+  b2b: "Ayudas a inmobiliarias, consorcios y empresas a usar SolucionesYa B2B. Sonas ejecutivo pero cercano. Junta tipo de organizacion, cantidad de unidades, rubros frecuentes, urgencias, responsables, forma de aprobacion y canal de seguimiento.",
+  "intermediar-chat":
+    "Sos MICA, intermediaria neutral dentro de un chat entre cliente y prestador. Ayudas a resumir acuerdos, interpretar transcripciones de audio, detectar datos pendientes y proponer el proximo paso dentro de TOORI. No tomes partido, no inventes precios, pagos, fechas ni confirmaciones. No repitas telefonos, enlaces ni datos de contacto externos aunque aparezcan en el historial. Diferencia claramente hechos acordados de puntos pendientes y recorda que ambas personas deben confirmar. Una transcripcion automatica es evidencia provisoria: si contiene un dato sensible o ambiguo, marcala como pendiente hasta que una persona la confirme por escrito.",
 };
+
+const validModes = new Set<MicaMode>([
+  "buscar-servicio",
+  "ofrecer-servicio",
+  "b2b",
+  "intermediar-chat",
+]);
 
 function safeJsonParse(text: string) {
   try {
@@ -46,7 +59,12 @@ function safeJsonParse(text: string) {
   }
 }
 
-function extractText(response: any) {
+type OpenAIResponse = {
+  output_text?: unknown;
+  output?: Array<{ content?: Array<{ text?: unknown }> }>;
+};
+
+function extractText(response: OpenAIResponse) {
   if (typeof response?.output_text === "string") return response.output_text;
 
   const parts: string[] = [];
@@ -60,7 +78,7 @@ function extractText(response: any) {
 }
 
 function buildInput(body: MicaRequest) {
-  const recentHistory = (body.history ?? []).slice(-8).map((message) => ({
+  const recentHistory = (body.history ?? []).slice(-20).map((message) => ({
     role: message.author === "user" ? "user" : "assistant",
     content: message.text,
   }));
@@ -80,6 +98,39 @@ function buildInput(body: MicaRequest) {
   ];
 }
 
+function buildLocalIntermediaryReply(body: MicaRequest) {
+  const history = body.history ?? [];
+  const hasUntranscribedAudio = history.some((message) =>
+    message.text.toLowerCase().includes("audio sin transcripción"),
+  );
+  const question = body.message.toLowerCase();
+  const intro = question.includes("resum")
+    ? `Revisé ${history.length} mensajes recientes.`
+    : "Para avanzar de forma segura dentro de TOORI:";
+  const audioNote = hasUntranscribedAudio
+    ? "\n\nHay al menos un audio que todavía no pude interpretar. Conviene confirmar ese dato por escrito."
+    : "";
+
+  return [
+    intro,
+    "",
+    "ACORDADO",
+    "• Todavía no puedo afirmar acuerdos sin confirmación explícita de ambas partes.",
+    "",
+    "PENDIENTE",
+    "• Confirmen el alcance exacto del trabajo.",
+    "• Dejen por escrito el precio final y qué materiales incluye.",
+    "• Acuerden fecha, franja horaria y garantía.",
+    "",
+    "PRÓXIMO PASO",
+    "• Usen el presupuesto y la confirmación dentro de la app.",
+    "• Cuando ambos confirmen esos puntos, coordinen la visita desde este chat.",
+    audioNote,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -93,20 +144,37 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey) {
-      return new Response(JSON.stringify({ error: "OPENAI_API_KEY is not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const body = (await req.json()) as MicaRequest;
+    if (!body?.mode || !validModes.has(body.mode) || !body?.message?.trim()) {
+      return new Response(
+        JSON.stringify({ error: "Missing mode or message" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
-    const body = (await req.json()) as MicaRequest;
-    if (!body?.mode || !body?.message?.trim()) {
-      return new Response(JSON.stringify({ error: "Missing mode or message" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const apiKey = Deno.env.get("OPENAI_API_KEY");
+    if (!apiKey && body.mode === "intermediar-chat") {
+      return new Response(
+        JSON.stringify({
+          reply: buildLocalIntermediaryReply(body),
+          fallback: true,
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    if (!apiKey) {
+      return new Response(
+        JSON.stringify({ error: "OPENAI_API_KEY is not configured" }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     const model = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
@@ -118,12 +186,16 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         model,
+        store: false,
         instructions: [
           modeInstructions[body.mode],
           "Escribi en español rioplatense, sin sonar robotico.",
           "Hace una sola pregunta concreta por turno cuando falten datos.",
           "Si ya hay datos suficientes, explica el siguiente paso sin inventar datos externos.",
           "No pidas datos sensibles innecesarios. No des asesoramiento legal, medico o financiero especializado.",
+          body.mode === "intermediar-chat"
+            ? "Tu respuesta sera visible para cliente y prestador. Usa listas breves y separa Acordado, Pendiente y Proximo paso solo cuando ayude."
+            : "",
         ].join("\n"),
         input: buildInput(body),
         max_output_tokens: 650,
@@ -147,9 +219,14 @@ Deno.serve(async (req) => {
     const parsed = safeJsonParse(text);
 
     if (!parsed?.reply) {
-      return new Response(JSON.stringify({ reply: text || "Dale, contame un poco mas para ayudarte mejor." }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({
+          reply: text || "Dale, contame un poco mas para ayudarte mejor.",
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
     }
 
     return new Response(

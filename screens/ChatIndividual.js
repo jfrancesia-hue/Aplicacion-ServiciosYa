@@ -8,22 +8,42 @@ import {
   KeyboardAvoidingView,
   Platform,
   Alert,
-  AppState,
   ActivityIndicator,
   Modal,
   SafeAreaView,
   ScrollView,
   Linking,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as FileSystem from "expo-file-system";
 import { supabase } from "../lib/supabase";
 import ChatInputBar from "../components/chat/ChatInputBar";
+import MicaAssistantModal from "../components/chat/MicaAssistantModal";
+import MicaSystemBubble from "../components/chat/MicaSystemBubble";
 import BotonVolver from "../components/BotonVolver";
 import { withModalProvider } from "../components/sheet/withModalProvider";
 import { parseQuoteMessage, formatQuoteAmount } from "../lib/utils/quoteMessage";
 import { calculateServiceConfirmationFee } from "../lib/constants/billing";
+import VoiceMessageBubble from "../components/chat/VoiceMessageBubble";
+import {
+  CHAT_AUDIO_BUCKET,
+  createAudioMessageContent,
+  parseAudioMessageContent,
+} from "../lib/utils/audioMessage";
+import {
+  createMicaAssistantContent,
+  parseMicaSystemMessage,
+} from "../lib/utils/micaMessage";
+import TrustSafetyModal from "../components/trust/TrustSafetyModal";
+import { useNavigation } from "@react-navigation/native";
+import vexo from "../lib/vexo";
+import { getPaymentReturnParam } from "../lib/utils/paymentReturn";
+
+const CHAT_PAGE_SIZE = 40;
 
 function ChatIndividual({ route }) {
+  const navigation = useNavigation();
   const { chatId, nombre, servicio, usuarioId1, usuarioId2, servicioId } = route.params;
 
   const [mensajes, setMensajes] = useState([]);
@@ -32,41 +52,105 @@ function ChatIndividual({ route }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [estrellas, setEstrellas] = useState(0);
   const [pagando, setPagando] = React.useState(false);
+  const [hasOlderMessages, setHasOlderMessages] = useState(false);
+  const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
+  const [micaAssistantVisible, setMicaAssistantVisible] = useState(false);
+  const [askingMica, setAskingMica] = useState(false);
+  const [trustSafetyVisible, setTrustSafetyVisible] = useState(false);
+  const [transcriptEditor, setTranscriptEditor] = useState(null);
+  const [savingTranscript, setSavingTranscript] = useState(false);
   const [servicioData, setServicioData] = useState(servicio || {});
-  const pendingWspUnlock = useRef(false); // flag: usuario fue a pagar y vuelve
+  const processingPaymentReturn = useRef(null);
   const flatListRef = useRef(null);
   const messageChannelRef = useRef(null);
+  const partnerId = usuarioId
+    ? usuarioId1 === usuarioId
+      ? usuarioId2
+      : usuarioId1
+    : usuarioId1 || usuarioId2;
 
-  // Detectar retorno desde MercadoPago con pago aprobado
-  useEffect(() => {
-    // Escuchar deep links cuando la app vuelve al frente
-    const linkSub = Linking.addEventListener('url', ({ url }) => {
-      if (url && url.includes('status=approved') && pendingWspUnlock.current) {
-        pendingWspUnlock.current = false;
-        desbloquearWhatsApp();
+  const verificarRetornoPago = useCallback(async (url) => {
+    if (!url?.includes("presupuesto-confirmado")) return;
+
+    const paymentRecordId = getPaymentReturnParam(url, "payment_record_id");
+    const paymentId =
+      getPaymentReturnParam(url, "payment_id") ||
+      getPaymentReturnParam(url, "collection_id");
+    const returnStatus =
+      getPaymentReturnParam(url, "status") ||
+      getPaymentReturnParam(url, "collection_status");
+
+    if (returnStatus === "failure" || returnStatus === "rejected") {
+      Alert.alert(
+        "Pago no aprobado",
+        "Mercado Pago no aprobó la operación. Podés intentarlo nuevamente.",
+      );
+      return;
+    }
+
+    if (!paymentRecordId || !paymentId) {
+      if (returnStatus === "pending") {
+        Alert.alert(
+          "Pago pendiente",
+          "Mercado Pago todavía está procesando la operación.",
+        );
       }
-    });
-    // Escuchar cuando la app vuelve al frente (usuario volvió del browser)
-    const appStateSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active' && pendingWspUnlock.current) {
-        // Revisar si hay un URL pendiente con pago aprobado
-        Linking.getInitialURL().then(url => {
-          if (url && url.includes('status=approved')) {
-            pendingWspUnlock.current = false;
-            desbloquearWhatsApp();
-          }
-        });
+      return;
+    }
+
+    const operationKey = `${paymentRecordId}:${paymentId}`;
+    if (processingPaymentReturn.current === operationKey) return;
+    processingPaymentReturn.current = operationKey;
+    setPagando(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "verify-payment",
+        {
+          body: { paymentRecordId, paymentId },
+        },
+      );
+      if (error) throw error;
+      if (!data?.approved) {
+        Alert.alert(
+          data?.status === "pending" ? "Pago pendiente" : "Pago no aprobado",
+          data?.message ||
+            "La operación todavía no fue confirmada por Mercado Pago.",
+        );
+        return;
       }
-    });
-    return () => {
-      linkSub.remove();
-      appStateSub.remove();
-    };
+
+      Alert.alert(
+        "Pago verificado",
+        "La confirmación fue validada por Mercado Pago. Continuá coordinando el servicio desde este chat.",
+      );
+    } catch (error) {
+      processingPaymentReturn.current = null;
+      Alert.alert(
+        "No pudimos verificar el pago",
+        error instanceof Error
+          ? error.message
+          : "Intentá nuevamente desde el presupuesto.",
+      );
+    } finally {
+      setPagando(false);
+    }
   }, []);
+
+  useEffect(() => {
+    const linkSub = Linking.addEventListener("url", ({ url }) => {
+      void verificarRetornoPago(url);
+    });
+    Linking.getInitialURL().then((url) => {
+      if (url) void verificarRetornoPago(url);
+    });
+
+    return () => linkSub.remove();
+  }, [verificarRetornoPago]);
 
   // Si el servicio llegó vacío, buscarlo desde la BD usando el usuario partner
   useEffect(() => {
-    if (servicio && servicio.titulo) return; // ya tiene datos
+    if (servicio?.titulo) return; // ya tiene datos
     const partnerId = usuarioId1 && usuarioId2
       ? (usuarioId1 !== usuarioId2 ? null : null) // se resuelve abajo
       : null;
@@ -91,6 +175,9 @@ function ChatIndividual({ route }) {
   // --- Cargar usuario y mensajes iniciales
   useEffect(() => {
     let isMounted = true;
+    setLoadingMsg(true);
+    setMensajes([]);
+    setHasOlderMessages(false);
 
     const init = async () => {
       const { data: { user }, error } = await supabase.auth.getUser();
@@ -119,39 +206,83 @@ function ChatIndividual({ route }) {
   // --- Cargar mensajes de la BD
   const cargarMensajes = async (userId) => {
     try {
-      console.log("[chat] cargarMensajes →", { chatId, userId, usuarioId1, usuarioId2 });
-
-      // Diagnóstico: verificar que el chat existe y a quién pertenece
-      const { data: chatRow } = await supabase
-        .from("chats")
-        .select("id, participant_a, participant_b")
-        .eq("id", chatId)
-        .maybeSingle();
-      console.log("[chat] chat row →", chatRow);
-
       const { data, error } = await supabase
         .from("mensajes")
         .select("*")
         .eq("chat_id", chatId)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: false })
+        .limit(CHAT_PAGE_SIZE);
 
       if (error) {
         console.error("[chat] error al cargar mensajes:", error.message, error);
+        setLoadingMsg(false);
         return;
       }
 
-      console.log("[chat] mensajes encontrados:", data?.length ?? 0);
-      setMensajes(data ?? []);
+      const initialMessages = [...(data ?? [])].reverse();
+      setMensajes(initialMessages);
+      setHasOlderMessages((data?.length ?? 0) === CHAT_PAGE_SIZE);
       setLoadingMsg(false);
-      marcarComoLeidos(data ?? [], userId);
+      marcarComoLeidos(initialMessages, userId);
 
       // scroll al final
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
 
     } catch (e) {
       console.error("[chat] excepción cargarMensajes:", e);
+      setLoadingMsg(false);
     }
   };
+
+  const cargarMensajesAnteriores = useCallback(async () => {
+    if (loadingOlderMessages || !hasOlderMessages || mensajes.length === 0) {
+      return;
+    }
+
+    const oldestCreatedAt = mensajes.find(
+      (message) => message.tipo !== "fecha" && message.created_at,
+    )?.created_at;
+    if (!oldestCreatedAt) {
+      setHasOlderMessages(false);
+      return;
+    }
+
+    setLoadingOlderMessages(true);
+    try {
+      const { data, error } = await supabase
+        .from("mensajes")
+        .select("*")
+        .eq("chat_id", chatId)
+        .lt("created_at", oldestCreatedAt)
+        .order("created_at", { ascending: false })
+        .limit(CHAT_PAGE_SIZE);
+
+      if (error) throw error;
+      const olderMessages = [...(data ?? [])].reverse();
+      setMensajes((current) => {
+        const knownIds = new Set(current.map((message) => message.id));
+        return [
+          ...olderMessages.filter((message) => !knownIds.has(message.id)),
+          ...current,
+        ];
+      });
+      setHasOlderMessages((data?.length ?? 0) === CHAT_PAGE_SIZE);
+      if (usuarioId) marcarComoLeidos(olderMessages, usuarioId);
+    } catch (error) {
+      Alert.alert(
+        "No se pudo cargar el historial",
+        error instanceof Error ? error.message : "Intentá nuevamente.",
+      );
+    } finally {
+      setLoadingOlderMessages(false);
+    }
+  }, [
+    chatId,
+    hasOlderMessages,
+    loadingOlderMessages,
+    mensajes,
+    usuarioId,
+  ]);
 
   // --- Marcar mensajes no leídos como leídos
   const marcarComoLeidos = async (mensajesData, userId) => {
@@ -180,11 +311,14 @@ function ChatIndividual({ route }) {
         },
         (payload) => {
           const nuevo = payload.new;
-          setMensajes((prev) => [...prev, nuevo]);
+          setMensajes((prev) =>
+            prev.some((message) => message.id === nuevo.id)
+              ? prev
+              : [...prev, nuevo],
+          );
           // Si el mensaje no es mío, marcarlo como leído
           if (nuevo.remitente_id !== userId) {
             marcarComoLeidos([nuevo], userId);
-             return;
           }
           setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
         }
@@ -206,8 +340,239 @@ function ChatIndividual({ route }) {
 
     if (error) {
       console.error("Error al enviar mensaje:", error.message);
+      throw new Error(
+        error.message?.includes("CHAT_BLOCKED")
+          ? "La conversación está bloqueada y no admite mensajes nuevos."
+          : "No se pudo enviar el mensaje. Intentá nuevamente.",
+      );
     }
+
+    await supabase
+      .from("chats")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", chatId);
   }, [usuarioId, chatId]);
+
+  const enviarAudio = useCallback(async ({
+    uri,
+    durationMs,
+    mimeType,
+  }) => {
+    if (!usuarioId) throw new Error("Necesitás iniciar sesión para enviar audios.");
+
+    const { data: ticket, error: ticketError } = await supabase.functions.invoke(
+      "chat-audio",
+      {
+        body: {
+          action: "create-upload",
+          chatId,
+          durationMs,
+          mimeType,
+        },
+      },
+    );
+
+    if (ticketError || !ticket?.path || !ticket?.token) {
+      throw new Error(
+        ticket?.error || ticketError?.message || "No se pudo preparar el audio.",
+      );
+    }
+
+    const base64Audio = await FileSystem.readAsStringAsync(uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    const file = Uint8Array.from(atob(base64Audio), (character) =>
+      character.charCodeAt(0),
+    );
+    if (ticket.maxFileBytes && file.byteLength > ticket.maxFileBytes) {
+      throw new Error("El audio supera el tamaño máximo permitido.");
+    }
+
+    const { error: uploadError } = await supabase.storage
+      .from(CHAT_AUDIO_BUCKET)
+      .uploadToSignedUrl(ticket.path, ticket.token, file, {
+        contentType: mimeType,
+      });
+
+    if (uploadError) {
+      throw new Error(`No se pudo subir el audio: ${uploadError.message}`);
+    }
+
+    let transcript;
+    const { data: transcriptionData } = await supabase.functions.invoke(
+      "chat-audio",
+      {
+        body: {
+          action: "transcribe",
+          chatId,
+          path: ticket.path,
+        },
+      },
+    );
+    if (typeof transcriptionData?.transcript === "string") {
+      transcript = transcriptionData.transcript;
+    }
+
+    const contenido = createAudioMessageContent({
+      path: ticket.path,
+      durationMs,
+      mimeType,
+      transcript,
+    });
+
+    const { error: messageError } = await supabase.from("mensajes").insert({
+      chat_id: chatId,
+      remitente_id: usuarioId,
+      contenido,
+    });
+
+    if (messageError) {
+      throw new Error(
+        messageError.message?.includes("CHAT_BLOCKED")
+          ? "El audio se guardó, pero la conversación está bloqueada."
+          : `El audio se subió, pero no se pudo enviar: ${messageError.message}`,
+      );
+    }
+
+    vexo.marketplace("audio_sent", {
+      duracion_segundos: Math.round(durationMs / 1000),
+      transcripto: Boolean(transcript),
+    });
+    if (transcript) {
+      vexo.marketplace("audio_transcribed", {
+        duracion_segundos: Math.round(durationMs / 1000),
+      });
+    }
+
+    await supabase
+      .from("chats")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", chatId);
+  }, [chatId, usuarioId]);
+
+  const sanitizeMicaContext = (value) =>
+    String(value ?? "")
+      .replace(/https?:\/\/\S+/gi, "[enlace externo oculto]")
+      .replace(/(?:\+?\d[\s().-]*){8,}/g, "[dato de contacto oculto]")
+      .slice(0, 1800);
+
+  const buildMicaChatHistory = useCallback(async () => {
+    const recentMessages = mensajes.slice(-24);
+    let transcriptionAttempts = 0;
+
+    return Promise.all(
+      recentMessages.map(async (message) => {
+        const micaMessage = parseMicaSystemMessage(message.contenido);
+        if (micaMessage) {
+          return {
+            author: "mica",
+            text: `MICA: ${sanitizeMicaContext(micaMessage.text)}`,
+          };
+        }
+
+        const audioMessage = parseAudioMessageContent(message.contenido);
+        let content = message.contenido ?? "";
+        if (audioMessage) {
+          let transcript = audioMessage.transcript;
+          if (!transcript && transcriptionAttempts < 3) {
+            transcriptionAttempts += 1;
+            const { data } = await supabase.functions.invoke("chat-audio", {
+              body: {
+                action: "transcribe",
+                chatId,
+                path: audioMessage.path,
+              },
+            });
+            if (typeof data?.transcript === "string") {
+              transcript = data.transcript;
+            }
+          }
+          content = transcript
+            ? `Transcripción de audio: ${transcript}`
+            : "Audio sin transcripción disponible";
+        } else {
+          const quote = parseQuoteMessage(message.contenido);
+          if (quote) {
+            content = [
+              `Presupuesto ${formatQuoteAmount(quote.amount)}`,
+              `Alcance: ${quote.scope}`,
+              `Materiales: ${quote.materials}`,
+              `Tiempo: ${quote.timeframe}`,
+              `Garantía: ${quote.warranty}`,
+            ].join(". ");
+          }
+        }
+
+        const author =
+          message.remitente_id === usuarioId ? "Yo" : "La otra persona";
+        return {
+          author: "user",
+          text: `${author}: ${sanitizeMicaContext(content)}`,
+        };
+      }),
+    );
+  }, [chatId, mensajes, usuarioId]);
+
+  const pedirAyudaAMica = useCallback(async (question) => {
+    if (!usuarioId || askingMica) return;
+    setAskingMica(true);
+
+    try {
+      const history = await buildMicaChatHistory();
+      const { data, error } = await supabase.functions.invoke("mica-chat", {
+        body: {
+          mode: "intermediar-chat",
+          message: question,
+          history,
+          insight: { chatId },
+        },
+      });
+
+      if (error || !data?.reply) {
+        throw new Error(
+          data?.error || error?.message || "MICA no pudo responder.",
+        );
+      }
+
+      const contenido = createMicaAssistantContent(data.reply, usuarioId);
+      const { error: messageError } = await supabase.from("mensajes").insert({
+        chat_id: chatId,
+        remitente_id: usuarioId,
+        contenido,
+      });
+      if (messageError) throw messageError;
+
+      await supabase
+        .from("chats")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", chatId);
+      setMicaAssistantVisible(false);
+      vexo.marketplace("mica_intervention", {
+        audios_sin_transcribir: mensajes.some((message) => {
+          const audio = parseAudioMessageContent(message.contenido);
+          return Boolean(audio && !audio.transcript);
+        }),
+      });
+    } catch (error) {
+      Alert.alert(
+        "MICA no pudo intervenir",
+        error instanceof Error ? error.message : "Intentá nuevamente.",
+      );
+    } finally {
+      setAskingMica(false);
+    }
+  }, [
+    askingMica,
+    buildMicaChatHistory,
+    chatId,
+    mensajes,
+    usuarioId,
+  ]);
+
+  const hasUntranscribedAudio = mensajes.some((message) => {
+    const audio = parseAudioMessageContent(message.contenido);
+    return Boolean(audio && !audio.transcript);
+  });
 
   // ---  Función para formatear la fecha con "Hoy", "Ayer" o DD/MM/YYYY
   const formatearFecha = (fechaISO) => {
@@ -233,10 +598,10 @@ function ChatIndividual({ route }) {
 
   // ---  Genera la lista con "chips" de fecha
   const mensajesConFechas = () => {
-    let resultado = [];
+    const resultado = [];
     let ultimaFecha = null;
 
-    mensajes.forEach((msg) => {
+    for (const msg of mensajes) {
       const fechaMsg = formatearFecha(msg.created_at);
       if (fechaMsg !== ultimaFecha) {
         // Insertar chip de fecha
@@ -244,9 +609,55 @@ function ChatIndividual({ route }) {
         ultimaFecha = fechaMsg;
       }
       resultado.push({ ...msg, tipo: 'mensaje' });
-    });
+    }
 
     return resultado;
+  };
+
+  const abrirEditorTranscripcion = (messageId, audioMessage) => {
+    setTranscriptEditor({
+      messageId,
+      audioMessage,
+      text: audioMessage.transcript || "",
+    });
+  };
+
+  const guardarTranscripcion = async () => {
+    if (!transcriptEditor || !usuarioId || savingTranscript) return;
+
+    try {
+      setSavingTranscript(true);
+      const transcript = transcriptEditor.text.trim();
+      const contenido = createAudioMessageContent({
+        path: transcriptEditor.audioMessage.path,
+        durationMs: transcriptEditor.audioMessage.durationMs,
+        mimeType: transcriptEditor.audioMessage.mimeType,
+        transcript,
+      });
+      const { error } = await supabase
+        .from("mensajes")
+        .update({ contenido })
+        .eq("id", transcriptEditor.messageId)
+        .eq("remitente_id", usuarioId);
+
+      if (error) throw error;
+
+      setMensajes((current) =>
+        current.map((message) =>
+          message.id === transcriptEditor.messageId
+            ? { ...message, contenido }
+            : message,
+        ),
+      );
+      setTranscriptEditor(null);
+    } catch (error) {
+      Alert.alert(
+        "No se pudo corregir",
+        error instanceof Error ? error.message : "Intentá nuevamente.",
+      );
+    } finally {
+      setSavingTranscript(false);
+    }
   };
 
   const renderItem = ({ item }) => {
@@ -259,10 +670,16 @@ function ChatIndividual({ route }) {
     }
 
     const esMio = item.remitente_id === usuarioId;
-    const quote = parseQuoteMessage(item.contenido);
+    const micaSystemMessage = parseMicaSystemMessage(item.contenido);
+    if (micaSystemMessage) {
+      return <MicaSystemBubble message={micaSystemMessage} />;
+    }
+
+    const audioMessage = parseAudioMessageContent(item.contenido);
+    const quote = audioMessage ? null : parseQuoteMessage(item.contenido);
     const esPresupuestoTexto = typeof item.contenido === 'string' && item.contenido.startsWith('💰 Presupuesto:');
     const montoMatch = esPresupuestoTexto && item.contenido.match(/\$([\d.,]+)/);
-    const montoNumerico = quote?.amount ?? (montoMatch ? parseFloat(montoMatch[1].replace(/\./g, '').replace(',', '.')) : 0);
+    const montoNumerico = quote?.amount ?? (montoMatch ? Number.parseFloat(montoMatch[1].replace(/\./g, '').replace(',', '.')) : 0);
     const esPresupuesto = Boolean(quote) || esPresupuestoTexto;
 
     return (
@@ -272,7 +689,18 @@ function ChatIndividual({ route }) {
           esMio ? styles.mensajeDerecha : styles.mensajeIzquierda,
         ]}
       >
-        {quote ? (
+        {audioMessage ? (
+          <VoiceMessageBubble
+            chatId={chatId}
+            message={audioMessage}
+            isOwn={esMio}
+            onEditTranscript={
+              esMio
+                ? () => abrirEditorTranscripcion(item.id, audioMessage)
+                : undefined
+            }
+          />
+        ) : quote ? (
           <View style={styles.quoteCard}>
             <View style={styles.quoteHeader}>
               <View>
@@ -301,13 +729,13 @@ function ChatIndividual({ route }) {
         {esPresupuesto && !esMio && (
           <TouchableOpacity
             style={styles.pagarBtn}
-            onPress={() => pagarPresupuesto(montoNumerico)}
+            onPress={() => pagarPresupuesto(item.id)}
             disabled={pagando}
             activeOpacity={0.8}
           >
             <Ionicons name="card-outline" size={15} color="#fff" />
             <Text style={styles.pagarBtnText}>
-              {pagando ? 'Procesando...' : `Confirmar presupuesto y habilitar WhatsApp ($${Math.round(calculateServiceConfirmationFee(montoNumerico)).toLocaleString('es-AR')})`}
+              {pagando ? 'Procesando...' : `Confirmar presupuesto en la app ($${Math.round(calculateServiceConfirmationFee(montoNumerico)).toLocaleString('es-AR')})`}
             </Text>
           </TouchableOpacity>
         )}
@@ -332,66 +760,39 @@ function ChatIndividual({ route }) {
     );
   };
 
-  const desbloquearWhatsApp = useCallback(async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      const myId = user?.id;
-      const workerId = usuarioId1 === myId ? usuarioId2 : usuarioId1;
-      const { data: workerData } = await supabase
-        .from('usuarios')
-        .select('celular, nombre')
-        .eq('id', workerId)
-        .single();
-      const celular = workerData?.celular;
-      if (celular) {
-        await supabase.from('mensajes').insert({
-          chat_id: chatId,
-          remitente_id: myId,
-          contenido: `✅ Pago aprobado. WhatsApp del profesional: 📱 ${celular}`,
-        });
-      } else {
-        Alert.alert('Pago recibido', 'Tu pago fue aprobado. El profesional se comunicará contigo pronto.');
-      }
-    } catch (e) {
-      Alert.alert('Pago aprobado', 'Tu pago fue aprobado. Contactá al profesional por el chat.');
-    }
-  }, [chatId, usuarioId1, usuarioId2]);
-
-  const pagarPresupuesto = async (montoTotal) => {
+  const pagarPresupuesto = async (messageId) => {
     setPagando(true);
     try {
-      const comision = calculateServiceConfirmationFee(montoTotal);
-      const res = await fetch('https://api.mercadopago.com/checkout/preferences', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer APP_USR-2906464672020891-031112-22f4fa494707febbc20d77650b33fa6e-183374120',
-        },
-        body: JSON.stringify({
-          items: [{
-            title: 'Confirmación de presupuesto - 15%',
-            quantity: 1,
-            unit_price: comision,
-            currency_id: 'ARS',
-          }],
-          back_urls: {
-            success: 'solucionesya://wsp-desbloqueado?status=approved',
-            failure: 'solucionesya://wsp-desbloqueado?status=failure',
-            pending: 'solucionesya://wsp-desbloqueado?status=pending',
+      const { data, error } = await supabase.functions.invoke(
+        "create-payment-preference",
+        {
+          body: {
+            chatId,
+            messageId,
           },
-          auto_return: 'approved',
-          external_reference: chatId,
-        }),
-      });
-      const data = await res.json();
-      if (data?.init_point) {
-        pendingWspUnlock.current = true;
-        Linking.openURL(data.init_point);
+        },
+      );
+      if (error) throw error;
+
+      if (data?.approved) {
+        Alert.alert(
+          "Pago verificado",
+          "Este presupuesto ya tiene una confirmación de pago aprobada.",
+        );
+      } else if (data?.initPoint) {
+        await Linking.openURL(data.initPoint);
       } else {
-        Alert.alert('Error', 'No se pudo generar el pago. Intentá de nuevo.');
+        throw new Error(
+          data?.error || "No se pudo generar el pago. Intentá nuevamente.",
+        );
       }
-    } catch (e) {
-      Alert.alert('Error', 'Falló la conexión con MercadoPago.');
+    } catch (error) {
+      Alert.alert(
+        "No se pudo iniciar el pago",
+        error instanceof Error
+          ? error.message
+          : "Falló la conexión segura con Mercado Pago.",
+      );
     } finally {
       setPagando(false);
     }
@@ -405,7 +806,32 @@ function ChatIndividual({ route }) {
         style={styles.container}
       >
         <View style={styles.header}>
-          <Text style={styles.titulo}>{nombre}</Text>
+          <View style={styles.headerCopy}>
+            <Text style={styles.titulo}>{nombre}</Text>
+            <View style={styles.secureChatRow}>
+              <Ionicons name="shield-checkmark" size={13} color="#e7fffb" />
+              <Text style={styles.secureChatText}>Chat interno protegido</Text>
+            </View>
+          </View>
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              accessibilityLabel="Seguridad de la conversación"
+              activeOpacity={0.78}
+              onPress={() => setTrustSafetyVisible(true)}
+              style={styles.safetyHeaderButton}
+            >
+              <Ionicons name="shield-outline" size={18} color="#fff" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              accessibilityLabel="Pedir ayuda a MICA"
+              activeOpacity={0.78}
+              onPress={() => setMicaAssistantVisible(true)}
+              style={styles.micaHelpButton}
+            >
+              <Ionicons name="sparkles" size={16} color="#087989" />
+              <Text style={styles.micaHelpButtonText}>Ayuda MICA</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {loadingMsg ? (
@@ -419,14 +845,44 @@ function ChatIndividual({ route }) {
             data={mensajesConFechas()}
             keyExtractor={(item, index) => item.id?.toString() ?? `fecha-${index}`}
             renderItem={renderItem}
-            ListHeaderComponent={<ChatRules />}
+            ListHeaderComponent={
+              <View>
+                {hasOlderMessages ? (
+                  <TouchableOpacity
+                    activeOpacity={0.78}
+                    disabled={loadingOlderMessages}
+                    onPress={cargarMensajesAnteriores}
+                    style={styles.loadOlderButton}
+                  >
+                    {loadingOlderMessages ? (
+                      <ActivityIndicator size="small" color="#087989" />
+                    ) : (
+                      <Ionicons name="time-outline" size={16} color="#087989" />
+                    )}
+                    <Text style={styles.loadOlderText}>
+                      {loadingOlderMessages
+                        ? "Cargando historial..."
+                        : "Ver mensajes anteriores"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+                <ChatRules />
+              </View>
+            }
+            maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
             contentContainerStyle={{ paddingVertical: 10, paddingHorizontal: 10 }}
             //onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             //onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
           />
         )}
 
-        {!loadingMsg && <ChatInputBar serviceId={servicioId} onSend={enviarMensaje} />}
+        {!loadingMsg && (
+          <ChatInputBar
+            serviceId={servicioId}
+            onSend={enviarMensaje}
+            onSendAudio={enviarAudio}
+          />
+        )}
 
         <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
           <View style={styles.modalFondo}>
@@ -445,6 +901,92 @@ function ChatIndividual({ route }) {
             </View>
           </View>
         </Modal>
+
+        <Modal
+          visible={Boolean(transcriptEditor)}
+          animationType="fade"
+          transparent
+          onRequestClose={() => {
+            if (!savingTranscript) setTranscriptEditor(null);
+          }}
+        >
+          <View style={styles.transcriptModalOverlay}>
+            <View style={styles.transcriptModalCard}>
+              <Text style={styles.transcriptModalTitle}>
+                Corregir transcripción
+              </Text>
+              <Text style={styles.transcriptModalHint}>
+                Escuchá el audio y corregí nombres, precios, horarios o
+                direcciones antes de pedir ayuda a MICA.
+              </Text>
+              <TextInput
+                editable={!savingTranscript}
+                multiline
+                maxLength={4000}
+                onChangeText={(text) =>
+                  setTranscriptEditor((current) =>
+                    current ? { ...current, text } : current,
+                  )
+                }
+                placeholder="Escribí lo que dice el audio..."
+                placeholderTextColor="#829296"
+                style={styles.transcriptModalInput}
+                textAlignVertical="top"
+                value={transcriptEditor?.text || ""}
+              />
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={savingTranscript}
+                onPress={guardarTranscripcion}
+                style={styles.transcriptSaveButton}
+              >
+                {savingTranscript ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.transcriptSaveText}>
+                    Guardar corrección
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                disabled={savingTranscript}
+                onPress={() => setTranscriptEditor(null)}
+                style={styles.transcriptCancelButton}
+              >
+                <Text style={styles.transcriptCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <MicaAssistantModal
+          visible={micaAssistantVisible}
+          loading={askingMica}
+          hasUntranscribedAudio={hasUntranscribedAudio}
+          onClose={() => {
+            if (!askingMica) setMicaAssistantVisible(false);
+          }}
+          onAsk={pedirAyudaAMica}
+        />
+
+        {partnerId ? (
+          <TrustSafetyModal
+            visible={trustSafetyVisible}
+            providerId={partnerId}
+            providerName={nombre}
+            serviceId={
+              Number.isFinite(Number(servicioData?.id || servicioId))
+                ? Number(servicioData?.id || servicioId)
+                : null
+            }
+            onClose={() => setTrustSafetyVisible(false)}
+            onBlocked={() => {
+              setTrustSafetyVisible(false);
+              navigation.goBack();
+            }}
+          />
+        ) : null}
 
       </KeyboardAvoidingView>
     </>
@@ -469,7 +1011,7 @@ function QuoteRow({ icon, label, value }) {
 
 function ChatRules() {
   const rules = [
-    { icon: "🔢", text: "Está prohibido compartir números de teléfono, WhatsApp o cualquier dato de contacto en el chat." },
+    { icon: "🔢", text: "No compartas teléfonos ni datos de contacto externos. Coordiná todo dentro del chat seguro." },
     { icon: "💰", text: "Para acordar un precio, usá el botón \"Enviar presupuesto\". El pago se gestiona dentro de la app." },
     { icon: "🤝", text: "Tratá con respeto a todos los usuarios. El lenguaje ofensivo puede resultar en una suspensión." },
     { icon: "🔒", text: "No compartas contraseñas, datos bancarios ni información personal sensible." },
@@ -481,8 +1023,8 @@ function ChatRules() {
         <Text style={rulesStyles.headerIcon}>🛡️</Text>
         <Text style={rulesStyles.headerTitle}>Reglas del chat</Text>
       </View>
-      {rules.map((r, i) => (
-        <View key={i} style={rulesStyles.row}>
+      {rules.map((r) => (
+        <View key={r.text} style={rulesStyles.row}>
           <Text style={rulesStyles.ruleIcon}>{r.icon}</Text>
           <Text style={rulesStyles.ruleText}>{r.text}</Text>
         </View>
@@ -552,8 +1094,70 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "bold",
     color: "#fff",
-    flex: 1,
     textAlign: "left",
+  },
+  headerCopy: {
+    flex: 1,
+  },
+  secureChatRow: {
+    marginTop: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  secureChatText: {
+    color: "#e7fffb",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+  },
+  safetyHeaderButton: {
+    width: 38,
+    height: 38,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.72)",
+    borderRadius: 14,
+    backgroundColor: "rgba(4,122,143,0.28)",
+  },
+  micaHelpButton: {
+    minHeight: 38,
+    paddingHorizontal: 11,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "rgba(255,255,255,0.94)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.72)",
+  },
+  micaHelpButtonText: {
+    color: "#087989",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  loadOlderButton: {
+    minHeight: 40,
+    marginBottom: 10,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "#dff5f2",
+    borderWidth: 1,
+    borderColor: "#b8e1dc",
+  },
+  loadOlderText: {
+    color: "#087989",
+    fontSize: 12,
+    fontWeight: "800",
   },
   botonInfo: {
     flexDirection: 'row', 
@@ -758,6 +1362,69 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 14,
     padding: 3,
+  },
+  transcriptModalOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(14,34,38,0.58)",
+  },
+  transcriptModalCard: {
+    width: "100%",
+    maxWidth: 440,
+    padding: 22,
+    borderRadius: 24,
+    backgroundColor: "#fff",
+  },
+  transcriptModalTitle: {
+    color: "#173f45",
+    fontSize: 21,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  transcriptModalHint: {
+    marginTop: 7,
+    color: "#5b7074",
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  transcriptModalInput: {
+    minHeight: 130,
+    marginTop: 16,
+    padding: 13,
+    color: "#1e3438",
+    fontSize: 14,
+    lineHeight: 20,
+    borderWidth: 1,
+    borderColor: "#b9dadd",
+    borderRadius: 14,
+    backgroundColor: "#f8fcfc",
+  },
+  transcriptSaveButton: {
+    minHeight: 48,
+    marginTop: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    backgroundColor: "#047a8f",
+  },
+  transcriptSaveText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "900",
+  },
+  transcriptCancelButton: {
+    minHeight: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 5,
+  },
+  transcriptCancelText: {
+    color: "#687b7f",
+    fontSize: 14,
+    fontWeight: "700",
   },
 
   modalOverlay: {
