@@ -137,6 +137,29 @@ type ProfileReportRow = {
   created_at: string;
 };
 
+type MarketplaceEventRow = {
+  id: number;
+  user_id: string;
+  event_name: string;
+  province: string | null;
+  city: string | null;
+  category: string | null;
+  context: Json;
+  created_at: string;
+};
+
+type ServiceJobReviewRow = {
+  id: string;
+  payment_record_id: string;
+  chat_id: string;
+  reviewer_id: string;
+  provider_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = MergeDeep<
   DatabaseGenerated,
   {
@@ -204,8 +227,50 @@ export type Database = MergeDeep<
           Update: Partial<ProfileReportRow>;
           Relationships: [];
         };
+        marketplace_events: {
+          Row: MarketplaceEventRow;
+          Insert: Partial<MarketplaceEventRow> & {
+            user_id: string;
+            event_name: string;
+          };
+          Update: Partial<MarketplaceEventRow>;
+          Relationships: [];
+        };
+        service_job_reviews: {
+          Row: ServiceJobReviewRow;
+          Insert: Partial<ServiceJobReviewRow> & {
+            payment_record_id: string;
+            chat_id: string;
+            reviewer_id: string;
+            provider_id: string;
+            rating: number;
+          };
+          Update: Partial<ServiceJobReviewRow>;
+          Relationships: [];
+        };
       };
       Functions: {
+        track_marketplace_event: {
+          Args: {
+            p_event_name: string;
+            p_context?: Json;
+          };
+          Returns: number;
+        };
+        get_chat_job_status: {
+          Args: {
+            p_chat_id: string;
+          };
+          Returns: Json;
+        };
+        submit_service_job_review: {
+          Args: {
+            p_payment_record_id: string;
+            p_rating: number;
+            p_comment?: string | null;
+          };
+          Returns: Json;
+        };
         create_mica_app_request: {
           Args: {
             p_categoria: string;

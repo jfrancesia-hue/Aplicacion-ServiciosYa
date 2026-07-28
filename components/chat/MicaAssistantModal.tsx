@@ -34,10 +34,10 @@ const QUICK_ACTIONS = [
       "Indicá el próximo paso más útil para que cliente y prestador puedan avanzar dentro de la app.",
   },
   {
-    label: "Revisar presupuesto",
-    icon: "receipt-outline" as const,
+    label: "Validar acuerdo escrito",
+    icon: "checkmark-done-outline" as const,
     prompt:
-      "Revisá si el presupuesto y el alcance están claros. Señalá únicamente datos que falten confirmar.",
+      "Revisá el presupuesto y verificá si cliente y prestador confirmaron por escrito precio, alcance, materiales, fecha, horario y dirección. Lo dicho solo en audio debe quedar pendiente.",
   },
 ];
 
@@ -149,8 +149,9 @@ export default function MicaAssistantModal({
           </View>
 
           <Text style={styles.disclaimer}>
-            MICA puede resumir y orientar, pero no confirma pagos ni modifica
-            acuerdos sin una acción explícita de las personas.
+            MICA resume y orienta. Precio, alcance, fecha y dirección solo se
+            consideran acordados cuando ambas personas los confirman por
+            escrito; los pagos los valida exclusivamente el sistema.
           </Text>
         </View>
       </KeyboardAvoidingView>

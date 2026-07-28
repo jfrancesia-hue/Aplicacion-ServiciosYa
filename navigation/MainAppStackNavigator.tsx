@@ -36,6 +36,7 @@ import WorkerProfile from "../components/workers/WorkerProfile";
 import { useInitializeHomeEvents } from "../lib/hooks/useInitializeHomeEvents";
 import ChatListScreen from "../screens/ChatListScreen";
 import MicaChat from "../screens/MicaChat";
+import OperationalDashboard from "../screens/OperationalDashboard";
 
 const withSafeArea = <P extends object>(Component: FC<P>) => {
   const WrappedComponent: FC<P> = (props: PropsWithChildren<P>) => (
@@ -114,6 +115,10 @@ export default function MainStackNavigator() {
       <Stack.Screen
         name="PerfilPendienteDetalle"
         component={withSafeArea(PerfilPendienteDetalle)}
+      />
+      <Stack.Screen
+        name="OperationalDashboard"
+        component={OperationalDashboard}
       />
       <Stack.Screen name="Maps" component={Maps} />
       <Stack.Group screenOptions={{ presentation: "modal" }}>

@@ -271,6 +271,22 @@ function Configuracion({ navigation }: Props) {
 
             {rol !== "guest" && <BlockedUsersSection />}
 
+            {rol === "admin" && (
+              <View style={styles.section}>
+                <Text style={styles.optionText}>Operación y seguridad</Text>
+                <Text style={styles.optionDescription}>
+                  Revisá prestadores, embudo, pagos, errores y reportes sin
+                  exponer conversaciones privadas.
+                </Text>
+                <TouchableOpacity
+                  style={styles.adminButton}
+                  onPress={() => navigation.navigate("OperationalDashboard")}
+                >
+                  <Text style={styles.buttonText}>Abrir panel operativo</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* CERRAR SESIÓN */}
             <View style={styles.section}>
               <Text style={styles.optionText}>Cerrar Sesión</Text>
@@ -339,6 +355,25 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     color: "#202B3A",
     marginTop: 4,
+  },
+  optionDescription: {
+    color: "#667b80",
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  adminButton: {
+    backgroundColor: "#063b45",
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: "center",
+    marginBottom: 10,
+    elevation: 3,
+    shadowColor: "#063b45",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 7,
   },
   input: {
     backgroundColor: "#f5feff",

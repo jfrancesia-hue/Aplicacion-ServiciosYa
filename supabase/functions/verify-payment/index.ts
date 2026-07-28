@@ -191,6 +191,7 @@ Deno.serve(async (req) => {
       .from("service_confirmation_payments")
       .update({
         status: "approved",
+        job_status: "confirmed",
         payment_id: paymentId,
         provider_status: providerStatus,
         approved_at: now,

@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import {
   View,
@@ -78,6 +79,11 @@ interface Worker {
   availabilityUpdatedAt?: string | null;
   legacy?: boolean;
   campaignProfile?: boolean;
+  completedJobs?: number;
+  averageRating?: number | null;
+  reviewCount?: number;
+  averageResponseMinutes?: number | null;
+  responseSampleSize?: number;
 }
 
 type RawWorker = Omit<Worker, "categoria"> & {
@@ -126,6 +132,13 @@ function extractCardDocUrl(val: unknown): string | null {
     }
   }
   return null;
+}
+
+function formatResponseTime(minutes?: number | null) {
+  if (minutes == null || !Number.isFinite(minutes)) return null;
+  if (minutes < 60) return `Responde en ~${Math.max(1, Math.round(minutes))} min`;
+  if (minutes < 24 * 60) return `Responde en ~${Math.round(minutes / 60)} h`;
+  return `Responde en ~${Math.round(minutes / (24 * 60))} días`;
 }
 
 function WorkerCard({ worker, onPress }: { worker: Worker; onPress: () => void }) {
@@ -246,6 +259,33 @@ function WorkerCard({ worker, onPress }: { worker: Worker; onPress: () => void }
         </View>
         {worker.suscriptor && <View style={[styles.badge, styles.badgeSub]}><MaterialIcons name="star" size={13} color="#fff" /><Text style={styles.badgeText}>Premium</Text></View>}
       </View>
+      {(worker.completedJobs ?? 0) > 0 ||
+      (worker.responseSampleSize ?? 0) >= 3 ? (
+        <View style={styles.reputationRow}>
+          {(worker.completedJobs ?? 0) > 0 ? (
+            <View style={styles.reputationItem}>
+              <MaterialIcons name="verified" size={15} color="#12815e" />
+              <Text style={styles.reputationText}>
+                {worker.averageRating != null
+                  ? `${worker.averageRating.toFixed(1)} · `
+                  : ""}
+                {worker.completedJobs} trabajo
+                {worker.completedJobs === 1 ? "" : "s"} confirmado
+                {worker.completedJobs === 1 ? "" : "s"}
+              </Text>
+            </View>
+          ) : null}
+          {(worker.responseSampleSize ?? 0) >= 3 &&
+          worker.averageResponseMinutes != null ? (
+            <View style={styles.reputationItem}>
+              <MaterialIcons name="schedule" size={15} color="#047a8f" />
+              <Text style={styles.reputationText}>
+                {formatResponseTime(worker.averageResponseMinutes)}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -454,6 +494,27 @@ function WorkerDetailModal({
                     : ""}
                 </Text>
               </View>
+              {(worker.completedJobs ?? 0) > 0 ? (
+                <View style={styles.verifiedWorkPanel}>
+                  <MaterialIcons name="verified" size={21} color="#12815e" />
+                  <View style={styles.verifiedWorkCopy}>
+                    <Text style={styles.verifiedWorkTitle}>
+                      {worker.completedJobs} trabajo
+                      {worker.completedJobs === 1 ? "" : "s"} confirmado
+                      {worker.completedJobs === 1 ? "" : "s"} en la app
+                    </Text>
+                    <Text style={styles.verifiedWorkText}>
+                      {worker.averageRating != null
+                        ? `Calificación ${worker.averageRating.toFixed(1)} sobre 5`
+                        : "Historial generado con servicios confirmados"}
+                      {(worker.responseSampleSize ?? 0) >= 3 &&
+                      worker.averageResponseMinutes != null
+                        ? ` · ${formatResponseTime(worker.averageResponseMinutes)}`
+                        : ""}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
               {worker.antiguedad != null && <View style={styles.modalRow}><MaterialIcons name="work" size={18} color="#069eb3" /><Text style={styles.modalRowText}>{worker.antiguedad} años de experiencia</Text></View>}
 
               {Array.isArray(worker.categoria) && worker.categoria.length > 0 && (
@@ -614,9 +675,9 @@ export default function ServiciosPorCategoria({ route }: Props) {
   const [blockedIds, setBlockedIds] = useState<Set<string>>(
     () => new Set(),
   );
-  const [locationMode, setLocationMode] = useState<"province" | "city">(
-    "province",
-  );
+  const [locationMode, setLocationMode] = useState<
+    "auto" | "province" | "city"
+  >("auto");
   const [profileLocation, setProfileLocation] =
     useState<UserLocation>(undefined);
   const effectiveLocation = useLocationStore((state) => state.effectiveLocation);
@@ -652,23 +713,25 @@ export default function ServiciosPorCategoria({ route }: Props) {
   const userLocation = locationPending ? undefined : combinedLocation;
   const locationError = !locationPending && !userLocation;
   const locationScope = formatLocationScope(userLocation);
+  const fallbackTrackedRef = useRef("");
 
-  const visibleWorkers = useMemo(() => {
+  const scopedWorkerGroups = useMemo(() => {
     const unblockedWorkers = workers.filter(
       (worker) => !blockedIds.has(worker.id),
     );
-    if (!userLocation) return unblockedWorkers;
-
-    const targetCity = userLocation.ciudad || userLocation.localidad;
-    const localWorkers = unblockedWorkers.filter(
-      (worker) => {
-        if (!providerMatchesLocation(worker, userLocation)) return false;
-        if (locationMode !== "city" || !targetCity) return true;
-        return [worker.ciudad, worker.barrio].some((value) =>
+    const targetCity = userLocation?.ciudad || userLocation?.localidad;
+    const provinceWorkers = userLocation
+      ? unblockedWorkers.filter((worker) =>
+          providerMatchesLocation(worker, userLocation),
+        )
+      : unblockedWorkers;
+    const cityWorkers = targetCity
+      ? provinceWorkers.filter((worker) =>
+          [worker.ciudad, worker.barrio].some((value) =>
           sameLocality(value, targetCity),
-        );
-      },
-    );
+          ),
+        )
+      : provinceWorkers;
     const availabilityOrder: Record<ProviderAvailabilityStatus, number> = {
       online: 0,
       scheduled: 1,
@@ -676,23 +739,75 @@ export default function ServiciosPorCategoria({ route }: Props) {
       busy: 3,
     };
 
-    return [...localWorkers].sort((a, b) => {
-      const availabilityDifference =
-        availabilityOrder[a.availabilityStatus ?? "to_confirm"] -
-        availabilityOrder[b.availabilityStatus ?? "to_confirm"];
-      if (availabilityDifference !== 0) return availabilityDifference;
-      if (targetCity) {
-        const aSameCity = sameLocality(a.ciudad || a.barrio, targetCity);
-        const bSameCity = sameLocality(b.ciudad || b.barrio, targetCity);
-        const cityDifference = Number(bSameCity) - Number(aSameCity);
-        if (cityDifference !== 0) return cityDifference;
-      }
+    const sortWorkers = (items: Worker[]) =>
+      [...items].sort((a, b) => {
+        const availabilityDifference =
+          availabilityOrder[a.availabilityStatus ?? "to_confirm"] -
+          availabilityOrder[b.availabilityStatus ?? "to_confirm"];
+        if (availabilityDifference !== 0) return availabilityDifference;
+        if (targetCity) {
+          const aSameCity = sameLocality(a.ciudad || a.barrio, targetCity);
+          const bSameCity = sameLocality(b.ciudad || b.barrio, targetCity);
+          const cityDifference = Number(bSameCity) - Number(aSameCity);
+          if (cityDifference !== 0) return cityDifference;
+        }
 
-      const aUpdated = Date.parse(a.availabilityUpdatedAt || "") || 0;
-      const bUpdated = Date.parse(b.availabilityUpdatedAt || "") || 0;
-      return bUpdated - aUpdated;
+        const aUpdated = Date.parse(a.availabilityUpdatedAt || "") || 0;
+        const bUpdated = Date.parse(b.availabilityUpdatedAt || "") || 0;
+        return bUpdated - aUpdated;
+      });
+
+    return {
+      province: sortWorkers(provinceWorkers),
+      city: sortWorkers(cityWorkers),
+    };
+  }, [blockedIds, userLocation, workers]);
+
+  const visibleWorkers = useMemo(() => {
+    if (locationMode === "province") return scopedWorkerGroups.province;
+    if (locationMode === "city") return scopedWorkerGroups.city;
+    return scopedWorkerGroups.city.length > 0
+      ? scopedWorkerGroups.city
+      : scopedWorkerGroups.province;
+  }, [locationMode, scopedWorkerGroups]);
+
+  const targetCity = userLocation?.ciudad || userLocation?.localidad;
+  const locationFallbackActive =
+    locationMode === "auto" &&
+    Boolean(targetCity) &&
+    scopedWorkerGroups.city.length === 0 &&
+    scopedWorkerGroups.province.length > 0;
+
+  useEffect(() => {
+    if (!locationFallbackActive) return;
+    const trackingKey = [
+      categoria,
+      userLocation?.ciudad,
+      userLocation?.provincia,
+    ].join("|");
+    if (fallbackTrackedRef.current === trackingKey) return;
+    fallbackTrackedRef.current = trackingKey;
+    vexo.marketplace("location_fallback", {
+      categoria,
+      ciudad: userLocation?.ciudad || userLocation?.localidad || "sin_ciudad",
+      provincia: userLocation?.provincia || "sin_provincia",
     });
-  }, [blockedIds, locationMode, userLocation, workers]);
+  }, [
+    categoria,
+    locationFallbackActive,
+    userLocation?.ciudad,
+    userLocation?.localidad,
+    userLocation?.provincia,
+  ]);
+
+  useEffect(() => {
+    setLocationMode("auto");
+  }, [
+    categoria,
+    userLocation?.ciudad,
+    userLocation?.localidad,
+    userLocation?.provincia,
+  ]);
 
   useEffect(() => {
     if (!selected) { setWorkerServices([]); return; }
@@ -806,6 +921,11 @@ export default function ServiciosPorCategoria({ route }: Props) {
         "[ServiciosPorCategoria] lectura unificada no disponible; se usa el perfil actual:",
         unifiedError,
       );
+      vexo.marketplace("search_failed", {
+        categoria,
+        etapa: "indice_unificado",
+        provincia: userLocation?.provincia || "sin_provincia",
+      });
     }
 
     try {
@@ -877,7 +997,9 @@ export default function ServiciosPorCategoria({ route }: Props) {
         <Text style={styles.headerSub}>
           {loading || locationPending
             ? "Buscando en tu zona..."
-            : `${visibleWorkers.length} prestador${visibleWorkers.length !== 1 ? "es" : ""} en tu zona`}
+            : locationFallbackActive
+              ? `${visibleWorkers.length} en la provincia · ampliamos la búsqueda`
+              : `${visibleWorkers.length} prestador${visibleWorkers.length !== 1 ? "es" : ""} en tu zona`}
         </Text>
       </LinearGradient>
 
@@ -921,20 +1043,51 @@ export default function ServiciosPorCategoria({ route }: Props) {
                 </TouchableOpacity>
               </View>
             ) : (
-              <View style={styles.scopeBanner}>
+              <View
+                style={[
+                  styles.scopeBanner,
+                  locationFallbackActive && styles.scopeBannerFallback,
+                ]}
+              >
                 <View style={styles.scopeIcon}>
-                  <MaterialIcons name="my-location" size={18} color="#fff" />
+                  <MaterialIcons
+                    name={locationFallbackActive ? "travel-explore" : "my-location"}
+                    size={18}
+                    color="#fff"
+                  />
                 </View>
                 <View style={styles.locationBannerCopy}>
                   <Text style={styles.scopeTitle}>
-                    Prestadores de {locationScope || "tu zona"}
+                    {locationFallbackActive && targetCity
+                      ? `Ampliamos desde ${targetCity}`
+                      : `Prestadores de ${locationScope || "tu zona"}`}
                   </Text>
                   <Text style={styles.scopeText}>
-                    Solo mostramos profesionales de esta provincia y
-                    priorizamos a quienes informaron disponibilidad.
+                    {locationFallbackActive
+                      ? `No había resultados exactos en tu ciudad. Mostramos opciones de ${userLocation?.provincia || "tu provincia"} sin mezclar otras provincias.`
+                      : "Priorizamos tu ciudad y a quienes informaron disponibilidad. Nunca mezclamos otra provincia automáticamente."}
                   </Text>
                   {(userLocation?.ciudad || userLocation?.localidad) && (
                     <View style={styles.scopeToggle}>
+                      <TouchableOpacity
+                        activeOpacity={0.78}
+                        onPress={() => setLocationMode("auto")}
+                        style={[
+                          styles.scopeToggleButton,
+                          locationMode === "auto" &&
+                            styles.scopeToggleButtonActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.scopeToggleText,
+                            locationMode === "auto" &&
+                              styles.scopeToggleTextActive,
+                          ]}
+                        >
+                          Recomendado
+                        </Text>
+                      </TouchableOpacity>
                       <TouchableOpacity
                         activeOpacity={0.78}
                         onPress={() => setLocationMode("province")}
@@ -951,7 +1104,7 @@ export default function ServiciosPorCategoria({ route }: Props) {
                               styles.scopeToggleTextActive,
                           ]}
                         >
-                          Toda la provincia
+                          Provincia
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -970,7 +1123,7 @@ export default function ServiciosPorCategoria({ route }: Props) {
                               styles.scopeToggleTextActive,
                           ]}
                         >
-                          Solo mi ciudad
+                          Mi ciudad
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -999,8 +1152,23 @@ export default function ServiciosPorCategoria({ route }: Props) {
                 este momento.
               </Text>
               <Text style={styles.emptyHint}>
-                Probá otra categoría o cambiá tu ubicación desde el inicio.
+                {locationMode === "city" &&
+                scopedWorkerGroups.province.length > 0
+                  ? "Hay prestadores en tu provincia. Podés ampliar el alcance sin mezclar otras provincias."
+                  : "Probá otra categoría o cambiá tu ubicación desde el inicio."}
               </Text>
+              {locationMode === "city" &&
+              scopedWorkerGroups.province.length > 0 ? (
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  onPress={() => setLocationMode("province")}
+                  style={styles.expandLocationButton}
+                >
+                  <Text style={styles.expandLocationButtonText}>
+                    Ver toda la provincia
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           }
         />
@@ -1034,6 +1202,7 @@ const styles = StyleSheet.create({
   locationBannerText: { color: "#795548", fontSize: 12, fontWeight: "500", lineHeight: 17 },
   locationRetryButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: "#fff", borderWidth: 1, borderColor: "#a8dfe8" },
   scopeBanner: { flexDirection: "row", alignItems: "center", gap: 11, backgroundColor: "#e8f7f5", borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: "#b6e4df" },
+  scopeBannerFallback: { backgroundColor: "#fff8e8", borderColor: "#efd49e" },
   scopeIcon: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: "#047a8f" },
   scopeTitle: { color: "#045f6f", fontSize: 15, fontWeight: "800", marginBottom: 2 },
   scopeText: { color: "#3c676b", fontSize: 12, lineHeight: 17 },
@@ -1043,6 +1212,8 @@ const styles = StyleSheet.create({
   scopeToggleText: { color: "#38666b", fontSize: 10, fontWeight: "800" },
   scopeToggleTextActive: { color: "#fff" },
   legacyIncludedText: { color: "#047a8f", fontSize: 11, lineHeight: 16, fontWeight: "700", marginTop: 4 },
+  expandLocationButton: { marginTop: 4, paddingHorizontal: 18, paddingVertical: 11, borderRadius: 22, backgroundColor: "#047a8f" },
+  expandLocationButtonText: { color: "#fff", fontSize: 12, fontWeight: "800" },
   emptyTitle: { fontSize: 18, fontWeight: "700", color: "#047a8f" },
   emptyText: { fontSize: 14, color: "#666", textAlign: "center", lineHeight: 20 },
   emptyHint: { fontSize: 12, color: "#7a7a7a", textAlign: "center", lineHeight: 18 },
@@ -1072,6 +1243,9 @@ const styles = StyleSheet.create({
   badgeSub: { backgroundColor: "#e6a817" },
   badgeText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   badgeTextBasic: { color: "#516468" },
+  reputationRow: { gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: "#e6efed" },
+  reputationItem: { flexDirection: "row", alignItems: "center", gap: 6 },
+  reputationText: { flex: 1, color: "#31565b", fontSize: 11, lineHeight: 16, fontWeight: "700" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalBox: { backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, maxHeight: "92%", overflow: "hidden" },
   modalHero: { alignItems: "center", paddingVertical: 28, gap: 8 },
@@ -1081,6 +1255,10 @@ const styles = StyleSheet.create({
   modalContent: { padding: 20, gap: 4 },
   modalRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 },
   modalRowText: { fontSize: 15, color: "#333" },
+  verifiedWorkPanel: { flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 13, marginBottom: 12, borderRadius: 14, borderWidth: 1, borderColor: "#bde4d5", backgroundColor: "#edf9f4" },
+  verifiedWorkCopy: { flex: 1 },
+  verifiedWorkTitle: { color: "#126846", fontSize: 13, lineHeight: 18, fontWeight: "900" },
+  verifiedWorkText: { color: "#50746a", fontSize: 11, lineHeight: 16, marginTop: 2 },
   modalLabel: { fontSize: 12, fontWeight: "700", color: "#047a8f", marginBottom: 8, marginTop: 10, textTransform: "uppercase", letterSpacing: 0.8 },
   verRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
   verItem: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20 },

@@ -44,6 +44,7 @@ export type MainStackParamList = {
   DniPendiente: undefined;
   PerfilesPendientes: undefined;
   PerfilPendienteDetalle: undefined;
+  OperationalDashboard: undefined;
   Maps: undefined;
   OnlineWorkers: undefined;
   WorkerProfile: UserProfile;

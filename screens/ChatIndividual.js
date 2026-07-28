@@ -51,6 +51,9 @@ function ChatIndividual({ route }) {
   const [loadingMsg, setLoadingMsg] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [estrellas, setEstrellas] = useState(0);
+  const [comentarioCalificacion, setComentarioCalificacion] = useState("");
+  const [enviandoCalificacion, setEnviandoCalificacion] = useState(false);
+  const [jobStatus, setJobStatus] = useState(null);
   const [pagando, setPagando] = React.useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
@@ -69,6 +72,22 @@ function ChatIndividual({ route }) {
       : usuarioId1
     : usuarioId1 || usuarioId2;
 
+  const cargarEstadoTrabajo = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.rpc("get_chat_job_status", {
+        p_chat_id: chatId,
+      });
+      if (error) throw error;
+      setJobStatus(
+        data && typeof data === "object" && data.payment_record_id
+          ? data
+          : null,
+      );
+    } catch (error) {
+      console.warn("[chat] estado del trabajo no disponible:", error);
+    }
+  }, [chatId]);
+
   const verificarRetornoPago = useCallback(async (url) => {
     if (!url?.includes("presupuesto-confirmado")) return;
 
@@ -81,6 +100,10 @@ function ChatIndividual({ route }) {
       getPaymentReturnParam(url, "collection_status");
 
     if (returnStatus === "failure" || returnStatus === "rejected") {
+      vexo.marketplace("payment_failed", {
+        etapa: "retorno",
+        estado: returnStatus,
+      });
       Alert.alert(
         "Pago no aprobado",
         "Mercado Pago no aprobó la operación. Podés intentarlo nuevamente.",
@@ -90,6 +113,9 @@ function ChatIndividual({ route }) {
 
     if (!paymentRecordId || !paymentId) {
       if (returnStatus === "pending") {
+        vexo.marketplace("payment_started", {
+          etapa: "retorno_pendiente",
+        });
         Alert.alert(
           "Pago pendiente",
           "Mercado Pago todavía está procesando la operación.",
@@ -124,8 +150,15 @@ function ChatIndividual({ route }) {
         "Pago verificado",
         "La confirmación fue validada por Mercado Pago. Continuá coordinando el servicio desde este chat.",
       );
+      vexo.marketplace("payment_confirmed", {
+        origen: "retorno_mercadopago",
+      });
+      await cargarEstadoTrabajo();
     } catch (error) {
       processingPaymentReturn.current = null;
+      vexo.marketplace("payment_failed", {
+        etapa: "verificacion",
+      });
       Alert.alert(
         "No pudimos verificar el pago",
         error instanceof Error
@@ -135,7 +168,11 @@ function ChatIndividual({ route }) {
     } finally {
       setPagando(false);
     }
-  }, []);
+  }, [cargarEstadoTrabajo]);
+
+  useEffect(() => {
+    void cargarEstadoTrabajo();
+  }, [cargarEstadoTrabajo]);
 
   useEffect(() => {
     const linkSub = Linking.addEventListener("url", ({ url }) => {
@@ -347,11 +384,17 @@ function ChatIndividual({ route }) {
       );
     }
 
+    if (parseQuoteMessage(mensaje.trim())) {
+      vexo.marketplace("quote_sent", {
+        categoria: servicioData?.categoria || servicioData?.titulo || "sin_categoria",
+      });
+    }
+
     await supabase
       .from("chats")
       .update({ updated_at: new Date().toISOString() })
       .eq("id", chatId);
-  }, [usuarioId, chatId]);
+  }, [usuarioId, chatId, servicioData?.categoria, servicioData?.titulo]);
 
   const enviarAudio = useCallback(async ({
     uri,
@@ -440,6 +483,10 @@ function ChatIndividual({ route }) {
     });
     if (transcript) {
       vexo.marketplace("audio_transcribed", {
+        duracion_segundos: Math.round(durationMs / 1000),
+      });
+    } else {
+      vexo.marketplace("audio_transcription_failed", {
         duracion_segundos: Math.round(durationMs / 1000),
       });
     }
@@ -554,6 +601,9 @@ function ChatIndividual({ route }) {
         }),
       });
     } catch (error) {
+      vexo.marketplace("mica_response_failed", {
+        audios_sin_transcribir: hasUntranscribedAudio,
+      });
       Alert.alert(
         "MICA no pudo intervenir",
         error instanceof Error ? error.message : "Intentá nuevamente.",
@@ -760,8 +810,63 @@ function ChatIndividual({ route }) {
     );
   };
 
+  const enviarCalificacion = async () => {
+    if (!jobStatus?.payment_record_id) {
+      Alert.alert(
+        "Trabajo no confirmado",
+        "Solo se puede calificar un trabajo con pago confirmado dentro de la app.",
+      );
+      return;
+    }
+    if (estrellas < 1 || estrellas > 5) {
+      Alert.alert("Elegí una calificación", "Marcá entre 1 y 5 estrellas.");
+      return;
+    }
+
+    setEnviandoCalificacion(true);
+    try {
+      const { data, error } = await supabase.rpc(
+        "submit_service_job_review",
+        {
+          p_payment_record_id: jobStatus.payment_record_id,
+          p_rating: estrellas,
+          p_comment: comentarioCalificacion.trim() || null,
+        },
+      );
+      if (error || !data?.ok) {
+        throw new Error(
+          error?.message || "No se pudo guardar la calificación.",
+        );
+      }
+
+      vexo.marketplace("job_completed", {
+        categoria: servicioData?.categoria || servicioData?.titulo || "sin_categoria",
+      });
+      vexo.marketplace("rating_submitted", {
+        estrellas,
+      });
+      setModalVisible(false);
+      setComentarioCalificacion("");
+      await cargarEstadoTrabajo();
+      Alert.alert(
+        "Trabajo terminado",
+        "La calificación quedó vinculada a un servicio confirmado.",
+      );
+    } catch (error) {
+      Alert.alert(
+        "No se pudo calificar",
+        error instanceof Error ? error.message : "Intentá nuevamente.",
+      );
+    } finally {
+      setEnviandoCalificacion(false);
+    }
+  };
+
   const pagarPresupuesto = async (messageId) => {
     setPagando(true);
+    vexo.marketplace("payment_started", {
+      origen: "presupuesto_chat",
+    });
     try {
       const { data, error } = await supabase.functions.invoke(
         "create-payment-preference",
@@ -775,6 +880,10 @@ function ChatIndividual({ route }) {
       if (error) throw error;
 
       if (data?.approved) {
+        vexo.marketplace("payment_confirmed", {
+          origen: "presupuesto_previamente_aprobado",
+        });
+        await cargarEstadoTrabajo();
         Alert.alert(
           "Pago verificado",
           "Este presupuesto ya tiene una confirmación de pago aprobada.",
@@ -787,6 +896,9 @@ function ChatIndividual({ route }) {
         );
       }
     } catch (error) {
+      vexo.marketplace("payment_failed", {
+        etapa: "crear_preferencia",
+      });
       Alert.alert(
         "No se pudo iniciar el pago",
         error instanceof Error
@@ -847,6 +959,16 @@ function ChatIndividual({ route }) {
             renderItem={renderItem}
             ListHeaderComponent={
               <View>
+                {jobStatus ? (
+                  <JobStatusBanner
+                    status={jobStatus}
+                    onReview={() => {
+                      setEstrellas(0);
+                      setComentarioCalificacion("");
+                      setModalVisible(true);
+                    }}
+                  />
+                ) : null}
                 {hasOlderMessages ? (
                   <TouchableOpacity
                     activeOpacity={0.78}
@@ -887,15 +1009,46 @@ function ChatIndividual({ route }) {
         <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
           <View style={styles.modalFondo}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitulo}>Califica el servicio</Text>
+              <Text style={styles.modalTitulo}>Finalizar y calificar</Text>
+              <Text style={styles.modalHint}>
+                Confirmá que el trabajo terminó. Tu opinión quedará vinculada a
+                este servicio verificado.
+              </Text>
               {renderEstrellas()}
-              <TouchableOpacity style={[styles.botonModal, styles.botonDenunciar]} onPress={() => Alert.alert("Denunciado")}>
-                <Text style={styles.textoBotonModal}>Denunciar servicio</Text>
+              <TextInput
+                editable={!enviandoCalificacion}
+                multiline
+                maxLength={800}
+                onChangeText={setComentarioCalificacion}
+                placeholder="Contá brevemente cómo fue el trabajo (opcional)"
+                placeholderTextColor="#87979a"
+                style={styles.ratingCommentInput}
+                textAlignVertical="top"
+                value={comentarioCalificacion}
+              />
+              <TouchableOpacity
+                disabled={enviandoCalificacion || estrellas === 0}
+                style={[
+                  styles.botonModal,
+                  styles.botonEnviarCalificacion,
+                  (enviandoCalificacion || estrellas === 0) &&
+                    styles.botonModalDisabled,
+                ]}
+                onPress={enviarCalificacion}
+              >
+                {enviandoCalificacion ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.textoBotonModal}>
+                    Confirmar trabajo terminado
+                  </Text>
+                )}
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.botonModal, styles.botonEnviarCalificacion]} onPress={() => Alert.alert("Calificación enviada")}>
-                <Text style={styles.textoBotonModal}>Enviar calificación</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.botonCerrarModal} onPress={() => setModalVisible(false)}>
+              <TouchableOpacity
+                disabled={enviandoCalificacion}
+                style={styles.botonCerrarModal}
+                onPress={() => setModalVisible(false)}
+              >
                 <Ionicons name="close" size={28} color="#333" />
               </TouchableOpacity>
             </View>
@@ -1008,6 +1161,132 @@ function QuoteRow({ icon, label, value }) {
     </View>
   );
 }
+
+function JobStatusBanner({ status, onReview }) {
+  const completed = status.job_status === "completed";
+  const amount = Number(status.amount_total ?? 0);
+  return (
+    <View
+      style={[
+        jobStyles.container,
+        completed && jobStyles.containerCompleted,
+      ]}
+    >
+      <View
+        style={[
+          jobStyles.icon,
+          completed && jobStyles.iconCompleted,
+        ]}
+      >
+        <Ionicons
+          name={completed ? "checkmark-done" : "shield-checkmark"}
+          size={19}
+          color="#fff"
+        />
+      </View>
+      <View style={jobStyles.copy}>
+        <Text style={jobStyles.eyebrow}>
+          {completed ? "TRABAJO VERIFICADO" : "SERVICIO CONFIRMADO"}
+        </Text>
+        <Text style={jobStyles.title}>
+          {completed
+            ? "Trabajo terminado dentro de la app"
+            : "El presupuesto quedó confirmado"}
+        </Text>
+        <Text style={jobStyles.text}>
+          {amount > 0
+            ? `Presupuesto de ${formatQuoteAmount(amount)}. `
+            : ""}
+          {completed
+            ? status.rating
+              ? `Calificación registrada: ${status.rating}/5.`
+              : "El cierre quedó registrado."
+            : status.is_payer
+              ? "Cuando finalice, cerralo y calificá al prestador."
+              : "El cliente podrá cerrarlo y calificar al finalizar."}
+        </Text>
+        {status.can_review ? (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={onReview}
+            style={jobStyles.reviewButton}
+          >
+            <Ionicons name="star-outline" size={16} color="#fff" />
+            <Text style={jobStyles.reviewButtonText}>
+              Finalizar y calificar
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const jobStyles = StyleSheet.create({
+  container: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 12,
+    padding: 13,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#b9dfe5",
+    backgroundColor: "#eaf8fb",
+  },
+  containerCompleted: {
+    borderColor: "#bde4d5",
+    backgroundColor: "#edf9f4",
+  },
+  icon: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+    backgroundColor: "#047a8f",
+  },
+  iconCompleted: {
+    backgroundColor: "#12815e",
+  },
+  copy: {
+    flex: 1,
+  },
+  eyebrow: {
+    color: "#047a8f",
+    fontSize: 9,
+    fontWeight: "900",
+    letterSpacing: 0.8,
+  },
+  title: {
+    marginTop: 2,
+    color: "#1e4148",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  text: {
+    marginTop: 4,
+    color: "#587277",
+    fontSize: 10.5,
+    lineHeight: 15,
+  },
+  reviewButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 18,
+    backgroundColor: "#12815e",
+  },
+  reviewButtonText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+});
 
 function ChatRules() {
   const rules = [
@@ -1333,9 +1612,30 @@ const styles = StyleSheet.create({
     color: "#19D4C6",
     textAlign: "center",
   },
+  modalHint: {
+    marginBottom: 14,
+    color: "#60777c",
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center",
+  },
   estrellasContainer: {
     flexDirection: "row",
     marginBottom: 18,
+  },
+  ratingCommentInput: {
+    width: "100%",
+    minHeight: 90,
+    maxHeight: 130,
+    marginBottom: 10,
+    paddingHorizontal: 13,
+    paddingVertical: 11,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#b9deda",
+    backgroundColor: "#f8fcfb",
+    color: "#25464c",
+    fontSize: 13,
   },
   botonModal: {
     width: "100%",
@@ -1348,7 +1648,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#E45757",
   },
   botonEnviarCalificacion: {
-    backgroundColor: "#19D4C6",
+    backgroundColor: "#12815e",
+  },
+  botonModalDisabled: {
+    opacity: 0.45,
   },
   textoBotonModal: {
     color: "#fff",

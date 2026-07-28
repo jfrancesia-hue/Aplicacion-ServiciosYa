@@ -27,6 +27,11 @@ export type AvailableProvider = {
   legacy: boolean;
   campaignProfile: boolean;
   serviceCount: number;
+  completedJobs: number;
+  averageRating?: number | null;
+  reviewCount: number;
+  averageResponseMinutes?: number | null;
+  responseSampleSize: number;
 };
 
 export type AvailableProviderLocation = {

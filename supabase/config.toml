@@ -44,3 +44,8 @@ entrypoint = "./functions/create-payment-preference/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/verify-payment/index.ts"
+
+[functions.operational-dashboard]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/operational-dashboard/index.ts"

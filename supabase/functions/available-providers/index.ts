@@ -76,12 +76,22 @@ type CityRow = {
   longitude: number;
 };
 
+type ProviderTrustRow = {
+  provider_id: string;
+  completed_jobs: number | null;
+  average_rating: number | null;
+  review_count: number | null;
+  average_response_minutes: number | null;
+  response_sample_size: number | null;
+};
+
 type CachedData = {
   users: UserRow[];
   services: ServiceRow[];
   workerStates: WorkerStateRow[];
   campaignProfiles: CampaignProfileRow[];
   argentinaCities: CityRow[];
+  providerTrust: ProviderTrustRow[];
   expiresAt: number;
 };
 
@@ -379,6 +389,7 @@ async function loadData(admin: ReturnType<typeof createClient>) {
     workerStates,
     campaignProfiles,
     argentinaCities,
+    providerTrust,
   ] = await Promise.all([
     fetchAll<UserRow>(
       admin,
@@ -401,6 +412,11 @@ async function loadData(admin: ReturnType<typeof createClient>) {
       "id,nombre,telefono,zona_frecuente,oficios,rol,foto_url,matricula_url,antecedentes,antecedentes_url,verificado,antiguedad,edad",
     ),
     fetchArgentinaCities(admin),
+    fetchAll<ProviderTrustRow>(
+      admin,
+      "provider_trust_summary",
+      "provider_id,completed_jobs,average_rating,review_count,average_response_minutes,response_sample_size",
+    ),
   ]);
 
   cachedData = {
@@ -409,6 +425,7 @@ async function loadData(admin: ReturnType<typeof createClient>) {
     workerStates,
     campaignProfiles,
     argentinaCities,
+    providerTrust,
     expiresAt: Date.now() + CACHE_TTL_MS,
   };
   return cachedData;
@@ -617,6 +634,9 @@ function buildProviders(data: CachedData) {
   const statesByUser = new Map(
     data.workerStates.map((state) => [state.user_id, state]),
   );
+  const trustByUser = new Map(
+    data.providerTrust.map((summary) => [summary.provider_id, summary]),
+  );
   const serviceLocations = new Map(
     data.services.map((service) => [
       service.id,
@@ -659,6 +679,7 @@ function buildProviders(data: CachedData) {
       normalizeText(draft.user.rol) !== "worker" ||
       draft.user.perfilPublico !== true ||
       parseCategories(draft.user.categoria).length === 0;
+    const trust = trustByUser.get(draft.id);
 
     return {
       id: draft.id,
@@ -700,6 +721,17 @@ function buildProviders(data: CachedData) {
       serviceCount: draft.services.length,
       campaignProfile: draft.sources.has("campaign"),
       locationText: [barrio, city, province].filter(Boolean).join(", "),
+      completedJobs: Number(trust?.completed_jobs ?? 0),
+      averageRating:
+        trust?.average_rating == null
+          ? null
+          : Number(trust.average_rating),
+      reviewCount: Number(trust?.review_count ?? 0),
+      averageResponseMinutes:
+        trust?.average_response_minutes == null
+          ? null
+          : Number(trust.average_response_minutes),
+      responseSampleSize: Number(trust?.response_sample_size ?? 0),
     };
   });
 
