@@ -9,7 +9,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>TOORI Servicios Ya</string>
+    <string>ServiciosYa</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -66,7 +66,7 @@
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Permitir que $(PRODUCT_NAME) utiliza tu ubicación para mostrar trabajadores o proveedores de servicios cercanos, como plomeros o electricistas, y ayudarte a recibir asistencia más rápido y eficiente en tu zona.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Permitir que TOORI use tu micrófono para grabar y enviar mensajes de voz en el chat interno.</string>
+    <string>Permitir que ServiciosYa use tu micrófono para grabar y enviar mensajes de voz en el chat interno.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Permitir acceso a tu galería para subir imágenes en la aplicación.</string>
     <key>NSUserNotificationsUsageDescription</key>

@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TOORI Servicios Ya",
+    "name": "ServiciosYa",
     "slug": "appTrabajo",
     "scheme": "solucionesya",
     "platforms": [
@@ -152,7 +152,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Permitir que TOORI use tu micrófono para grabar y enviar mensajes de voz en el chat interno."
+          "microphonePermission": "Permitir que ServiciosYa use tu micrófono para grabar y enviar mensajes de voz en el chat interno."
         }
       ],
       "expo-web-browser",
