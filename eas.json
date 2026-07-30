@@ -30,6 +30,10 @@
         "appleId": "serviciosya.desarrollador@gmail.com",
         "ascAppId": "6747944823",
         "appleTeamId": "HHY5MJ22J3"
+      },
+      "android": {
+        "track": "production",
+        "releaseStatus": "completed"
       }
     }
   }
