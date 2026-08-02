@@ -30,7 +30,7 @@
       "reactCompiler": true
     },
     "ios": {
-      "buildNumber": "92",
+      "buildNumber": "93",
       "supportsTablet": false,
       "usesAppleSignIn": true,
       "infoPlist": {
@@ -47,10 +47,7 @@
         ]
       },
       "bundleIdentifier": "com.alex-6775.appTrabajo",
-      "appleTeamId": "HHY5MJ22J3",
-      "associatedDomains": [
-        "applinks:inicio.serviciosya.info"
-      ]
+      "appleTeamId": "HHY5MJ22J3"
     },
     "android": {
       "versionCode": 93,
