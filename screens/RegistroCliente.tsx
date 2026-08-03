@@ -321,7 +321,7 @@ export default function RegistroCliente() {
                 </View>
 
                 <Text style={styles.leyenda}>
-                  TOORI Servicios Ya es una plataforma de conexión entre trabajadores y clientes, y no asume responsabilidad alguna por las tareas o el desempeño de los trabajadores.
+                  Servicios Ya es una plataforma de conexión entre trabajadores y clientes, y no asume responsabilidad alguna por las tareas o el desempeño de los trabajadores.
                 </Text>
               </>
             )}

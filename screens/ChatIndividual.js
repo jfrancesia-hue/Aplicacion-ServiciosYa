@@ -1294,7 +1294,7 @@ function ChatRules() {
     { icon: "💰", text: "Para acordar un precio, usá el botón \"Enviar presupuesto\". El pago se gestiona dentro de la app." },
     { icon: "🤝", text: "Tratá con respeto a todos los usuarios. El lenguaje ofensivo puede resultar en una suspensión." },
     { icon: "🔒", text: "No compartas contraseñas, datos bancarios ni información personal sensible." },
-    { icon: "⚠️", text: "Los acuerdos fuera de la plataforma no tienen cobertura ni garantía de TOORI ServiciosYa." },
+    { icon: "⚠️", text: "Los acuerdos fuera de la plataforma no tienen cobertura ni garantía de Servicios Ya." },
   ];
   return (
     <View style={rulesStyles.container}>

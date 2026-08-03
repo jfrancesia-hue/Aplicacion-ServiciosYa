@@ -329,10 +329,10 @@ function WorkerDetailModal({
     const url = `https://tooriserviciosya.com/PerfileProfesionales.php?ids=${encodeURIComponent(worker.id)}`;
     const nombre = worker.nombre?.trim();
     const message = nombre
-      ? `Mirá el perfil de ${nombre} en Toori Servicios Ya: ${url}`
-      : `Mirá este profesional en Toori Servicios Ya: ${url}`;
+      ? `Mirá el perfil de ${nombre} en Servicios Ya: ${url}`
+      : `Mirá este profesional en Servicios Ya: ${url}`;
     try {
-      await Share.share({ message, url, title: nombre || "Profesional Toori" });
+      await Share.share({ message, url, title: nombre || "Profesional Servicios Ya" });
     } catch {
       // usuario canceló o falló el share — no hace falta avisar
     }

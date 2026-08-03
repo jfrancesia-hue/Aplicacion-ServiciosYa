@@ -22,7 +22,7 @@ export default function MicaSystemBubble({ message }: Props) {
             />
           </View>
           <View style={styles.headerCopy}>
-            <Text style={styles.eyebrow}>INTERMEDIACIÓN TOORI</Text>
+            <Text style={styles.eyebrow}>INTERMEDIACIÓN SERVICIOS YA</Text>
             <Text style={styles.title}>{message.title}</Text>
           </View>
           <View style={styles.secureBadge}>

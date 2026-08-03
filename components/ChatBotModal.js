@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 const preguntasFrecuentes = [
   { id: '1', pregunta: '¿Cómo publicar un servicio?', respuesta: 'Ingresa a la sección "Ofrecer Servicio", completa los campos requeridos como título, descripción y categoría, y pulsa "Publicar".' },
   { id: '2', pregunta: '¿Cómo elimino un servicio?', respuesta: 'Ve a la pantalla "Mis Servicios", selecciona el servicio que deseas eliminar y pulsa el botón "Eliminar".' },
-  { id: '3', pregunta: '¿Dónde contacto a soporte?', respuesta: 'Usá MICA o el chat interno de la aplicación. Así tu consulta y las respuestas quedan protegidas dentro de TOORI.' },
+  { id: '3', pregunta: '¿Dónde contacto a soporte?', respuesta: 'Usá MICA o el chat interno de la aplicación. Así tu consulta y las respuestas quedan protegidas dentro de Servicios Ya.' },
   { id: '4', pregunta: '¿Cómo edito un servicio publicado?', respuesta: 'En "Mis Servicios", pulsa sobre el servicio que quieres modificar y elige la opción "Editar".' },
   { id: '5', pregunta: '¿Cómo pausar un servicio?', respuesta: 'Desde "Mis Servicios", selecciona el servicio y toca "Pausar". Esto ocultará el servicio temporalmente sin eliminarlo.' },
   { id: '6', pregunta: '¿Cómo veo los servicios por categoría?', respuesta: 'En la pantalla principal (Home), verás un listado de categorías. Al tocar una, verás los servicios disponibles en esa categoría.' },
@@ -95,7 +95,7 @@ export default function ChatBotModal({ visible, onClose }) {
             <View style={styles.supportNote}>
               <Ionicons name="shield-checkmark" size={20} color="#047a8f" />
               <Text style={styles.titleText}>
-                Tus consultas y datos de contacto permanecen dentro de TOORI.
+                Tus consultas y datos de contacto permanecen dentro de Servicios Ya.
               </Text>
             </View>
           </View>

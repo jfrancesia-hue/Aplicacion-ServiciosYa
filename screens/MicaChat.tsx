@@ -1378,7 +1378,7 @@ export default function MicaChat({ navigation, route }: Props) {
                 </Text>
                 <Text style={styles.paymentText}>
                   MICA enviará el resumen del pedido y ambos podrán coordinar
-                  fecha, materiales y confirmación sin salir de TOORI.
+                  fecha, materiales y confirmación sin salir de Servicios Ya.
                 </Text>
               </View>
             </View>

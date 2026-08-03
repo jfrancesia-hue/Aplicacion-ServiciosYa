@@ -41,7 +41,7 @@ const normalize = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").trim();
 
 const EXCLUDED_CATEGORIES = new Set(
-  ["general", "mi primer trabajo"].map(normalize),
+  ["general", "mi primer trabajo", "servicio"].map(normalize),
 );
 
 const CategoryList = ({

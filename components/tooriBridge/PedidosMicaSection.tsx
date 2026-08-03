@@ -60,7 +60,7 @@ async function getBridgeWorkerContext() {
 
   return {
     appUserId: userId,
-    nombre: perfil?.nombre ?? "Prestador Toori",
+    nombre: perfil?.nombre ?? "Prestador Servicios Ya",
     telefono: perfil?.celular ? String(perfil.celular) : "",
     ciudad: perfil?.ciudad ?? undefined,
     provincia: perfil?.provincia ?? undefined,
@@ -177,7 +177,7 @@ export default function PedidosMicaSection() {
           type: "budget",
           amount: montoNumero,
           availability: horario,
-          description: descripcion || "Presupuesto enviado desde la app TOORI",
+          description: descripcion || "Presupuesto enviado desde la app Servicios Ya",
         });
       }
 

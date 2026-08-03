@@ -307,7 +307,7 @@ export default function OperationalDashboard() {
             <Ionicons name="pulse" size={14} color="#baf6ed" />
             <Text style={styles.heroEyebrowText}>OPERACIÓN EN TIEMPO REAL</Text>
           </View>
-          <Text style={styles.heroTitle}>Panel de ServiciosYa</Text>
+          <Text style={styles.heroTitle}>Panel de Servicios Ya</Text>
           <Text style={styles.heroSubtitle}>
             Prestadores, conversaciones, pagos y confianza en una sola vista.
           </Text>

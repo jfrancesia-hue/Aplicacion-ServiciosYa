@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ServiciosYa",
+    "name": "Servicios Ya",
     "slug": "appTrabajo",
     "scheme": "solucionesya",
     "platforms": [
@@ -8,7 +8,7 @@
       "android",
       "web"
     ],
-    "version": "93.0.0",
+    "version": "94.0.0",
     "orientation": "portrait",
     "icon": "./assets/serviciosya-logo-2026.png",
     "userInterfaceStyle": "light",
@@ -30,7 +30,7 @@
       "reactCompiler": true
     },
     "ios": {
-      "buildNumber": "93",
+      "buildNumber": "94",
       "supportsTablet": false,
       "usesAppleSignIn": true,
       "infoPlist": {
@@ -50,7 +50,7 @@
       "appleTeamId": "HHY5MJ22J3"
     },
     "android": {
-      "versionCode": 93,
+      "versionCode": 94,
       "adaptiveIcon": {
         "foregroundImage": "./assets/serviciosya-logo-2026.png",
         "backgroundColor": "#20231f"
@@ -149,7 +149,7 @@
       [
         "expo-av",
         {
-          "microphonePermission": "Permitir que ServiciosYa use tu micrófono para grabar y enviar mensajes de voz en el chat interno."
+          "microphonePermission": "Permitir que Servicios Ya use tu micrófono para grabar y enviar mensajes de voz en el chat interno."
         }
       ],
       "expo-web-browser",

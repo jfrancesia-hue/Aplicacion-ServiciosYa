@@ -121,7 +121,7 @@ function OfrecerServicio({ navigation }: Props) {
 
       showToast.success(
         "Éxito",
-        "Servicio creado y vinculado al flujo Toori/Mica.",
+        "Servicio creado y vinculado al flujo Servicios Ya/Mica.",
       );
       navigation.goBack();
     } catch (err: unknown) {

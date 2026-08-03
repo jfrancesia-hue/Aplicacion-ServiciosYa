@@ -31,7 +31,7 @@ const WelcomeModal: React.FC<HomeEventComponentProps> = ({
         >
             <View style={styles.overlay}>
                 <View style={styles.modalContainer}>
-                    <Text style={styles.title}>¡Bienvenido a TOORI Servicios Ya! 👋</Text>
+                    <Text style={styles.title}>¡Bienvenido a Servicios Ya! 👋</Text>
 
                     <Text style={styles.subtitle}>¿Qué querés hacer hoy?</Text>
 

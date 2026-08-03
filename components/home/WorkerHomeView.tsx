@@ -189,7 +189,7 @@ function OfertasView({ navigation }: { navigation: any }) {
 
       if (!response.ok) {
         if (response.skipped) {
-          setError("Conexión con Mica no configurada todavía. Pedile al administrador activar el puente Toori.");
+          setError("Conexión con Mica no configurada todavía. Pedile al administrador activar el puente Servicios Ya.");
           setOfertas([]);
           return;
         }

@@ -185,7 +185,7 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
 
 
 
-        <Text style={styles.appTitle}>TOORI SERVICIOS YA</Text>
+        <Text style={styles.appTitle}>Servicios Ya</Text>
         <Text style={styles.title}>
           Seleccione su <Text style={styles.bold}>método de inicio de sesión</Text> preferido
         </Text>
