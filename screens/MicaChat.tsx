@@ -816,8 +816,8 @@ export default function MicaChat({ navigation, route }: Props) {
 
   useEffect(() => {
     if (mode !== "buscar-servicio") return;
-    refreshOrderStatus(null);
-  }, [mode, refreshOrderStatus]);
+    refreshOrderStatus(route.params.offerId ?? null);
+  }, [mode, refreshOrderStatus, route.params.offerId]);
 
   useEffect(() => {
     if (

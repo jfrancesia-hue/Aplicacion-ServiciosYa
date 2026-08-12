@@ -42,6 +42,15 @@ type NuevaOfertaRow = {
   video_urls: string | null;
   media_descripcion: string | null;
   historial_conversacion: string | null;
+  app_cliente_id: string | null;
+  app_chat_id: string | null;
+  ciudad: string | null;
+  provincia: string | null;
+  modo_agente: boolean | null;
+  source: string;
+  metadata: Json;
+  updated_at: string | null;
+  presupuesto_seleccionado_id: number | null;
 };
 
 type PresupuestoRow = {
@@ -320,6 +329,44 @@ export type Database = MergeDeep<
             oferta_id: string;
           }[];
         };
+        create_manual_service_request: {
+          Args: {
+            p_categoria: string;
+            p_descripcion: string;
+            p_zona: string;
+            p_ciudad?: string | null;
+            p_provincia?: string | null;
+            p_urgencia?: "normal" | "pronto" | "urgente";
+            p_responsable_herramientas?: "cliente" | "prestador" | "a_coordinar";
+            p_cantidad_personas?: number;
+            p_modalidad_preferida?: "a_coordinar" | "proyecto" | "hora" | "dia";
+          };
+          Returns: {
+            ok: boolean;
+            oferta_id: string;
+          }[];
+        };
+        get_my_service_requests: {
+          Args: { p_limit?: number };
+          Returns: {
+            id: string;
+            categoria: string;
+            zona: string;
+            descripcion: string;
+            estado: string;
+            paso: number;
+            source: string;
+            metadata: Json;
+            created_at: string;
+            response_count: number;
+            selected_budget_id: string | null;
+            chat_id: string | null;
+          }[];
+        };
+        cancel_service_request: {
+          Args: { p_oferta_id: string };
+          Returns: Json;
+        };
         get_provider_contact_access: {
           Args: {
             p_cliente_id?: string | null;
@@ -356,6 +403,8 @@ export type Database = MergeDeep<
             video_urls: string | null;
             presupuesto_estimado: number | null;
             ya_respondio: boolean;
+            source: string;
+            metadata: Json;
           }[];
         };
         get_servicios_with_online_workers: {

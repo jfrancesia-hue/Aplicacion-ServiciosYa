@@ -15,6 +15,7 @@ export type MainStackParamList = {
   CrearPerfil: undefined;
   Perfil: undefined;
   OfrecerServicio: undefined;
+  PublicarNecesidad: undefined;
   Configuracion: undefined;
   ServiciosPorCategoria: { categoria: string };
   pagoInicial: undefined;
@@ -28,7 +29,7 @@ export type MainStackParamList = {
     };
   } | undefined;
   ChatIA: undefined;
-  MicaChat: { mode: MicaChatMode };
+  MicaChat: { mode: MicaChatMode; offerId?: string };
   ChatIndividual: {
     chatId: string;
     nombre: string;

@@ -20,7 +20,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import CategoryList from "./CategoryList";
 import { supabase } from "../../lib/supabase";
-import { obtenerPedidosDisponibles, responderPedidoMica } from "../../lib/tooriApi";
+import { obtenerPedidosDisponibles } from "../../lib/tooriApi";
+import { respondToMicaOrder } from "../../lib/micaOrder";
+import { getWorkerServiceRequests } from "../../lib/serviceRequests";
 import WorkerState from "./WorkerState";
 
 type Tab = "calendario" | "ofertas" | "contratar";
@@ -138,7 +140,6 @@ function CalendarioView() {
 
 function OfertasView({ navigation }: { navigation: any }) {
   const [ofertas, setOfertas] = useState<any[]>([]);
-  const [presupuestos, setPresupuestos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,27 +177,55 @@ function OfertasView({ navigation }: { navigation: any }) {
         : [];
 
       const userId = userData?.id || user.id;
-      setPresupuestos([]);
+      const [bridgeResult, appRequests] = await Promise.all([
+        obtenerPedidosDisponibles({
+          appUserId: userId,
+          telefono: userData?.celular ? String(userData.celular) : null,
+          oficios: categoriasUsuario,
+          ciudad: userData?.ciudad ?? null,
+          provincia: userData?.provincia ?? null,
+          limit: 30,
+        }),
+        getWorkerServiceRequests({
+          userId,
+          trades: categoriasUsuario,
+          city: userData?.ciudad ?? null,
+          province: userData?.provincia ?? null,
+          limit: 30,
+        }),
+      ]);
 
-      const response = await obtenerPedidosDisponibles({
-        appUserId: userId,
-        telefono: userData?.celular ? String(userData.celular) : null,
-        oficios: categoriasUsuario,
-        ciudad: userData?.ciudad ?? null,
-        provincia: userData?.provincia ?? null,
-        limit: 30,
-      });
-
-      if (!response.ok) {
-        if (response.skipped) {
-          setError("Conexión con Mica no configurada todavía. Pedile al administrador activar el puente Servicios Ya.");
-          setOfertas([]);
-          return;
+      const merged = new Map<string, any>();
+      if (bridgeResult.ok) {
+        for (const pedido of bridgeResult.data.pedidos) {
+          if (!pedido.yaRespondio) merged.set(String(pedido.id), pedido);
         }
-        throw new Error(response.error);
+      }
+      for (const pedido of appRequests) {
+        if (pedido.alreadyResponded) continue;
+        merged.set(String(pedido.id), {
+          id: pedido.id,
+          categoria: pedido.category,
+          zona: pedido.zone,
+          descripcion: pedido.description,
+          estado: pedido.status,
+          paso: pedido.step,
+          createdAt: pedido.createdAt,
+          mediaUrl: pedido.mediaUrl,
+          videoUrls: pedido.videoUrls,
+          presupuestoEstimado: pedido.estimatedBudget,
+          source: pedido.source,
+          metadata: pedido.metadata,
+        });
       }
 
-      setOfertas(response.data.pedidos.filter((pedido) => !pedido.yaRespondio));
+      setOfertas(
+        Array.from(merged.values()).sort(
+          (a, b) =>
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime(),
+        ),
+      );
     } catch (e: any) {
       setError("Error al cargar ofertas. Intenta nuevamente.");
     } finally {
@@ -239,36 +268,16 @@ function OfertasView({ navigation }: { navigation: any }) {
     }
     setEnviando(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No autenticado");
-      const { data: userData } = await supabase
-        .from("usuarios")
-        .select("id, nombre, celular")
-        .eq("id", user.id)
-        .single();
-      const trabajadorId = userData?.id || user.id;
-
-      const descripcionCompleta = [
-        `Incluye: ${descripcion.trim()}`,
-        `Materiales: ${materiales.trim() || "A confirmar"}`,
-        `Tiempo disponible: ${horarios.trim()}`,
-        `Garantia: ${garantia.trim() || "Sin garantia especificada"}`,
-        `Validez: ${validez.trim() || "24 horas"}`,
-        notas.trim() ? `Notas: ${notas.trim()}` : null,
-      ].filter(Boolean).join("\n");
-
-      const response = await responderPedidoMica({
-        ofertaId: ofertaSeleccionada.id,
-        appUserId: trabajadorId,
-        nombre: userData?.nombre ?? null,
-        telefono: userData?.celular ? String(userData.celular) : null,
-        accion: "presupuesto",
-        monto: parseFloat(monto.replace(",", ".")),
-        descripcion: descripcionCompleta,
-        horariosDisponibles: horarios.trim(),
+      await respondToMicaOrder(String(ofertaSeleccionada.id), {
+        type: "budget",
+        amount: parseFloat(monto.replace(",", ".")),
+        description: descripcion.trim(),
+        availability: horarios.trim(),
+        materials: materiales.trim() || "A confirmar",
+        warranty: garantia.trim() || "Sin garantía especificada",
+        validUntil: validez.trim() || "24 horas",
+        notes: notas.trim() || undefined,
       });
-
-      if (!response.ok) throw new Error(response.error);
 
       setModalVisible(false);
       Alert.alert("¡Presupuesto enviado!", "Tu presupuesto fue enviado correctamente.", [
@@ -285,24 +294,9 @@ function OfertasView({ navigation }: { navigation: any }) {
     if (!ofertaSeleccionada) return;
     setEnviando(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No autenticado");
-      const { data: userData } = await supabase
-        .from("usuarios")
-        .select("id, nombre, celular")
-        .eq("id", user.id)
-        .single();
-      const trabajadorId = userData?.id || user.id;
-
-      const response = await responderPedidoMica({
-        ofertaId: ofertaSeleccionada.id,
-        appUserId: trabajadorId,
-        nombre: userData?.nombre ?? null,
-        telefono: userData?.celular ? String(userData.celular) : null,
-        accion: "no_disponible",
+      await respondToMicaOrder(String(ofertaSeleccionada.id), {
+        type: "decline",
       });
-
-      if (!response.ok) throw new Error(response.error);
 
       setModalVisible(false);
       Alert.alert("Gracias", "Marcamos que no podés tomar este pedido.", [
@@ -329,34 +323,12 @@ function OfertasView({ navigation }: { navigation: any }) {
       showsVerticalScrollIndicator={false}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#069eb3"]} />}
     >
-      {/* Presupuestos enviados */}
-      {presupuestos.length > 0 && (
-        <View style={{ marginBottom: 20 }}>
-          <Text style={styles.seccionTitle}>
-            <MaterialIcons name="send" size={16} color="#069eb3" /> Tus presupuestos enviados
-          </Text>
-          {presupuestos.map((p) => (
-            <View key={p.id} style={[styles.ofertaCard, { borderLeftWidth: 3, borderLeftColor: "#069eb3" }]}>
-              <View style={styles.ofertaBadge}>
-                <Text style={styles.ofertaBadgeText}>Presupuesto #{p.id}</Text>
-              </View>
-              <Text style={styles.ofertaTitulo}>Monto: ${p.monto}</Text>
-              {!!p.descripcion && <Text style={styles.ofertaDesc}>{p.descripcion}</Text>}
-              {!!p.horarios_disponibles && (
-                <Text style={styles.ofertaMeta}>📅 {p.horarios_disponibles}</Text>
-              )}
-              <Text style={styles.ofertaMeta}>Estado: {p.estado || "activo"}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
       {/* Ofertas disponibles */}
       <Text style={styles.seccionTitle}>
-        <MaterialIcons name="bolt" size={16} color="#069eb3" /> Ofertas disponibles para vos
+        <MaterialIcons name="bolt" size={16} color="#069eb3" /> Publicaciones compatibles
       </Text>
       <Text style={styles.seccionSubtitle}>
-        Ofertas que coinciden con tu categoría profesional (últimas 48h)
+        Necesidades de clientes que coinciden con tu profesión y tu zona
       </Text>
 
       {loading ? (
@@ -414,7 +386,7 @@ function OfertasView({ navigation }: { navigation: any }) {
               <View style={styles.presupuestosBadge}>
                 <MaterialIcons name="send" size={12} color="#fff" />
                 <Text style={styles.presupuestosBadgeText}>
-                  Pedido Mica
+                  {oferta.source === "manual_app" ? "Publicación" : "Pedido MICA"}
                 </Text>
               </View>
             </View>
