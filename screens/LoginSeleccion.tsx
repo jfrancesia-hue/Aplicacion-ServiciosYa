@@ -17,6 +17,10 @@ import type { AuthStackParamList } from '../types/navigation';
 import AppleSignInButton from "../components/AppleSignInButton"; 
 import vexo from '../lib/vexo';
 import { useGoogleAuth } from './useGoogleAuth';
+import {
+  LEGAL_TERMS_URL,
+  PRIVACY_POLICY_URL,
+} from "../lib/constants/legal";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -261,14 +265,14 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
           Al usar esta aplicación, aceptas nuestros{' '}
           <Text
             style={styles.link}
-            onPress={() => openURL('https://inicio.serviciosya.info/Terminos-y-condiciones.html')}
+            onPress={() => openURL(LEGAL_TERMS_URL)}
           >
             Términos y Condiciones
           </Text>{' '}
           y nuestra{' '}
           <Text
             style={styles.link}
-            onPress={() => openURL('https://inicio.serviciosya.info/politicas-de-privacidad.html')}
+            onPress={() => openURL(PRIVACY_POLICY_URL)}
           >
             Política de Privacidad
           </Text>.

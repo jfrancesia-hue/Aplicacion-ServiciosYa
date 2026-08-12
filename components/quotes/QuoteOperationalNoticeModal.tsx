@@ -1,6 +1,7 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import {
   ActivityIndicator,
+  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -9,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { calculateServiceConfirmationFee } from "../../lib/constants/billing";
+import { LEGAL_TERMS_URL } from "../../lib/constants/legal";
 
 type Props = {
   visible: boolean;
@@ -89,6 +91,17 @@ export default function QuoteOperationalNoticeModal({
                 Este resumen no reemplaza los términos y condiciones aplicables.
               </Text>
             </View>
+            <TouchableOpacity
+              accessibilityRole="link"
+              disabled={busy}
+              onPress={() => void Linking.openURL(LEGAL_TERMS_URL)}
+              style={styles.legalLink}
+            >
+              <MaterialIcons name="open-in-new" size={16} color="#047a8f" />
+              <Text style={styles.legalLinkText}>
+                Ver términos y condiciones vigentes
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
 
           <View style={styles.actions}>
@@ -176,6 +189,20 @@ const styles = StyleSheet.create({
     color: "#76541c",
     fontSize: 12,
     lineHeight: 17,
+  },
+  legalLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    minHeight: 38,
+    marginTop: 7,
+  },
+  legalLinkText: {
+    color: "#047a8f",
+    fontSize: 12,
+    fontWeight: "800",
+    textDecorationLine: "underline",
   },
   actions: { marginTop: 16, gap: 9 },
   primaryButton: {

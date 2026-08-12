@@ -158,19 +158,14 @@ Deno.serve(async (req) => {
 
     const { data: chat, error: chatError } = await admin
       .from("chats")
-      .select("id,participant_a,participant_b,usuario_1,usuario_2")
+      .select("id,participant_a,participant_b")
       .eq("id", chatId)
       .maybeSingle();
     if (chatError) throw chatError;
     if (!chat) return json({ error: "Chat no encontrado." }, 404);
 
     const participants = new Set(
-      [
-        chat.participant_a,
-        chat.participant_b,
-        chat.usuario_1,
-        chat.usuario_2,
-      ].filter(Boolean),
+      [chat.participant_a, chat.participant_b].filter(Boolean),
     );
     if (!participants.has(user.id)) {
       return json({ error: "No pertenecés a este chat." }, 403);

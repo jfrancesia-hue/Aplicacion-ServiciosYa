@@ -22,6 +22,10 @@ import { supabase } from "../lib/supabase";
 import uuid from "react-native-uuid";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import SelectDropdown from 'react-native-select-dropdown' 
+import {
+  LEGAL_TERMS_URL,
+  PRIVACY_POLICY_URL,
+} from "../lib/constants/legal";
 
 
 type NavigationProp = NativeStackNavigationProp<MainStackParamList>;
@@ -307,11 +311,11 @@ export default function RegistroCliente() {
               <>
                 <Text style={styles.subtitulo}>Links legales:</Text>
                 <LinkTexto
-                  url="https://inicio.tooriserviciosya.info/politicas-de-privacidad.html"
+                  url={PRIVACY_POLICY_URL}
                   texto="Políticas de Privacidad"
                 />
                 <LinkTexto
-                  url="https://inicio.tooriserviciosya.info/Terminos-y-condiciones.html"
+                  url={LEGAL_TERMS_URL}
                   texto="Términos y Condiciones"
                 />
 
@@ -321,7 +325,9 @@ export default function RegistroCliente() {
                 </View>
 
                 <Text style={styles.leyenda}>
-                  Servicios Ya es una plataforma de conexión entre trabajadores y clientes, y no asume responsabilidad alguna por las tareas o el desempeño de los trabajadores.
+                  Servicios Ya facilita la conexión, la coordinación y el canal
+                  de reclamos. El alcance legal aplicable se detalla en los
+                  términos y condiciones vigentes.
                 </Text>
               </>
             )}

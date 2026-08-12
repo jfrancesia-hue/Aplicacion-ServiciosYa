@@ -10,6 +10,7 @@ Switch,
 StyleSheet,
 ScrollView,
 Alert,
+Linking,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useState, useEffect } from 'react';
@@ -20,6 +21,7 @@ import { Picker } from '@react-native-picker/picker';
 import { useQueryClient } from '@tanstack/react-query';
 import { perfilQueryKey } from '../lib/queryOptions';
 import { useGrantAchievement } from "../lib/services/achievements.services";
+import { LEGAL_TERMS_URL } from "../lib/constants/legal";
 
 export default function FormularioRegistroDNI() {
 const queryClient = useQueryClient();
@@ -326,7 +328,12 @@ return (
         setValidaciones((prev) => ({ ...prev, terminos: value }));
       }}
     />
-    <Text style={styles.switchLabel}>Acepto los términos y condiciones</Text>
+    <Text
+      style={[styles.switchLabel, { textDecorationLine: 'underline' }]}
+      onPress={() => Linking.openURL(LEGAL_TERMS_URL)}
+    >
+      Acepto los términos y condiciones
+    </Text>
   </View>
 
   <TouchableOpacity

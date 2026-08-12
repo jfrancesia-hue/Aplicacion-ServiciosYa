@@ -391,7 +391,9 @@ async function getReports(admin: ReturnType<typeof createClient>) {
       .limit(50),
     admin
       .from("service_job_incidents")
-      .select("id,case_number,payment_record_id,chat_id,provider_id,category,details,mica_summary,status,created_at")
+      .select(
+        "id,case_number,payment_record_id,chat_id,provider_id,category,details,mica_summary,status,created_at",
+      )
       .in("status", ["mica_intake", "escalated", "reviewing"])
       .order("created_at", { ascending: false })
       .limit(50),
@@ -437,7 +439,9 @@ async function getReports(admin: ReturnType<typeof createClient>) {
       source: "incident" as const,
       provider_id: incident.provider_id,
       reason_category: incident.category,
-      details: [incident.mica_summary, incident.details].filter(Boolean).join("\n"),
+      details: [incident.mica_summary, incident.details]
+        .filter(Boolean)
+        .join("\n"),
       status: incident.status,
       service_id: null,
       created_at: incident.created_at,
@@ -494,11 +498,12 @@ async function updateReport(
 ) {
   const cleanId = String(reportId ?? "").trim();
   const cleanStatus = String(status ?? "").trim();
-  const table = source === "service"
-    ? "reports"
-    : source === "incident"
-      ? "service_job_incidents"
-      : "profile_reports";
+  const table =
+    source === "service"
+      ? "reports"
+      : source === "incident"
+        ? "service_job_incidents"
+        : "profile_reports";
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       cleanId,
@@ -508,16 +513,17 @@ async function updateReport(
     return json({ error: "Datos de moderación inválidos." }, 400);
   }
 
-  const updatePayload = source === "incident"
-    ? {
-        status: cleanStatus,
-        assigned_to: cleanStatus === "reviewing" ? adminUserId : undefined,
-        resolved_at: ["resolved", "dismissed"].includes(cleanStatus)
-          ? new Date().toISOString()
-          : null,
-        updated_at: new Date().toISOString(),
-      }
-    : { status: cleanStatus };
+  const updatePayload =
+    source === "incident"
+      ? {
+          status: cleanStatus,
+          assigned_to: cleanStatus === "reviewing" ? adminUserId : undefined,
+          resolved_at: ["resolved", "dismissed"].includes(cleanStatus)
+            ? new Date().toISOString()
+            : null,
+          updated_at: new Date().toISOString(),
+        }
+      : { status: cleanStatus };
   const { data, error } = await admin
     .from(table)
     .update(updatePayload)
@@ -528,6 +534,110 @@ async function updateReport(
   if (!data) return json({ error: "Reporte no encontrado." }, 404);
 
   return json({ ok: true, report: data });
+}
+
+type UrgentPolicyRow = {
+  sla_minutes: number;
+  reminder_minutes: number;
+  max_reassignments: number;
+  enforcement_enabled: boolean;
+  missed_threshold: number;
+  window_days: number;
+  priority_suspension_days: number;
+  updated_at: string;
+};
+
+function urgentPolicyPayload(policy: UrgentPolicyRow) {
+  return {
+    slaMinutes: policy.sla_minutes,
+    reminderMinutes: policy.reminder_minutes,
+    maxReassignments: policy.max_reassignments,
+    enforcementEnabled: policy.enforcement_enabled,
+    missedThreshold: policy.missed_threshold,
+    windowDays: policy.window_days,
+    prioritySuspensionDays: policy.priority_suspension_days,
+    updatedAt: policy.updated_at,
+  };
+}
+
+async function getUrgencyPolicy(admin: ReturnType<typeof createClient>) {
+  const { data: policyData, error: policyError } = await admin
+    .from("urgent_work_policy")
+    .select(
+      "sla_minutes,reminder_minutes,max_reassignments,enforcement_enabled,missed_threshold,window_days,priority_suspension_days,updated_at",
+    )
+    .eq("singleton", true)
+    .single();
+  if (policyError) throw policyError;
+
+  const policy = policyData as UrgentPolicyRow;
+  const windowStart = new Date(
+    Date.now() - policy.window_days * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const [missesResult, suspensionsResult] = await Promise.all([
+    admin
+      .from("urgent_work_misses")
+      .select("id", { count: "exact", head: true })
+      .gte("occurred_at", windowStart),
+    admin
+      .from("worker_urgent_discipline")
+      .select("worker_id", { count: "exact", head: true })
+      .gt("priority_suspended_until", new Date().toISOString()),
+  ]);
+  if (missesResult.error) throw missesResult.error;
+  if (suspensionsResult.error) throw suspensionsResult.error;
+
+  return {
+    ok: true,
+    policy: urgentPolicyPayload(policy),
+    metrics: {
+      missesInWindow: missesResult.count ?? 0,
+      activeSuspensions: suspensionsResult.count ?? 0,
+    },
+  };
+}
+
+function integerInRange(value: unknown, minimum: number, maximum: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum
+    ? parsed
+    : null;
+}
+
+async function updateUrgencyPolicy(
+  admin: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+  adminUserId: string,
+) {
+  const enforcementEnabled = body?.enforcementEnabled;
+  const missedThreshold = integerInRange(body?.missedThreshold, 1, 20);
+  const windowDays = integerInRange(body?.windowDays, 1, 365);
+  const prioritySuspensionDays = integerInRange(
+    body?.prioritySuspensionDays,
+    1,
+    90,
+  );
+  const maxReassignments = integerInRange(body?.maxReassignments, 0, 10);
+  if (
+    typeof enforcementEnabled !== "boolean" ||
+    missedThreshold == null ||
+    windowDays == null ||
+    prioritySuspensionDays == null ||
+    maxReassignments == null
+  ) {
+    return json({ error: "Configuración de urgencias inválida." }, 400);
+  }
+
+  const { error } = await admin.rpc("set_urgent_work_policy", {
+    p_enforcement_enabled: enforcementEnabled,
+    p_missed_threshold: missedThreshold,
+    p_window_days: windowDays,
+    p_priority_suspension_days: prioritySuspensionDays,
+    p_max_reassignments: maxReassignments,
+    p_updated_by: adminUserId,
+  });
+  if (error) throw error;
+  return json(await getUrgencyPolicy(admin));
 }
 
 Deno.serve(async (req) => {
@@ -562,7 +672,19 @@ Deno.serve(async (req) => {
       return json(await getReports(admin));
     }
     if (action === "update-report") {
-      return updateReport(admin, body?.reportId, body?.status, body?.source, currentAdmin.id);
+      return updateReport(
+        admin,
+        body?.reportId,
+        body?.status,
+        body?.source,
+        currentAdmin.id,
+      );
+    }
+    if (action === "urgency-policy") {
+      return json(await getUrgencyPolicy(admin));
+    }
+    if (action === "update-urgency-policy") {
+      return updateUrgencyPolicy(admin, body, currentAdmin.id);
     }
 
     return json({ error: "Acción no permitida." }, 400);

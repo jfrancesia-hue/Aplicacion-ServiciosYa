@@ -17,14 +17,22 @@
 - Outbox de correo transaccional idempotente; conserva los eventos si el proveedor todavía no está configurado.
 - Urgencia explícita separada del chat normal: respuesta aceptar/rechazar, recordatorio a los 10 minutos, vencimiento a los 20 y reasignación por rubro y zona.
 - Registro auditable de urgencias incumplidas y política disciplinaria configurable.
+- Administración de la disciplina desde el panel de Agustín, con confirmación,
+  métricas e historial de cada cambio. La base impide configurar un SLA mayor a
+  20 minutos.
 - Calificación bilateral sobre trabajos confirmados. Una reseña aislada no sanciona automáticamente.
 - Resumen operativo antes de enviar y aceptar presupuestos, con versión y hora registradas al iniciar el pago.
+- Enlaces legales centralizados en el dominio vigente y eliminación del descargo
+  absoluto que figuraba en el registro del cliente.
+- Corrección desplegada de participantes canónicos del chat en mensajes,
+  urgencias y confirmación de pagos.
 - Android alineado en versión `95.0.0` / `versionCode 95` y perfil EAS para pista interna.
 
 ## Decisiones que requieren confirmación de Agustín
 
-1. Disciplina de urgencias. La configuración propuesta es 3 incumplimientos en 30 días y suspensión de prioridad por 7 días. Está cargada pero `enforcement_enabled` permanece en `false` hasta aprobación.
+1. Disciplina de urgencias. La configuración propuesta es 3 incumplimientos en 30 días y suspensión de prioridad por 7 días. Está cargada pero `enforcement_enabled` permanece en `false` hasta aprobación. Agustín puede revisarla y activarla desde **Panel operativo > Urgencias y disciplina**, sin ejecutar SQL.
 2. Texto legal definitivo. El modal actual es un resumen operativo prudente y aclara que no reemplaza términos y condiciones. Cualquier limitación de responsabilidad contractual debe provenir de revisión profesional.
+   El documento público actual declara “TuEmpresa”, no identifica una jurisdicción concreta y fue actualizado el 19/06/2025; debe reemplazarse antes de promover la beta a producción.
 
 ## Accesos externos necesarios
 
@@ -40,17 +48,9 @@ Configurar el correo sin compartir la clave por chat:
 npx supabase secrets set RESEND_API_KEY="..." TRANSACTIONAL_EMAIL_FROM="Servicios Ya <avisos@dominio-verificado>"
 ```
 
-Habilitar la política propuesta después de aprobarla:
-
-```sql
-update public.urgent_work_policy
-set enforcement_enabled = true,
-    missed_threshold = 3,
-    window_days = 30,
-    priority_suspension_days = 7,
-    updated_at = now()
-where singleton = true;
-```
+Habilitar la política propuesta después de aprobarla desde **Panel operativo >
+Urgencias y disciplina**. El panel muestra el impacto antes de guardar y registra
+administrador, valores anteriores, valores nuevos y fecha.
 
 Completar la beta:
 
@@ -62,3 +62,13 @@ npx eas-cli submit --platform android --profile internal --latest
 ```
 
 La guía ampliada está en `docs/GOOGLE_PLAY_INTERNAL_BETA.md`.
+
+## Evidencia de cierre técnico
+
+- `npm test`: 37 pruebas aprobadas.
+- `npm run typecheck`: sin errores.
+- Migraciones remotas alineadas hasta `20260812185000`.
+- Funciones `operational-dashboard` y `create-payment-preference` desplegadas.
+- El linter remoto ya no informa referencias inválidas en el flujo de chat o
+  urgencias. Conserva advertencias heredadas de la extensión GIS y una RPC
+  antigua no utilizada por la app (`incrementar_veces_contratado`).

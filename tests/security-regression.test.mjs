@@ -64,6 +64,20 @@ const urgentSlaMigration = await readFile(
   ),
   "utf8",
 );
+const urgentPolicyAdminMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812184000_urgent_policy_admin_controls.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const canonicalChatParticipantsMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812185000_fix_canonical_chat_participants.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const urgentProcessor = await readFile(
   new URL(
     "../supabase/functions/process-urgent-work-alerts/index.ts",
@@ -92,6 +106,20 @@ const bilateralReviewsMigration = await readFile(
   ),
   "utf8",
 );
+const legalConstants = await readFile(
+  new URL("../lib/constants/legal.ts", import.meta.url),
+  "utf8",
+);
+const registrationLegalSources = (
+  await Promise.all(
+    [
+      "../screens/RegistroCliente.tsx",
+      "../screens/RegistroTrabajador.tsx",
+      "../screens/CrearPerfil.js",
+      "../screens/LoginSeleccion.tsx",
+    ].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
+  )
+).join("\n");
 
 test("el cliente no contiene credenciales ni llama directo a Mercado Pago", () => {
   assert.equal(chatSource.includes(`${["APP", "USR"].join("_")}-`), false);
@@ -205,6 +233,36 @@ test("las urgencias vencidas se registran y se reasignan con disciplina configur
   assert.match(urgentProcessor, /max_reassignments/);
 });
 
+test("la política de urgencias fija el máximo de 20 minutos y audita cambios administrativos", () => {
+  assert.match(
+    urgentPolicyAdminMigration,
+    /check \(sla_minutes between 5 and 20\)/,
+  );
+  assert.match(
+    urgentPolicyAdminMigration,
+    /check \(reminder_minutes < sla_minutes\)/,
+  );
+  assert.match(urgentPolicyAdminMigration, /urgent_work_policy_audit/);
+  assert.match(urgentPolicyAdminMigration, /set_urgent_work_policy/);
+  assert.match(urgentPolicyAdminMigration, /u\.rol::text = 'admin'/);
+  assert.match(operationalDashboard, /update-urgency-policy/);
+  assert.match(operationalDashboard, /p_updated_by: adminUserId/);
+});
+
+test("chat protegido, urgencias y pagos usan los participantes canónicos", () => {
+  assert.match(
+    canonicalChatParticipantsMigration,
+    /create or replace function public\.enforce_protected_chat_content/,
+  );
+  assert.match(
+    canonicalChatParticipantsMigration,
+    /create or replace function public\.create_urgent_work_alert/,
+  );
+  assert.doesNotMatch(canonicalChatParticipantsMigration, /c\.usuario_[12]/);
+  assert.doesNotMatch(paymentPreference, /chat\.usuario_[12]/);
+  assert.match(paymentPreference, /select\("id,participant_a,participant_b"\)/);
+});
+
 test("los mensajes comunes ya no crean falsas urgencias", () => {
   assert.doesNotMatch(messageNotification, /urgent_work_alerts/);
   assert.match(messageNotification, /channelId: "default"/);
@@ -217,8 +275,21 @@ test("el resumen operativo distingue la comisi\u00f3n del pago del trabajo", () 
   );
   assert.match(quoteNoticeModal, /no es un adelanto del trabajo/);
   assert.match(quoteNoticeModal, /Seguir conversando/);
+  assert.match(quoteNoticeModal, /LEGAL_TERMS_URL/);
+  assert.match(quoteNoticeModal, /Ver términos y condiciones vigentes/);
   assert.match(paymentPreference, /operationalNotice/);
   assert.match(paymentPreference, /operational_notice_accepted_at/);
+});
+
+test("los flujos de registro usan enlaces legales centralizados sin descargo absoluto", () => {
+  assert.match(legalConstants, /inicio\.serviciosya\.info/);
+  assert.doesNotMatch(legalConstants, /inicio\.tooriserviciosya\.info/);
+  assert.match(registrationLegalSources, /LEGAL_TERMS_URL/);
+  assert.match(registrationLegalSources, /PRIVACY_POLICY_URL/);
+  assert.doesNotMatch(
+    registrationLegalSources,
+    /no asume responsabilidad alguna/i,
+  );
 });
 
 test("la reputación es bilateral sin sanciones automáticas por reseña", () => {

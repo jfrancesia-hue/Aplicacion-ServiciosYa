@@ -7,7 +7,9 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -74,6 +76,43 @@ type ModerationReport = {
   chat_id?: string;
   payment_record_id?: string;
 };
+
+type UrgencyPolicy = {
+  slaMinutes: number;
+  reminderMinutes: number;
+  maxReassignments: number;
+  enforcementEnabled: boolean;
+  missedThreshold: number;
+  windowDays: number;
+  prioritySuspensionDays: number;
+  updatedAt: string;
+};
+
+type UrgencyPolicyResponse = {
+  policy: UrgencyPolicy;
+  metrics: {
+    missesInWindow: number;
+    activeSuspensions: number;
+  };
+};
+
+type UrgencyPolicyDraft = {
+  enforcementEnabled: boolean;
+  maxReassignments: string;
+  missedThreshold: string;
+  windowDays: string;
+  prioritySuspensionDays: string;
+};
+
+function policyToDraft(policy: UrgencyPolicy): UrgencyPolicyDraft {
+  return {
+    enforcementEnabled: policy.enforcementEnabled,
+    maxReassignments: String(policy.maxReassignments),
+    missedThreshold: String(policy.missedThreshold),
+    windowDays: String(policy.windowDays),
+    prioritySuspensionDays: String(policy.prioritySuspensionDays),
+  };
+}
 
 const REPORT_REASON_LABELS: Record<string, string> = {
   inappropriate_content: "Contenido inapropiado",
@@ -150,15 +189,50 @@ function SectionHeader({
   );
 }
 
+function PolicyNumberField({
+  label,
+  helper,
+  value,
+  onChangeText,
+}: {
+  label: string;
+  helper: string;
+  value: string;
+  onChangeText: (value: string) => void;
+}) {
+  return (
+    <View style={styles.policyField}>
+      <View style={styles.policyFieldCopy}>
+        <Text style={styles.policyFieldLabel}>{label}</Text>
+        <Text style={styles.policyFieldHelper}>{helper}</Text>
+      </View>
+      <TextInput
+        accessibilityLabel={label}
+        keyboardType="number-pad"
+        maxLength={3}
+        onChangeText={(value) => onChangeText(value.replace(/\D/g, ""))}
+        selectTextOnFocus
+        style={styles.policyInput}
+        value={value}
+      />
+    </View>
+  );
+}
+
 export default function OperationalDashboard() {
   const { rol } = useSuspenseProfile();
   const [periodDays, setPeriodDays] = useState<(typeof PERIODS)[number]>(30);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [reports, setReports] = useState<ModerationReport[]>([]);
+  const [urgency, setUrgency] = useState<UrgencyPolicyResponse | null>(null);
+  const [urgencyDraft, setUrgencyDraft] = useState<UrgencyPolicyDraft | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
+  const [savingUrgency, setSavingUrgency] = useState(false);
 
   const loadDashboard = useCallback(
     async (refresh = false) => {
@@ -171,14 +245,19 @@ export default function OperationalDashboard() {
       refresh ? setRefreshing(true) : setLoading(true);
       setErrorMessage(null);
       try {
-        const [summaryResult, reportsResult] = await Promise.all([
-          supabase.functions.invoke("operational-dashboard", {
-            body: { action: "summary", days: periodDays },
-          }),
-          supabase.functions.invoke("operational-dashboard", {
-            body: { action: "reports" },
-          }),
-        ]);
+        const [summaryResult, reportsResult, urgencyResult] = await Promise.all(
+          [
+            supabase.functions.invoke("operational-dashboard", {
+              body: { action: "summary", days: periodDays },
+            }),
+            supabase.functions.invoke("operational-dashboard", {
+              body: { action: "reports" },
+            }),
+            supabase.functions.invoke("operational-dashboard", {
+              body: { action: "urgency-policy" },
+            }),
+          ],
+        );
 
         if (summaryResult.error || summaryResult.data?.error) {
           throw new Error(
@@ -194,9 +273,19 @@ export default function OperationalDashboard() {
               "No se pudo cargar la moderación.",
           );
         }
+        if (urgencyResult.error || urgencyResult.data?.error) {
+          throw new Error(
+            urgencyResult.data?.error ||
+              urgencyResult.error?.message ||
+              "No se pudo cargar la política de urgencias.",
+          );
+        }
 
         setSummary(summaryResult.data as DashboardSummary);
         setReports((reportsResult.data?.reports ?? []) as ModerationReport[]);
+        const nextUrgency = urgencyResult.data as UrgencyPolicyResponse;
+        setUrgency(nextUrgency);
+        setUrgencyDraft(policyToDraft(nextUrgency.policy));
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -293,6 +382,100 @@ export default function OperationalDashboard() {
     },
     [updateReport],
   );
+
+  const updateUrgencyDraft = useCallback(
+    (field: keyof UrgencyPolicyDraft, value: string | boolean) => {
+      setUrgencyDraft((current) =>
+        current ? { ...current, [field]: value } : current,
+      );
+    },
+    [],
+  );
+
+  const persistUrgencyPolicy = useCallback(
+    async (draft: UrgencyPolicyDraft) => {
+      setSavingUrgency(true);
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          "operational-dashboard",
+          {
+            body: {
+              action: "update-urgency-policy",
+              enforcementEnabled: draft.enforcementEnabled,
+              maxReassignments: Number(draft.maxReassignments),
+              missedThreshold: Number(draft.missedThreshold),
+              windowDays: Number(draft.windowDays),
+              prioritySuspensionDays: Number(draft.prioritySuspensionDays),
+            },
+          },
+        );
+        if (error || data?.error) {
+          throw new Error(
+            data?.error ||
+              error?.message ||
+              "No se pudo guardar la política de urgencias.",
+          );
+        }
+
+        const nextUrgency = data as UrgencyPolicyResponse;
+        setUrgency(nextUrgency);
+        setUrgencyDraft(policyToDraft(nextUrgency.policy));
+        Alert.alert(
+          "Política guardada",
+          draft.enforcementEnabled
+            ? "La disciplina automática quedó activa y el cambio fue auditado."
+            : "La disciplina automática quedó desactivada y el cambio fue auditado.",
+        );
+      } catch (error) {
+        Alert.alert(
+          "No se pudo guardar",
+          error instanceof Error ? error.message : "Intentá nuevamente.",
+        );
+      } finally {
+        setSavingUrgency(false);
+      }
+    },
+    [],
+  );
+
+  const confirmUrgencyPolicy = useCallback(() => {
+    if (!urgencyDraft) return;
+    const entries = [
+      ["reasignaciones", urgencyDraft.maxReassignments, 0, 10],
+      ["incumplimientos", urgencyDraft.missedThreshold, 1, 20],
+      ["días de ventana", urgencyDraft.windowDays, 1, 365],
+      ["días de suspensión", urgencyDraft.prioritySuspensionDays, 1, 90],
+    ] as const;
+    const invalid = entries.find(([, value, minimum, maximum]) => {
+      const parsed = Number(value);
+      return !Number.isInteger(parsed) || parsed < minimum || parsed > maximum;
+    });
+    if (invalid) {
+      Alert.alert(
+        "Revisá la configuración",
+        `El valor de ${invalid[0]} debe estar entre ${invalid[2]} y ${invalid[3]}.`,
+      );
+      return;
+    }
+
+    const message = urgencyDraft.enforcementEnabled
+      ? `Al guardar, cada prestador perderá prioridad por ${urgencyDraft.prioritySuspensionDays} días cuando acumule ${urgencyDraft.missedThreshold} urgencias sin responder dentro de ${urgencyDraft.windowDays} días.`
+      : "Al guardar, se seguirán registrando los incumplimientos pero no se aplicarán suspensiones automáticas.";
+    Alert.alert(
+      urgencyDraft.enforcementEnabled
+        ? "Activar disciplina automática"
+        : "Mantener disciplina desactivada",
+      `${message}\n\nEl SLA continúa fijo en 20 minutos y toda modificación queda auditada.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Guardar política",
+          style: urgencyDraft.enforcementEnabled ? "destructive" : "default",
+          onPress: () => void persistUrgencyPolicy(urgencyDraft),
+        },
+      ],
+    );
+  }, [persistUrgencyPolicy, urgencyDraft]);
 
   return (
     <View style={styles.screen}>
@@ -589,6 +772,149 @@ export default function OperationalDashboard() {
               )}
             </View>
 
+            {urgency && urgencyDraft ? (
+              <View style={styles.section}>
+                <SectionHeader
+                  icon="timer-outline"
+                  title="Urgencias y disciplina"
+                  subtitle="SLA fijo de 20 minutos, reasignación y pérdida temporal de prioridad"
+                />
+                <View style={styles.policyStatusRow}>
+                  <View
+                    style={[
+                      styles.policyStatusIcon,
+                      urgencyDraft.enforcementEnabled &&
+                        styles.policyStatusIconEnabled,
+                    ]}
+                  >
+                    <Ionicons
+                      name={
+                        urgencyDraft.enforcementEnabled
+                          ? "shield-checkmark"
+                          : "pause-circle"
+                      }
+                      size={21}
+                      color={
+                        urgencyDraft.enforcementEnabled ? "#fff" : "#76541c"
+                      }
+                    />
+                  </View>
+                  <View style={styles.policyStatusCopy}>
+                    <Text style={styles.policyStatusTitle}>
+                      Disciplina automática
+                    </Text>
+                    <Text style={styles.policyStatusText}>
+                      {urgencyDraft.enforcementEnabled
+                        ? "Activa: los incumplimientos pueden suspender la prioridad."
+                        : "Desactivada: se registran incumplimientos sin sancionar."}
+                    </Text>
+                  </View>
+                  <Switch
+                    accessibilityLabel="Disciplina automática de urgencias"
+                    disabled={savingUrgency}
+                    onValueChange={(value) =>
+                      updateUrgencyDraft("enforcementEnabled", value)
+                    }
+                    trackColor={{ false: "#d8dedc", true: "#78c9bd" }}
+                    thumbColor={
+                      urgencyDraft.enforcementEnabled ? "#087a68" : "#f5f5f5"
+                    }
+                    value={urgencyDraft.enforcementEnabled}
+                  />
+                </View>
+
+                <View style={styles.policyMetricsRow}>
+                  <View style={styles.policyMetric}>
+                    <Text style={styles.policyMetricValue}>
+                      {formatCount(urgency.metrics.missesInWindow)}
+                    </Text>
+                    <Text style={styles.policyMetricLabel}>
+                      Incumplimientos en {urgency.policy.windowDays} días
+                    </Text>
+                  </View>
+                  <View style={styles.policyMetric}>
+                    <Text style={styles.policyMetricValue}>
+                      {formatCount(urgency.metrics.activeSuspensions)}
+                    </Text>
+                    <Text style={styles.policyMetricLabel}>
+                      Suspensiones activas
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.policyFixedRow}>
+                  <Ionicons name="alarm-outline" size={18} color="#047a8f" />
+                  <Text style={styles.policyFixedText}>
+                    Recordatorio a los {urgency.policy.reminderMinutes} min ·
+                    vencimiento a los {urgency.policy.slaMinutes} min
+                  </Text>
+                </View>
+
+                <PolicyNumberField
+                  label="Máximo de reasignaciones"
+                  helper="Cantidad de prestadores alternativos que puede intentar el sistema (0–10)."
+                  value={urgencyDraft.maxReassignments}
+                  onChangeText={(value) =>
+                    updateUrgencyDraft("maxReassignments", value)
+                  }
+                />
+                <PolicyNumberField
+                  label="Incumplimientos para sancionar"
+                  helper="Cantidad acumulada dentro de la ventana (1–20)."
+                  value={urgencyDraft.missedThreshold}
+                  onChangeText={(value) =>
+                    updateUrgencyDraft("missedThreshold", value)
+                  }
+                />
+                <PolicyNumberField
+                  label="Ventana de evaluación"
+                  helper="Días hacia atrás que se consideran para el cálculo (1–365)."
+                  value={urgencyDraft.windowDays}
+                  onChangeText={(value) =>
+                    updateUrgencyDraft("windowDays", value)
+                  }
+                />
+                <PolicyNumberField
+                  label="Suspensión de prioridad"
+                  helper="Días sin recibir asignaciones urgentes prioritarias (1–90)."
+                  value={urgencyDraft.prioritySuspensionDays}
+                  onChangeText={(value) =>
+                    updateUrgencyDraft("prioritySuspensionDays", value)
+                  }
+                />
+
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={savingUrgency}
+                  onPress={confirmUrgencyPolicy}
+                  style={[
+                    styles.policySaveButton,
+                    savingUrgency && styles.policySaveButtonDisabled,
+                  ]}
+                >
+                  {savingUrgency ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="save-outline" size={18} color="#fff" />
+                      <Text style={styles.policySaveText}>
+                        Revisar y guardar política
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.policyAuditText}>
+                  Último cambio:{" "}
+                  {new Intl.DateTimeFormat("es-AR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  }).format(new Date(urgency.policy.updatedAt))}
+                  . Cada cambio conserva el antes, el después y el administrador
+                  responsable.
+                </Text>
+              </View>
+            ) : null}
+
             <View style={styles.section}>
               <SectionHeader
                 icon="shield-outline"
@@ -631,7 +957,8 @@ export default function OperationalDashboard() {
                       </Text>
                       {report.source === "incident" ? (
                         <Text style={styles.reportReference}>
-                          Chat {report.chat_id?.slice(0, 8) ?? "—"} · Pago {report.payment_record_id?.slice(0, 8) ?? "—"}
+                          Chat {report.chat_id?.slice(0, 8) ?? "—"} · Pago{" "}
+                          {report.payment_record_id?.slice(0, 8) ?? "—"}
                         </Text>
                       ) : null}
                       {report.details ? (
@@ -659,7 +986,9 @@ export default function OperationalDashboard() {
                               style={styles.reviewButton}
                             >
                               <Text style={styles.reviewButtonText}>
-                                {report.source === "incident" ? "Tomar caso" : "Tomar revisión"}
+                                {report.source === "incident"
+                                  ? "Tomar caso"
+                                  : "Tomar revisión"}
                               </Text>
                             </TouchableOpacity>
                           ) : null}
@@ -676,7 +1005,9 @@ export default function OperationalDashboard() {
                             style={styles.resolveButton}
                           >
                             <Text style={styles.resolveButtonText}>
-                              {report.source === "incident" ? "Cerrar revisión" : "Resolver"}
+                              {report.source === "incident"
+                                ? "Cerrar revisión"
+                                : "Resolver"}
                             </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
@@ -1087,6 +1418,141 @@ const styles = StyleSheet.create({
     height: "100%",
     borderRadius: 4,
     backgroundColor: "#d67b17",
+  },
+  policyStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: "#fff8e9",
+    borderWidth: 1,
+    borderColor: "#f1dfb2",
+  },
+  policyStatusIcon: {
+    width: 39,
+    height: 39,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: "#f5e5bd",
+  },
+  policyStatusIconEnabled: {
+    backgroundColor: "#12815e",
+  },
+  policyStatusCopy: {
+    flex: 1,
+  },
+  policyStatusTitle: {
+    color: "#294b51",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  policyStatusText: {
+    marginTop: 2,
+    color: "#71868a",
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  policyMetricsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  policyMetric: {
+    flex: 1,
+    minHeight: 76,
+    padding: 12,
+    borderRadius: 15,
+    backgroundColor: "#f3f8f7",
+  },
+  policyMetricValue: {
+    color: "#047a8f",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  policyMetricLabel: {
+    marginTop: 3,
+    color: "#687f83",
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  policyFixedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 3,
+    padding: 11,
+    borderRadius: 14,
+    backgroundColor: "#e9f7f6",
+  },
+  policyFixedText: {
+    flex: 1,
+    color: "#31545a",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  policyField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 66,
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#dce8e6",
+  },
+  policyFieldCopy: {
+    flex: 1,
+  },
+  policyFieldLabel: {
+    color: "#31545a",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  policyFieldHelper: {
+    marginTop: 3,
+    color: "#7a8d90",
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  policyInput: {
+    width: 56,
+    minHeight: 42,
+    paddingHorizontal: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#b9d7dc",
+    backgroundColor: "#fff",
+    color: "#183b42",
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  policySaveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 48,
+    marginTop: 14,
+    borderRadius: 15,
+    backgroundColor: "#047a8f",
+  },
+  policySaveButtonDisabled: {
+    opacity: 0.55,
+  },
+  policySaveText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  policyAuditText: {
+    marginTop: 9,
+    color: "#7a8d90",
+    fontSize: 9,
+    lineHeight: 13,
+    textAlign: "center",
   },
   emptyText: {
     color: "#7a8d90",

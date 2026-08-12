@@ -30,6 +30,7 @@ import { AuthContext } from "../lib/context/AppContext";
 import { syncPrestadorConToori } from "../lib/tooriApi";
 import vexo from "../lib/vexo";
 import type { UserUpdate } from "../types/db.overrides.types";
+import { LEGAL_TERMS_URL } from "../lib/constants/legal";
 
 type NavigationProp = NativeStackNavigationProp<MainStackParamList>;
 type SelectedFile = {
@@ -531,7 +532,7 @@ export default function RegistroTrabajadorSimplificado() {
               {/* Términos */}
               <View style={styles.switchContainer}>
                 <Switch value={aceptaTerminos} onValueChange={setAceptaTerminos} trackColor={{ false: "#767577", true: "#E8C547" }} thumbColor={aceptaTerminos ? "#A4D4AE" : "#f4f3f4"} />
-                <TouchableOpacity onPress={() => Linking.openURL("https://inicio.tooriserviciosya.info/Terminos-y-condiciones.html")}>
+                <TouchableOpacity onPress={() => Linking.openURL(LEGAL_TERMS_URL)}>
                   <Text style={[styles.switchLabel, { textDecorationLine: "underline" }]}>Acepto los términos y condiciones</Text>
                 </TouchableOpacity>
               </View>
