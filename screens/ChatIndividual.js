@@ -25,6 +25,7 @@ import BotonVolver from "../components/BotonVolver";
 import { withModalProvider } from "../components/sheet/withModalProvider";
 import { parseQuoteMessage, formatQuoteAmount, getQuotePricing } from "../lib/utils/quoteMessage";
 import { pricingModeLabel, quotePricingSummary } from "../lib/utils/quotePricing";
+import ServiceSchedulePanel from "../components/chat/ServiceSchedulePanel";
 import { calculateServiceConfirmationFee } from "../lib/constants/billing";
 import VoiceMessageBubble from "../components/chat/VoiceMessageBubble";
 import {
@@ -1085,6 +1086,9 @@ function ChatIndividual({ route }) {
                       setModalVisible(true);
                     }}
                   />
+                ) : null}
+                {jobStatus?.status === "approved" && jobStatus?.job_status === "confirmed" ? (
+                  <ServiceSchedulePanel chatId={chatId} onChanged={cargarEstadoTrabajo} />
                 ) : null}
                 {hasOlderMessages ? (
                   <TouchableOpacity

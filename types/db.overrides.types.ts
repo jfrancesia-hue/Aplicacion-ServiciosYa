@@ -371,6 +371,25 @@ export type Database = MergeDeep<
           Args: { p_oferta_id: string };
           Returns: Json;
         };
+        get_chat_schedule: {
+          Args: { p_chat_id: string };
+          Returns: Json;
+        };
+        propose_service_schedule: {
+          Args: {
+            p_payment_record_id: string;
+            p_slots: Json;
+            p_reason?: "initial" | "reschedule";
+          };
+          Returns: Json;
+        };
+        select_service_schedule_slot: {
+          Args: {
+            p_proposal_id: string;
+            p_slot_id: string;
+          };
+          Returns: Json;
+        };
         get_provider_contact_access: {
           Args: {
             p_cliente_id?: string | null;

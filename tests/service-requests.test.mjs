@@ -35,6 +35,17 @@ const paymentPreference = await readFile(
   ),
   "utf8",
 );
+const scheduleMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812140000_service_schedule_options.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const schedulePanel = await readFile(
+  new URL("../components/chat/ServiceSchedulePanel.tsx", import.meta.url),
+  "utf8",
+);
 
 test("las publicaciones manuales reutilizan nuevaOferta con un origen distinguible", () => {
   assert.match(migration, /create_manual_service_request/);
@@ -91,4 +102,19 @@ test("el backend rechaza totales manipulados y guarda la base del 10%", () => {
     paymentPreference,
     /reference_total_type: pricing\.referenceType/,
   );
+});
+
+test("la agenda se habilita después del pago y limita cada ronda a tres opciones", () => {
+  assert.match(scheduleMigration, /status <> 'approved'/);
+  assert.match(scheduleMigration, /v_count < 1 or v_count > 3/);
+  assert.match(scheduleMigration, /INITIAL_SCHEDULE_PROVIDER_ONLY/);
+  assert.match(scheduleMigration, /SCHEDULE_OTHER_PARTY_MUST_SELECT/);
+  assert.match(schedulePanel, /choices\.length < 3/);
+});
+
+test("las reprogramaciones conservan rondas y requieren aceptación", () => {
+  assert.match(scheduleMigration, /p_reason <> 'reschedule'/);
+  assert.match(scheduleMigration, /schedule_round = v_proposal\.round/);
+  assert.match(scheduleMigration, /schedule_status = 'scheduled'/);
+  assert.match(scheduleMigration, /can_replace_expired/);
 });
