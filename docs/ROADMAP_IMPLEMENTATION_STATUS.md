@@ -15,6 +15,10 @@
 - MICA como intake guiado de reclamos y derivación a la bandeja operativa de Agustín.
 - Notificaciones in-app y push para pago, agenda, recordatorios, reprogramaciones y reclamos.
 - Outbox de correo transaccional idempotente; conserva los eventos si el proveedor todavía no está configurado.
+- Estado de correo y push visible en el panel operativo, incluyendo eventos en
+  espera y fallos definitivos, sin exponer secretos.
+- Procesadores automáticos de correo y urgencias autenticados con un secreto
+  generado dentro de Supabase Vault; las llamadas públicas son rechazadas.
 - Urgencia explícita separada del chat normal: respuesta aceptar/rechazar, recordatorio a los 10 minutos, vencimiento a los 20 y reasignación por rubro y zona.
 - Registro auditable de urgencias incumplidas y política disciplinaria configurable.
 - Administración de la disciplina desde el panel de Agustín, con confirmación,
@@ -65,10 +69,12 @@ La guía ampliada está en `docs/GOOGLE_PLAY_INTERNAL_BETA.md`.
 
 ## Evidencia de cierre técnico
 
-- `npm test`: 37 pruebas aprobadas.
+- `npm test`: 39 pruebas aprobadas.
 - `npm run typecheck`: sin errores.
-- Migraciones remotas alineadas hasta `20260812185000`.
-- Funciones `operational-dashboard` y `create-payment-preference` desplegadas.
+- Migraciones remotas alineadas hasta `20260812186000`.
+- Funciones `operational-dashboard`, `create-payment-preference`,
+  `process-transactional-notifications` y `process-urgent-work-alerts`
+  desplegadas.
 - El linter remoto ya no informa referencias inválidas en el flujo de chat o
   urgencias. Conserva advertencias heredadas de la extensión GIS y una RPC
   antigua no utilizada por la app (`incrementar_veces_contratado`).

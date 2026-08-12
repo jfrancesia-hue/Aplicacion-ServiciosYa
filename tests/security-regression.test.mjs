@@ -78,6 +78,13 @@ const canonicalChatParticipantsMigration = await readFile(
   ),
   "utf8",
 );
+const scheduledProcessorsSecurityMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812186000_secure_scheduled_processors.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const urgentProcessor = await readFile(
   new URL(
     "../supabase/functions/process-urgent-work-alerts/index.ts",
@@ -204,10 +211,47 @@ test("las notificaciones transaccionales son idempotentes y se reclaman con bloq
   );
 });
 
+test("los procesadores programados exigen un secreto de Vault o service role", () => {
+  assert.match(scheduledProcessorsSecurityMigration, /vault\.create_secret/);
+  assert.match(
+    scheduledProcessorsSecurityMigration,
+    /verify_marketplace_cron_secret/,
+  );
+  assert.match(
+    scheduledProcessorsSecurityMigration,
+    /x-marketplace-cron-secret/,
+  );
+  for (const processor of [
+    transactionalNotificationsFunction,
+    urgentProcessor,
+  ]) {
+    assert.match(processor, /isAuthorizedProcessorRequest/);
+    assert.match(processor, /status: 401/);
+    assert.ok(
+      processor.indexOf("isAuthorizedProcessorRequest(req") <
+        processor.indexOf("claim_"),
+    );
+  }
+});
+
 test("el procesador conserva correo pendiente cuando todav\u00eda no hay proveedor configurado", () => {
   assert.match(transactionalNotificationsFunction, /RESEND_API_KEY/);
   assert.match(transactionalNotificationsFunction, /TRANSACTIONAL_EMAIL_FROM/);
   assert.match(transactionalNotificationsFunction, /waiting_configuration/);
+});
+
+test("el panel muestra la salud transaccional sin exponer secretos", () => {
+  assert.match(operationalDashboard, /notification-health/);
+  assert.match(operationalDashboard, /emailConfigured/);
+  assert.match(operationalDashboard, /waitingEmail/);
+  assert.doesNotMatch(
+    operationalDashboard,
+    /RESEND_API_KEY[^\n]{0,120}(return|json)\s*[:=(]/,
+  );
+  assert.match(
+    transactionalNotificationsFunction,
+    /eq\("email_status", "waiting_configuration"\)/,
+  );
 });
 
 test("las urgencias exigen respuesta expl\u00edcita dentro de 20 minutos", () => {

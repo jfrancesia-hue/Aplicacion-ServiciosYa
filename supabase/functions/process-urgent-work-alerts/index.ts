@@ -44,6 +44,22 @@ function normalize(value: unknown) {
     .toLowerCase();
 }
 
+async function isAuthorizedProcessorRequest(
+  req: Request,
+  supabase: SupabaseAdmin,
+  serviceRoleKey: string,
+) {
+  const authorization = req.headers.get("Authorization") ?? "";
+  if (authorization === `Bearer ${serviceRoleKey}`) return true;
+
+  const cronSecret = req.headers.get("x-marketplace-cron-secret");
+  if (!cronSecret) return false;
+  const { data, error } = await supabase.rpc("verify_marketplace_cron_secret", {
+    p_secret: cronSecret,
+  });
+  return !error && data === true;
+}
+
 function matchesCategory(raw: unknown, category: string | null) {
   if (!category) return true;
   const expected = normalize(category);
@@ -260,6 +276,9 @@ Deno.serve(async (req) => {
     );
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
+  if (!(await isAuthorizedProcessorRequest(req, supabase, key))) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const [{ data: policyData, error: policyError }, { data, error }] =
     await Promise.all([
       supabase

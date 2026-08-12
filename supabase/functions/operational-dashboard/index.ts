@@ -640,6 +640,63 @@ async function updateUrgencyPolicy(
   return json(await getUrgencyPolicy(admin));
 }
 
+async function getNotificationHealth(admin: ReturnType<typeof createClient>) {
+  const [
+    waitingEmailResult,
+    pendingEmailResult,
+    failedEmailResult,
+    sentEmailResult,
+    failedPushResult,
+  ] = await Promise.all([
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("email_status", "waiting_configuration"),
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("email_status", "pending"),
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("email_status", "failed"),
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("email_status", "sent"),
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("push_status", "failed"),
+  ]);
+  const failure = [
+    waitingEmailResult.error,
+    pendingEmailResult.error,
+    failedEmailResult.error,
+    sentEmailResult.error,
+    failedPushResult.error,
+  ].find(Boolean);
+  if (failure) throw failure;
+
+  return {
+    ok: true,
+    providers: {
+      emailConfigured: Boolean(
+        Deno.env.get("RESEND_API_KEY") &&
+          Deno.env.get("TRANSACTIONAL_EMAIL_FROM"),
+      ),
+      pushAccessTokenConfigured: Boolean(Deno.env.get("EXPO_ACCESS_TOKEN")),
+    },
+    outbox: {
+      waitingEmail: waitingEmailResult.count ?? 0,
+      pendingEmail: pendingEmailResult.count ?? 0,
+      failedEmail: failedEmailResult.count ?? 0,
+      sentEmail: sentEmailResult.count ?? 0,
+      failedPush: failedPushResult.count ?? 0,
+    },
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -685,6 +742,9 @@ Deno.serve(async (req) => {
     }
     if (action === "update-urgency-policy") {
       return updateUrgencyPolicy(admin, body, currentAdmin.id);
+    }
+    if (action === "notification-health") {
+      return json(await getNotificationHealth(admin));
     }
 
     return json({ error: "Acción no permitida." }, 400);

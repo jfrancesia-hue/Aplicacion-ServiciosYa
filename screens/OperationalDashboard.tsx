@@ -96,6 +96,20 @@ type UrgencyPolicyResponse = {
   };
 };
 
+type NotificationHealth = {
+  providers: {
+    emailConfigured: boolean;
+    pushAccessTokenConfigured: boolean;
+  };
+  outbox: {
+    waitingEmail: number;
+    pendingEmail: number;
+    failedEmail: number;
+    sentEmail: number;
+    failedPush: number;
+  };
+};
+
 type UrgencyPolicyDraft = {
   enforcementEnabled: boolean;
   maxReassignments: string;
@@ -225,6 +239,8 @@ export default function OperationalDashboard() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [reports, setReports] = useState<ModerationReport[]>([]);
   const [urgency, setUrgency] = useState<UrgencyPolicyResponse | null>(null);
+  const [notificationHealth, setNotificationHealth] =
+    useState<NotificationHealth | null>(null);
   const [urgencyDraft, setUrgencyDraft] = useState<UrgencyPolicyDraft | null>(
     null,
   );
@@ -245,19 +261,25 @@ export default function OperationalDashboard() {
       refresh ? setRefreshing(true) : setLoading(true);
       setErrorMessage(null);
       try {
-        const [summaryResult, reportsResult, urgencyResult] = await Promise.all(
-          [
-            supabase.functions.invoke("operational-dashboard", {
-              body: { action: "summary", days: periodDays },
-            }),
-            supabase.functions.invoke("operational-dashboard", {
-              body: { action: "reports" },
-            }),
-            supabase.functions.invoke("operational-dashboard", {
-              body: { action: "urgency-policy" },
-            }),
-          ],
-        );
+        const [
+          summaryResult,
+          reportsResult,
+          urgencyResult,
+          notificationResult,
+        ] = await Promise.all([
+          supabase.functions.invoke("operational-dashboard", {
+            body: { action: "summary", days: periodDays },
+          }),
+          supabase.functions.invoke("operational-dashboard", {
+            body: { action: "reports" },
+          }),
+          supabase.functions.invoke("operational-dashboard", {
+            body: { action: "urgency-policy" },
+          }),
+          supabase.functions.invoke("operational-dashboard", {
+            body: { action: "notification-health" },
+          }),
+        ]);
 
         if (summaryResult.error || summaryResult.data?.error) {
           throw new Error(
@@ -280,12 +302,20 @@ export default function OperationalDashboard() {
               "No se pudo cargar la política de urgencias.",
           );
         }
+        if (notificationResult.error || notificationResult.data?.error) {
+          throw new Error(
+            notificationResult.data?.error ||
+              notificationResult.error?.message ||
+              "No se pudo cargar el estado de notificaciones.",
+          );
+        }
 
         setSummary(summaryResult.data as DashboardSummary);
         setReports((reportsResult.data?.reports ?? []) as ModerationReport[]);
         const nextUrgency = urgencyResult.data as UrgencyPolicyResponse;
         setUrgency(nextUrgency);
         setUrgencyDraft(policyToDraft(nextUrgency.policy));
+        setNotificationHealth(notificationResult.data as NotificationHealth);
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -912,6 +942,154 @@ export default function OperationalDashboard() {
                   . Cada cambio conserva el antes, el después y el administrador
                   responsable.
                 </Text>
+              </View>
+            ) : null}
+
+            {notificationHealth ? (
+              <View style={styles.section}>
+                <SectionHeader
+                  icon="notifications-outline"
+                  title="Notificaciones transaccionales"
+                  subtitle="Estado del correo, push y eventos conservados en la bandeja"
+                />
+                <View style={styles.integrationList}>
+                  <View style={styles.integrationRow}>
+                    <View
+                      style={[
+                        styles.integrationIcon,
+                        notificationHealth.providers.emailConfigured
+                          ? styles.integrationIconOk
+                          : styles.integrationIconWarning,
+                      ]}
+                    >
+                      <Ionicons
+                        name="mail-outline"
+                        size={19}
+                        color={
+                          notificationHealth.providers.emailConfigured
+                            ? "#fff"
+                            : "#76541c"
+                        }
+                      />
+                    </View>
+                    <View style={styles.integrationCopy}>
+                      <Text style={styles.integrationTitle}>
+                        Correo transaccional
+                      </Text>
+                      <Text style={styles.integrationText}>
+                        {notificationHealth.providers.emailConfigured
+                          ? "Resend y el remitente están configurados."
+                          : "Faltan Resend y/o el remitente verificado."}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.integrationBadge,
+                        notificationHealth.providers.emailConfigured
+                          ? styles.integrationBadgeOk
+                          : styles.integrationBadgeWarning,
+                      ]}
+                    >
+                      {notificationHealth.providers.emailConfigured
+                        ? "LISTO"
+                        : "PENDIENTE"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.integrationRow}>
+                    <View
+                      style={[
+                        styles.integrationIcon,
+                        notificationHealth.providers.pushAccessTokenConfigured
+                          ? styles.integrationIconOk
+                          : styles.integrationIconWarning,
+                      ]}
+                    >
+                      <Ionicons
+                        name="phone-portrait-outline"
+                        size={19}
+                        color={
+                          notificationHealth.providers.pushAccessTokenConfigured
+                            ? "#fff"
+                            : "#76541c"
+                        }
+                      />
+                    </View>
+                    <View style={styles.integrationCopy}>
+                      <Text style={styles.integrationTitle}>Push de Expo</Text>
+                      <Text style={styles.integrationText}>
+                        {notificationHealth.providers.pushAccessTokenConfigured
+                          ? "Token de acceso configurado para envíos protegidos."
+                          : "Sin token de acceso del proveedor push."}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.integrationBadge,
+                        notificationHealth.providers.pushAccessTokenConfigured
+                          ? styles.integrationBadgeOk
+                          : styles.integrationBadgeWarning,
+                      ]}
+                    >
+                      {notificationHealth.providers.pushAccessTokenConfigured
+                        ? "LISTO"
+                        : "REVISAR"}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.integrationMetrics}>
+                  <View style={styles.integrationMetric}>
+                    <Text style={styles.integrationMetricValue}>
+                      {formatCount(notificationHealth.outbox.waitingEmail)}
+                    </Text>
+                    <Text style={styles.integrationMetricLabel}>
+                      Correos esperando configuración
+                    </Text>
+                  </View>
+                  <View style={styles.integrationMetric}>
+                    <Text style={styles.integrationMetricValue}>
+                      {formatCount(notificationHealth.outbox.sentEmail)}
+                    </Text>
+                    <Text style={styles.integrationMetricLabel}>
+                      Correos enviados
+                    </Text>
+                  </View>
+                  <View style={styles.integrationMetric}>
+                    <Text
+                      style={[
+                        styles.integrationMetricValue,
+                        (notificationHealth.outbox.failedEmail > 0 ||
+                          notificationHealth.outbox.failedPush > 0) &&
+                          styles.integrationMetricValueError,
+                      ]}
+                    >
+                      {formatCount(
+                        notificationHealth.outbox.failedEmail +
+                          notificationHealth.outbox.failedPush,
+                      )}
+                    </Text>
+                    <Text style={styles.integrationMetricLabel}>
+                      Fallos definitivos
+                    </Text>
+                  </View>
+                </View>
+
+                {!notificationHealth.providers.emailConfigured ? (
+                  <View style={styles.integrationHint}>
+                    <Ionicons name="key-outline" size={18} color="#76541c" />
+                    <Text style={styles.integrationHintText}>
+                      Configurá RESEND_API_KEY y TRANSACTIONAL_EMAIL_FROM en
+                      Supabase. Los eventos conservados se liberarán
+                      automáticamente en el siguiente ciclo seguro.
+                    </Text>
+                  </View>
+                ) : notificationHealth.outbox.pendingEmail > 0 ? (
+                  <Text style={styles.integrationFootnote}>
+                    Hay {formatCount(notificationHealth.outbox.pendingEmail)}
+                    correos programados para próximos recordatorios.
+                  </Text>
+                ) : null}
               </View>
             ) : null}
 
@@ -1550,6 +1728,116 @@ const styles = StyleSheet.create({
   policyAuditText: {
     marginTop: 9,
     color: "#7a8d90",
+    fontSize: 9,
+    lineHeight: 13,
+    textAlign: "center",
+  },
+  integrationList: {
+    gap: 8,
+  },
+  integrationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 64,
+    padding: 11,
+    borderRadius: 16,
+    backgroundColor: "#f6faf9",
+    borderWidth: 1,
+    borderColor: "#dce8e6",
+  },
+  integrationIcon: {
+    width: 39,
+    height: 39,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+  },
+  integrationIconOk: {
+    backgroundColor: "#12815e",
+  },
+  integrationIconWarning: {
+    backgroundColor: "#f5e5bd",
+  },
+  integrationCopy: {
+    flex: 1,
+  },
+  integrationTitle: {
+    color: "#294b51",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  integrationText: {
+    marginTop: 2,
+    color: "#71868a",
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  integrationBadge: {
+    overflow: "hidden",
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 9,
+    fontSize: 8,
+    fontWeight: "900",
+  },
+  integrationBadgeOk: {
+    color: "#0c6b4e",
+    backgroundColor: "#dff4ec",
+  },
+  integrationBadgeWarning: {
+    color: "#76541c",
+    backgroundColor: "#fff0c9",
+  },
+  integrationMetrics: {
+    flexDirection: "row",
+    gap: 7,
+    marginTop: 10,
+  },
+  integrationMetric: {
+    flex: 1,
+    minHeight: 78,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 8,
+    borderRadius: 14,
+    backgroundColor: "#f3f8f7",
+  },
+  integrationMetricValue: {
+    color: "#047a8f",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  integrationMetricValueError: {
+    color: "#a43b32",
+  },
+  integrationMetricLabel: {
+    marginTop: 3,
+    color: "#687f83",
+    fontSize: 8,
+    lineHeight: 11,
+    textAlign: "center",
+  },
+  integrationHint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 10,
+    padding: 11,
+    borderRadius: 14,
+    backgroundColor: "#fff8e9",
+    borderWidth: 1,
+    borderColor: "#f1dfb2",
+  },
+  integrationHintText: {
+    flex: 1,
+    color: "#76541c",
+    fontSize: 9,
+    lineHeight: 14,
+  },
+  integrationFootnote: {
+    marginTop: 9,
+    color: "#71868a",
     fontSize: 9,
     lineHeight: 13,
     textAlign: "center",

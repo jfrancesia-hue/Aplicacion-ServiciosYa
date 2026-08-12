@@ -1,14 +1,28 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const expoAccessToken = Deno.env.get("EXPO_ACCESS_TOKEN");
 const resendApiKey = Deno.env.get("RESEND_API_KEY");
 const emailFrom = Deno.env.get("TRANSACTIONAL_EMAIL_FROM");
 
-const admin = createClient(supabaseUrl, serviceRoleKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
+type SupabaseAdmin = ReturnType<typeof createClient>;
+
+async function isAuthorizedProcessorRequest(
+  req: Request,
+  admin: SupabaseAdmin,
+  authorizationKey: string,
+) {
+  const authorization = req.headers.get("Authorization") ?? "";
+  if (authorization === `Bearer ${authorizationKey}`) return true;
+
+  const cronSecret = req.headers.get("x-marketplace-cron-secret");
+  if (!cronSecret) return false;
+  const { data, error } = await admin.rpc("verify_marketplace_cron_secret", {
+    p_secret: cronSecret,
+  });
+  return !error && data === true;
+}
 
 type OutboxRow = {
   id: string;
@@ -38,10 +52,7 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-async function sendPush(
-  token: string,
-  row: OutboxRow,
-) {
+async function sendPush(token: string, row: OutboxRow) {
   const response = await fetch("https://exp.host/--/api/v2/push/send", {
     method: "POST",
     headers: {
@@ -67,11 +78,7 @@ async function sendPush(
   }
 }
 
-async function sendEmail(
-  email: string,
-  name: string | null,
-  row: OutboxRow,
-) {
+async function sendEmail(email: string, name: string | null, row: OutboxRow) {
   if (!resendApiKey || !emailFrom) throw new Error("EMAIL_NOT_CONFIGURED");
 
   const response = await fetch("https://api.resend.com/emails", {
@@ -97,7 +104,12 @@ async function sendEmail(
             <p style="color:#61787d;font-size:13px">Abrí la app Servicios Ya para revisar los detalles y continuar dentro del canal protegido.</p>
           </div>
         </div>`,
-      tags: [{ name: "event_type", value: row.event_type.replace(/[^a-zA-Z0-9_-]/g, "_") }],
+      tags: [
+        {
+          name: "event_type",
+          value: row.event_type.replace(/[^a-zA-Z0-9_-]/g, "_"),
+        },
+      ],
     }),
   });
   const payload = await response.json().catch(() => ({}));
@@ -113,8 +125,32 @@ Deno.serve(async (req) => {
       headers: { "Content-Type": "application/json" },
     });
   }
+  if (!supabaseUrl || !serviceRoleKey) {
+    return new Response(JSON.stringify({ error: "Missing configuration" }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const admin = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  if (!(await isAuthorizedProcessorRequest(req, admin, serviceRoleKey))) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 
   try {
+    if (resendApiKey && emailFrom) {
+      const { error: releaseError } = await admin
+        .from("transactional_notification_outbox")
+        .update({ next_attempt_at: new Date().toISOString() })
+        .eq("email_status", "waiting_configuration")
+        .gt("next_attempt_at", new Date().toISOString());
+      if (releaseError) throw releaseError;
+    }
+
     const { data, error } = await admin.rpc(
       "claim_transactional_notifications",
       { p_limit: 50 },
@@ -176,7 +212,9 @@ Deno.serve(async (req) => {
         if (!profile?.email) update.email_status = "skipped";
         else if (!resendApiKey || !emailFrom) {
           update.email_status = "waiting_configuration";
-          update.next_attempt_at = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+          update.next_attempt_at = new Date(
+            Date.now() + 24 * 60 * 60 * 1000,
+          ).toISOString();
           errors.push("email:EMAIL_NOT_CONFIGURED");
         } else {
           try {
@@ -192,11 +230,15 @@ Deno.serve(async (req) => {
       }
 
       if (row.attempts >= 8) {
-        if (!update.push_status && row.push_status === "pending") update.push_status = "failed";
-        if (!update.email_status && row.email_status === "pending") update.email_status = "failed";
-        if (!update.in_app_status && row.in_app_status === "pending") update.in_app_status = "failed";
+        if (!update.push_status && row.push_status === "pending")
+          update.push_status = "failed";
+        if (!update.email_status && row.email_status === "pending")
+          update.email_status = "failed";
+        if (!update.in_app_status && row.in_app_status === "pending")
+          update.in_app_status = "failed";
       }
-      update.last_error = errors.length > 0 ? errors.join(" | ").slice(0, 2000) : null;
+      update.last_error =
+        errors.length > 0 ? errors.join(" | ").slice(0, 2000) : null;
 
       await admin
         .from("transactional_notification_outbox")
