@@ -15,7 +15,6 @@ import {
   Alert,
   FlatList,
   Image,
-  Linking,
   Modal,
   ScrollView,
   Share,
@@ -73,8 +72,7 @@ interface Worker {
   ciudad?: string | null;
   barrio?: string | null;
   categoria?: string[];
-  matricula?: unknown;
-  antecedentes?: unknown;
+  credentialSubmitted?: boolean;
   verificado?: boolean;
   suscriptor?: boolean;
   antiguedad?: number | null;
@@ -111,39 +109,6 @@ function parseCategories(value: unknown): string[] {
   );
 }
 
-function extractCardDocUrl(val: unknown): string | null {
-  if (!val) return null;
-  if (typeof val === "string") {
-    try {
-      return extractCardDocUrl(JSON.parse(val));
-    } catch (_) {}
-    const m = val.match(/https?:\/\/[^\s'"<>]+/i);
-    if (m) return m[0].replace(/[)\]"'.,;]+$/, "");
-    return /^https?:\/\//i.test(val) ? val : null;
-  }
-  if (Array.isArray(val)) {
-    for (const item of val) {
-      const f = extractCardDocUrl(item);
-      if (f) return f;
-    }
-    return null;
-  }
-  if (typeof val === "object") {
-    const record = val as Record<string, unknown>;
-    for (const key of ["uri", "url", "path", "link"]) {
-      if (record[key]) {
-        const found = extractCardDocUrl(record[key]);
-        if (found) return found;
-      }
-    }
-    for (const key of Object.keys(record)) {
-      const found = extractCardDocUrl(record[key]);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
 function formatResponseTime(minutes?: number | null) {
   if (minutes == null || !Number.isFinite(minutes)) return null;
   if (minutes < 60)
@@ -168,11 +133,9 @@ function WorkerCard({
         : availabilityStatus === "busy"
           ? "hourglass-top"
           : "chat";
-  const hasMatricula = Boolean(extractCardDocUrl(worker.matricula));
-  const hasAntecedentes = Boolean(extractCardDocUrl(worker.antecedentes));
   const trustLabel = worker.verificado
     ? "Identidad verificada"
-    : hasMatricula || hasAntecedentes
+    : worker.credentialSubmitted
       ? "Documentación cargada"
       : "Perfil básico";
   return (
@@ -259,7 +222,7 @@ function WorkerCard({
             styles.badge,
             worker.verificado
               ? styles.badgeVerified
-              : hasMatricula || hasAntecedentes
+              : worker.credentialSubmitted
                 ? styles.badgeDoc
                 : styles.badgeBasic,
           ]}
@@ -268,13 +231,13 @@ function WorkerCard({
             name={
               worker.verificado
                 ? "verified-user"
-                : hasMatricula || hasAntecedentes
+                : worker.credentialSubmitted
                   ? "description"
                   : "person-outline"
             }
             size={13}
             color={
-              worker.verificado || hasMatricula || hasAntecedentes
+              worker.verificado || worker.credentialSubmitted
                 ? "#fff"
                 : "#516468"
             }
@@ -283,8 +246,7 @@ function WorkerCard({
             style={[
               styles.badgeText,
               !worker.verificado &&
-                !hasMatricula &&
-                !hasAntecedentes &&
+                !worker.credentialSubmitted &&
                 styles.badgeTextBasic,
             ]}
           >
@@ -352,24 +314,8 @@ function WorkerDetailModal({
   const ubicacion = [worker.barrio, worker.ciudad, worker.provincia]
     .filter(Boolean)
     .join(", ");
-  const hasMatricula = Boolean(extractCardDocUrl(worker.matricula));
-  const hasAntecedentes = Boolean(extractCardDocUrl(worker.antecedentes));
   const hasVerificationEvidence =
-    Boolean(worker.verificado) || hasMatricula || hasAntecedentes;
-
-  const abrirDoc = (val: unknown) => {
-    const url = extractCardDocUrl(val);
-    if (!url) {
-      Alert.alert(
-        "Sin documento",
-        "No se encontró una URL válida en este documento.",
-      );
-      return;
-    }
-    Linking.openURL(url).catch(() =>
-      Alert.alert("Error", "No se pudo abrir el documento."),
-    );
-  };
+    Boolean(worker.verificado) || Boolean(worker.credentialSubmitted);
 
   const compartirPerfil = async () => {
     if (!worker?.id) {
@@ -607,27 +553,17 @@ function WorkerDetailModal({
                         <Text style={styles.verText}>Perfil verificado</Text>
                       </View>
                     )}
-                    {hasMatricula && (
+                    {worker.credentialSubmitted && (
                       <View style={[styles.verItem, styles.verOk]}>
                         <MaterialIcons name="badge" size={15} color="#fff" />
-                        <Text style={styles.verText}>Matrícula cargada</Text>
-                      </View>
-                    )}
-                    {hasAntecedentes && (
-                      <View style={[styles.verItem, styles.verOk]}>
-                        <MaterialIcons
-                          name="description"
-                          size={15}
-                          color="#fff"
-                        />
                         <Text style={styles.verText}>
-                          Antecedentes cargados
+                          Credencial presentada
                         </Text>
                       </View>
                     )}
                   </View>
                 )}
-                {(!worker.verificado || !hasMatricula || !hasAntecedentes) && (
+                {(!worker.verificado || !worker.credentialSubmitted) && (
                   <View style={styles.profileInfoNotice}>
                     <MaterialIcons name="info" size={18} color="#9a6a12" />
                     <Text style={styles.profileInfoText}>
@@ -684,43 +620,13 @@ function WorkerDetailModal({
                   </View>
                 ) : null}
 
-                {(extractCardDocUrl(worker.matricula) ||
-                  extractCardDocUrl(worker.antecedentes)) && (
-                  <>
-                    <Text style={styles.modalLabel}>Documentos</Text>
-                    {extractCardDocUrl(worker.matricula) && (
-                      <TouchableOpacity
-                        style={styles.docBtn}
-                        onPress={() => abrirDoc(worker.matricula)}
-                      >
-                        <MaterialIcons name="badge" size={18} color="#069eb3" />
-                        <Text style={styles.docBtnText}>Ver Matrícula</Text>
-                        <MaterialIcons
-                          name="open-in-new"
-                          size={16}
-                          color="#069eb3"
-                        />
-                      </TouchableOpacity>
-                    )}
-                    {extractCardDocUrl(worker.antecedentes) && (
-                      <TouchableOpacity
-                        style={styles.docBtn}
-                        onPress={() => abrirDoc(worker.antecedentes)}
-                      >
-                        <MaterialIcons
-                          name="description"
-                          size={18}
-                          color="#069eb3"
-                        />
-                        <Text style={styles.docBtnText}>Ver Antecedentes</Text>
-                        <MaterialIcons
-                          name="open-in-new"
-                          size={16}
-                          color="#069eb3"
-                        />
-                      </TouchableOpacity>
-                    )}
-                  </>
+                {worker.credentialSubmitted && (
+                  <View style={styles.docBtn}>
+                    <MaterialIcons name="badge" size={18} color="#069eb3" />
+                    <Text style={styles.docBtnText}>
+                      Credencial profesional presentada
+                    </Text>
+                  </View>
                 )}
 
                 <TouchableOpacity
@@ -959,7 +865,7 @@ export default function ServiciosPorCategoria({ route }: Props) {
     if (categoriasSensibles.includes(categoria)) {
       Alert.alert(
         "⚠️ Importante",
-        "Recuerda siempre solicitar un documento habilitante o antecedentes penales antes de contratar este servicio.",
+        "Recordá verificar la matrícula o habilitación directamente con el organismo competente antes de contratar este servicio.",
       );
     }
   }, [categoria]);
@@ -1064,7 +970,7 @@ export default function ServiciosPorCategoria({ route }: Props) {
       const { data, error } = await supabase
         .from("usuarios")
         .select(
-          "id, nombre, edad, foto_perfil, provincia, ciudad, barrio, categoria, matricula, antecedentes, verificado, suscriptor, antiguedad",
+          "id, nombre, edad, foto_perfil, provincia, ciudad, barrio, categoria, verificado, suscriptor, antiguedad",
         )
         .eq("rol", "worker")
         .eq("perfilPublico", true)

@@ -77,6 +77,17 @@ type ModerationReport = {
   payment_record_id?: string;
 };
 
+type ConsumerRightRequest = {
+  id: string;
+  request_code: string;
+  request_type: "withdrawal" | "service_cancellation";
+  email: string;
+  operation_reference: string | null;
+  details: string | null;
+  status: "received" | "reviewing" | "completed" | "rejected";
+  created_at: string;
+};
+
 type UrgencyPolicy = {
   slaMinutes: number;
   reminderMinutes: number;
@@ -238,6 +249,9 @@ export default function OperationalDashboard() {
   const [periodDays, setPeriodDays] = useState<(typeof PERIODS)[number]>(30);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [reports, setReports] = useState<ModerationReport[]>([]);
+  const [consumerRequests, setConsumerRequests] = useState<
+    ConsumerRightRequest[]
+  >([]);
   const [urgency, setUrgency] = useState<UrgencyPolicyResponse | null>(null);
   const [notificationHealth, setNotificationHealth] =
     useState<NotificationHealth | null>(null);
@@ -266,6 +280,7 @@ export default function OperationalDashboard() {
           reportsResult,
           urgencyResult,
           notificationResult,
+          consumerRequestsResult,
         ] = await Promise.all([
           supabase.functions.invoke("operational-dashboard", {
             body: { action: "summary", days: periodDays },
@@ -278,6 +293,9 @@ export default function OperationalDashboard() {
           }),
           supabase.functions.invoke("operational-dashboard", {
             body: { action: "notification-health" },
+          }),
+          supabase.functions.invoke("operational-dashboard", {
+            body: { action: "consumer-right-requests" },
           }),
         ]);
 
@@ -309,6 +327,16 @@ export default function OperationalDashboard() {
               "No se pudo cargar el estado de notificaciones.",
           );
         }
+        if (
+          consumerRequestsResult.error ||
+          consumerRequestsResult.data?.error
+        ) {
+          throw new Error(
+            consumerRequestsResult.data?.error ||
+              consumerRequestsResult.error?.message ||
+              "No se pudieron cargar las solicitudes de consumidores.",
+          );
+        }
 
         setSummary(summaryResult.data as DashboardSummary);
         setReports((reportsResult.data?.reports ?? []) as ModerationReport[]);
@@ -316,6 +344,10 @@ export default function OperationalDashboard() {
         setUrgency(nextUrgency);
         setUrgencyDraft(policyToDraft(nextUrgency.policy));
         setNotificationHealth(notificationResult.data as NotificationHealth);
+        setConsumerRequests(
+          (consumerRequestsResult.data?.requests ??
+            []) as ConsumerRightRequest[],
+        );
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -411,6 +443,53 @@ export default function OperationalDashboard() {
       ]);
     },
     [updateReport],
+  );
+
+  const updateConsumerRequest = useCallback(
+    async (
+      request: ConsumerRightRequest,
+      status: "reviewing" | "completed" | "rejected",
+    ) => {
+      setUpdatingReportId(request.id);
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          "operational-dashboard",
+          {
+            body: {
+              action: "update-consumer-right-request",
+              requestId: request.id,
+              status,
+            },
+          },
+        );
+        if (error || data?.error) {
+          throw new Error(
+            data?.error ||
+              error?.message ||
+              "No se pudo actualizar la solicitud.",
+          );
+        }
+        if (status === "completed" || status === "rejected") {
+          setConsumerRequests((current) =>
+            current.filter((item) => item.id !== request.id),
+          );
+        } else {
+          setConsumerRequests((current) =>
+            current.map((item) =>
+              item.id === request.id ? { ...item, status } : item,
+            ),
+          );
+        }
+      } catch (error) {
+        Alert.alert(
+          "No se pudo actualizar",
+          error instanceof Error ? error.message : "Intentá nuevamente.",
+        );
+      } finally {
+        setUpdatingReportId(null);
+      }
+    },
+    [],
   );
 
   const updateUrgencyDraft = useCallback(
@@ -1092,6 +1171,100 @@ export default function OperationalDashboard() {
                 ) : null}
               </View>
             ) : null}
+
+            <View style={styles.section}>
+              <SectionHeader
+                icon="receipt-outline"
+                title="Arrepentimientos y bajas"
+                subtitle="Solicitudes públicas con código inmediato, incluso sin inicio de sesión"
+              />
+              {consumerRequests.length === 0 ? (
+                <View style={styles.emptyModeration}>
+                  <Ionicons name="checkmark-circle" size={30} color="#12815e" />
+                  <Text style={styles.emptyModerationTitle}>
+                    No hay solicitudes pendientes
+                  </Text>
+                  <Text style={styles.emptyText}>La cola está al día.</Text>
+                </View>
+              ) : (
+                consumerRequests.map((request) => {
+                  const updating = updatingReportId === request.id;
+                  return (
+                    <View key={request.id} style={styles.reportCard}>
+                      <View style={styles.reportTopRow}>
+                        <View style={styles.reportReasonBadge}>
+                          <Text style={styles.reportReasonText}>
+                            {request.request_type === "withdrawal"
+                              ? "Arrepentimiento"
+                              : "Baja de servicio"}
+                          </Text>
+                        </View>
+                        <Text style={styles.reportDate}>
+                          {new Intl.DateTimeFormat("es-AR", {
+                            dateStyle: "short",
+                          }).format(new Date(request.created_at))}
+                        </Text>
+                      </View>
+                      <Text style={styles.reportProvider}>
+                        {request.request_code}
+                      </Text>
+                      <Text selectable style={styles.reportLocation}>
+                        {request.email}
+                      </Text>
+                      {request.operation_reference ? (
+                        <Text style={styles.reportReference}>
+                          Referencia: {request.operation_reference}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.reportDetails}>
+                        {request.details || "Sin información adicional."}
+                      </Text>
+                      {updating ? (
+                        <ActivityIndicator
+                          color="#069eb3"
+                          style={styles.reportLoader}
+                        />
+                      ) : (
+                        <View style={styles.reportActions}>
+                          {request.status !== "reviewing" ? (
+                            <TouchableOpacity
+                              onPress={() =>
+                                void updateConsumerRequest(request, "reviewing")
+                              }
+                              style={styles.reviewButton}
+                            >
+                              <Text style={styles.reviewButtonText}>
+                                Tomar gestión
+                              </Text>
+                            </TouchableOpacity>
+                          ) : null}
+                          <TouchableOpacity
+                            onPress={() =>
+                              void updateConsumerRequest(request, "completed")
+                            }
+                            style={styles.resolveButton}
+                          >
+                            <Text style={styles.resolveButtonText}>
+                              Completar
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() =>
+                              void updateConsumerRequest(request, "rejected")
+                            }
+                            style={styles.dismissButton}
+                          >
+                            <Text style={styles.dismissButtonText}>
+                              Rechazar
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </View>
 
             <View style={styles.section}>
               <SectionHeader

@@ -1,7 +1,8 @@
 import { MaterialIcons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   ActivityIndicator,
-  Linking,
   Modal,
   ScrollView,
   StyleSheet,
@@ -10,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { calculateServiceConfirmationFee } from "../../lib/constants/billing";
-import { LEGAL_TERMS_URL } from "../../lib/constants/legal";
+import type { MainStackParamList } from "../../types/navigation";
 
 type Props = {
   visible: boolean;
@@ -32,6 +33,8 @@ export default function QuoteOperationalNoticeModal({
   onClose,
   onConfirm,
 }: Props) {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const isAccept = mode === "accept";
   const fee = calculateServiceConfirmationFee(amount);
   const items = isAccept
@@ -94,7 +97,9 @@ export default function QuoteOperationalNoticeModal({
             <TouchableOpacity
               accessibilityRole="link"
               disabled={busy}
-              onPress={() => void Linking.openURL(LEGAL_TERMS_URL)}
+              onPress={() =>
+                navigation.navigate("LegalDocument", { document: "terms" })
+              }
               style={styles.legalLink}
             >
               <MaterialIcons name="open-in-new" size={16} color="#047a8f" />

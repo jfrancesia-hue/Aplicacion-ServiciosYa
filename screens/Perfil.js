@@ -11,22 +11,22 @@ import { LinearGradient } from 'expo-linear-gradient';
 import BotonVolver from '../components/BotonVolver';
 import { useQuery } from '@tanstack/react-query';
 import { perfilQueryOptions } from '../lib/queryOptions';
+import { VERIFICATION_DOCUMENTS_BUCKET } from '../lib/legal/verificationDocuments';
 
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
 const subirArchivo = async (uri, nombre, contentType, userId) => {
-  const nombreArchivo = `${userId}-${nombre}-${Date.now()}`;
+  const nombreArchivo = `${userId}/${nombre}-${Date.now()}`;
   const base64 = await FileSystem.readAsStringAsync(uri, {
     encoding: FileSystem.EncodingType.Base64,
   });
   const buffer = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
   const { error } = await supabase.storage
-    .from('imagenes')
+    .from(VERIFICATION_DOCUMENTS_BUCKET)
     .upload(nombreArchivo, buffer, { contentType, upsert: true });
   if (error) throw error;
-  const { data } = supabase.storage.from('imagenes').getPublicUrl(nombreArchivo);
-  return data.publicUrl;
+  return nombreArchivo;
 };
 
 // ─────────────────────────────────────────────
@@ -84,14 +84,11 @@ export default function Perfil() {
 
   // Archivos — también con refs
   const [matriculaArchivos, setMatriculaArchivos] = useState([]);
-  const [antecedentesArchivos, setAntecedentesArchivos] = useState([]);
   const matriculaRef = useRef([]);
-  const antecedentesRef = useRef([]);
 
   // Sync refs
   useEffect(() => { categoriasRef.current = categoriasSeleccionadas; }, [categoriasSeleccionadas]);
   useEffect(() => { matriculaRef.current = matriculaArchivos; }, [matriculaArchivos]);
-  useEffect(() => { antecedentesRef.current = antecedentesArchivos; }, [antecedentesArchivos]);
 
   // Populate form when userData arrives
   useEffect(() => {
@@ -117,15 +114,8 @@ export default function Perfil() {
             ? userData.matricula.map(toChip)
             : [toChip(userData.matricula)])
         : [];
-      const ant = userData.antecedentes
-        ? (Array.isArray(userData.antecedentes)
-            ? userData.antecedentes.map(toChip)
-            : [toChip(userData.antecedentes)])
-        : [];
       setMatriculaArchivos(mat);
-      setAntecedentesArchivos(ant);
       matriculaRef.current = mat;
-      antecedentesRef.current = ant;
     }
   }, [userData]);
 
@@ -253,7 +243,6 @@ export default function Perfil() {
     // Leer desde refs para evitar valores stale de closures
     const categoriasActuales = categoriasRef.current;
     const matriculaActual = matriculaRef.current;
-    const antecedentesActual = antecedentesRef.current;
 
     console.log('[Perfil] guardarCambios', {
       nombreVal, celularVal, ciudadVal, provinciaVal,
@@ -289,7 +278,6 @@ export default function Perfil() {
       };
 
       const matriculaUrls = await subirLista(matriculaActual);
-      const antecedentesUrls = await subirLista(antecedentesActual);
 
       const updateData = {
         nombre: nombreVal,
@@ -301,7 +289,6 @@ export default function Perfil() {
         barrio: barrioVal || null,
         categoria: categoriasActuales,
         matricula: matriculaUrls.length > 0 ? matriculaUrls[0] : null,
-        antecedentes: antecedentesUrls.length > 0 ? antecedentesUrls[0] : null,
       };
 
       console.log('[Perfil] updateData', updateData);
@@ -348,14 +335,8 @@ export default function Perfil() {
         ? (Array.isArray(userData.matricula)
             ? userData.matricula.map(toChip) : [toChip(userData.matricula)])
         : [];
-      const ant = userData.antecedentes
-        ? (Array.isArray(userData.antecedentes)
-            ? userData.antecedentes.map(toChip) : [toChip(userData.antecedentes)])
-        : [];
       setMatriculaArchivos(mat);
-      setAntecedentesArchivos(ant);
       matriculaRef.current = mat;
-      antecedentesRef.current = ant;
     }
     setEditing(false);
   };
@@ -571,53 +552,6 @@ export default function Perfil() {
             </View>
           )}
 
-          {/* Antecedentes */}
-          <Text style={[styles.itemLabel, { marginTop: 16 }]}>Antecedentes penales</Text>
-          {editing ? (
-            <>
-              <View style={styles.fileBtns}>
-                <TouchableOpacity
-                  style={styles.fileAddBtn}
-                  onPress={() => seleccionarArchivo(antecedentesArchivos, setAntecedentesArchivos, antecedentesRef, 'imagen')}
-                >
-                  <Text style={styles.fileAddBtnText}>📷 Imagen</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.fileAddBtn}
-                  onPress={() => seleccionarArchivo(antecedentesArchivos, setAntecedentesArchivos, antecedentesRef, 'pdf')}
-                >
-                  <Text style={styles.fileAddBtnText}>📄 PDF</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.chipsRow}>
-                {antecedentesArchivos.map((a, i) => (
-                  <View key={i} style={styles.fileChip}>
-                    <Text numberOfLines={1} style={styles.fileChipText}>{a.nombre}</Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        const nueva = antecedentesArchivos.filter((_, idx) => idx !== i);
-                        setAntecedentesArchivos(nueva);
-                        antecedentesRef.current = nueva;
-                      }}
-                    >
-                      <Text style={styles.tagClose}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            </>
-          ) : (
-            <View style={styles.chipsRow}>
-              {antecedentesArchivos.length > 0
-                ? antecedentesArchivos.map((a, i) => (
-                    <View key={i} style={styles.fileChipReadOnly}>
-                      <Text numberOfLines={1} style={styles.fileChipText}>{a.nombre}</Text>
-                    </View>
-                  ))
-                : <Text style={styles.itemValue}>–</Text>
-              }
-            </View>
-          )}
         </View>
 
         {/* Botón guardar inferior */}

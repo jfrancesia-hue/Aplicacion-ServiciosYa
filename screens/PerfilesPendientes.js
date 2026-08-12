@@ -14,6 +14,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { resolveVerificationDocumentUrl } from '../lib/legal/verificationDocuments';
 
 export default function PerfilesPendientes() {
   const navigation = useNavigation();
@@ -34,7 +35,25 @@ export default function PerfilesPendientes() {
       .filter('dni_verificado', 'is', false)
       .filter('perfil_completo', 'is', true);
 
-    setPerfiles(data || []);
+    if (error) {
+      Alert.alert('Error', 'No se pudieron cargar los perfiles pendientes.');
+      setPerfiles([]);
+      setCargando(false);
+      return;
+    }
+
+    const perfilesConAcceso = await Promise.all(
+      (data || []).map(async (perfil) => ({
+        ...perfil,
+        dni_frente: await resolveVerificationDocumentUrl(perfil.dni_frente).catch(
+          () => null,
+        ),
+        dni_dorso: await resolveVerificationDocumentUrl(perfil.dni_dorso).catch(
+          () => null,
+        ),
+      })),
+    );
+    setPerfiles(perfilesConAcceso);
     setCargando(false);
   };
 

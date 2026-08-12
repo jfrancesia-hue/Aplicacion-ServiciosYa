@@ -6,4 +6,6 @@ export const PRIVACY_POLICY_URL =
 
 // La versión contractual definitiva se actualizará cuando finalice la revisión
 // profesional. Este identificador solo centraliza el documento público actual.
-export const CURRENT_LEGAL_DOCUMENT_SET = "public-site-2025-06-19";
+export const CURRENT_LEGAL_DOCUMENT_SET = "legal-2026-08-12-v1";
+export const CURRENT_TERMS_VERSION = "terms-2026-08-12-v1";
+export const CURRENT_PRIVACY_VERSION = "privacy-2026-08-12-v1";

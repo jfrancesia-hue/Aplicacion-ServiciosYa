@@ -117,6 +117,45 @@ const legalConstants = await readFile(
   new URL("../lib/constants/legal.ts", import.meta.url),
   "utf8",
 );
+const legalDocuments = await readFile(
+  new URL("../lib/legal/documents.ts", import.meta.url),
+  "utf8",
+);
+const legalAcceptancesMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812187000_versioned_legal_acceptances.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const criminalRecordsMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812188000_stop_private_criminal_record_collection.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const consumerRequestsMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812189000_consumer_withdrawal_and_cancellation_requests.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const privateVerificationMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812190000_private_verification_documents.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const availableProvidersFunction = await readFile(
+  new URL(
+    "../supabase/functions/available-providers/index.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const registrationLegalSources = (
   await Promise.all(
     [
@@ -319,21 +358,54 @@ test("el resumen operativo distingue la comisi\u00f3n del pago del trabajo", () 
   );
   assert.match(quoteNoticeModal, /no es un adelanto del trabajo/);
   assert.match(quoteNoticeModal, /Seguir conversando/);
-  assert.match(quoteNoticeModal, /LEGAL_TERMS_URL/);
+  assert.match(quoteNoticeModal, /LegalDocument/);
   assert.match(quoteNoticeModal, /Ver términos y condiciones vigentes/);
   assert.match(paymentPreference, /operationalNotice/);
   assert.match(paymentPreference, /operational_notice_accepted_at/);
 });
 
-test("los flujos de registro usan enlaces legales centralizados sin descargo absoluto", () => {
+test("los flujos de registro integran documentos legales versionados sin descargo absoluto", () => {
   assert.match(legalConstants, /inicio\.serviciosya\.info/);
   assert.doesNotMatch(legalConstants, /inicio\.tooriserviciosya\.info/);
-  assert.match(registrationLegalSources, /LEGAL_TERMS_URL/);
-  assert.match(registrationLegalSources, /PRIVACY_POLICY_URL/);
+  assert.match(registrationLegalSources, /LegalDocument/);
+  assert.match(registrationLegalSources, /document: ["']terms["']/);
+  assert.match(registrationLegalSources, /document: ["']privacy["']/);
+  assert.match(legalDocuments, /comisión de conexión del 10%/i);
+  assert.match(legalAcceptancesMigration, /accept_current_legal_documents/);
   assert.doesNotMatch(
     registrationLegalSources,
     /no asume responsabilidad alguna/i,
   );
+});
+
+test("arrepentimiento y baja pueden pedirse sin iniciar sesión y llegan al panel", () => {
+  assert.match(
+    consumerRequestsMigration,
+    /to anon, authenticated, service_role/,
+  );
+  assert.match(consumerRequestsMigration, /request_code/);
+  assert.match(consumerRequestsMigration, /interval '24 hours'/);
+  assert.match(operationalDashboard, /consumer-right-requests/);
+  assert.match(registrationLegalSources, /BOTÓN DE ARREPENTIMIENTO/);
+  assert.match(registrationLegalSources, /BOTÓN DE BAJA DE SERVICIO/);
+});
+
+test("los documentos de verificación nuevos son privados y no se exponen al buscar", () => {
+  assert.match(privateVerificationMigration, /'verification-documents'/);
+  assert.match(privateVerificationMigration, /public, file_size_limit/);
+  assert.match(
+    privateVerificationMigration,
+    /public\.is_operational_admin\(\)/,
+  );
+  assert.match(
+    criminalRecordsMigration,
+    /CRIMINAL_RECORD_DOCUMENTS_NOT_ACCEPTED/,
+  );
+  assert.doesNotMatch(
+    availableProvidersFunction,
+    /matricula,antecedentes|antecedentes_url/,
+  );
+  assert.match(availableProvidersFunction, /auth\.getUser\(token\)/);
 });
 
 test("la reputación es bilateral sin sanciones automáticas por reseña", () => {

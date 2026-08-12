@@ -1,9 +1,9 @@
-import { queryOptions } from "@tanstack/react-query";
-import { supabase } from "./supabase";
 import type { Session } from "@supabase/supabase-js";
-import type { Coords } from "../types/location";
+import { queryOptions } from "@tanstack/react-query";
 import { getUserID } from "../store/authStore";
+import type { Coords } from "../types/location";
 import { query } from "./hooks/useUserSettings";
+import { supabase } from "./supabase";
 
 export const sessionQueryKey = ["session"];
 
@@ -36,7 +36,7 @@ export const perfilQueryOptions = queryOptions({
     const { data, error } = await supabase
       .from("usuarios")
       .select(
-        "id, email, nombre, celular, edad, dni, provincia, ciudad, barrio, foto_perfil, rol, verificado, creditos, categoria, matricula, antecedentes, perfil_completo, dni_verificado, suscriptor, referral_code",
+        "id, email, nombre, celular, edad, dni, provincia, ciudad, barrio, foto_perfil, rol, verificado, creditos, categoria, matricula, perfil_completo, dni_verificado, suscriptor, referral_code",
       )
       .eq("id", userId)
       .single();

@@ -15,8 +15,7 @@ export type AvailableProvider = {
   ciudad?: string | null;
   barrio?: string | null;
   categoria: string[];
-  matricula?: unknown;
-  antecedentes?: unknown;
+  credentialSubmitted?: boolean;
   verificado?: boolean;
   suscriptor?: boolean;
   antiguedad?: number | null;

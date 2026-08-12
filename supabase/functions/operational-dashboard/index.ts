@@ -536,6 +536,54 @@ async function updateReport(
   return json({ ok: true, report: data });
 }
 
+async function getConsumerRightRequests(
+  admin: ReturnType<typeof createClient>,
+) {
+  const { data, error } = await admin
+    .from("consumer_right_requests")
+    .select(
+      "id,request_code,request_type,email,operation_reference,details,status,created_at",
+    )
+    .in("status", ["received", "reviewing"])
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return { ok: true, requests: data ?? [] };
+}
+
+async function updateConsumerRightRequest(
+  admin: ReturnType<typeof createClient>,
+  requestId: unknown,
+  status: unknown,
+) {
+  const cleanId = String(requestId ?? "").trim();
+  const cleanStatus = String(status ?? "").trim();
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      cleanId,
+    ) ||
+    !["reviewing", "completed", "rejected"].includes(cleanStatus)
+  ) {
+    return json({ error: "Solicitud de consumidor inválida." }, 400);
+  }
+
+  const { data, error } = await admin
+    .from("consumer_right_requests")
+    .update({
+      status: cleanStatus,
+      updated_at: new Date().toISOString(),
+      resolved_at: ["completed", "rejected"].includes(cleanStatus)
+        ? new Date().toISOString()
+        : null,
+    })
+    .eq("id", cleanId)
+    .select("id,status")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return json({ error: "Solicitud no encontrada." }, 404);
+  return json({ ok: true, request: data });
+}
+
 type UrgentPolicyRow = {
   sla_minutes: number;
   reminder_minutes: number;
@@ -736,6 +784,12 @@ Deno.serve(async (req) => {
         body?.source,
         currentAdmin.id,
       );
+    }
+    if (action === "consumer-right-requests") {
+      return json(await getConsumerRightRequests(admin));
+    }
+    if (action === "update-consumer-right-request") {
+      return updateConsumerRightRequest(admin, body?.requestId, body?.status);
     }
     if (action === "urgency-policy") {
       return json(await getUrgencyPolicy(admin));
