@@ -40,6 +40,20 @@ const protectedChatMigration = await readFile(
   ),
   "utf8",
 );
+const transactionalNotificationsMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812170000_transactional_notification_outbox.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const transactionalNotificationsFunction = await readFile(
+  new URL(
+    "../supabase/functions/process-transactional-notifications/index.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("el cliente no contiene credenciales ni llama directo a Mercado Pago", () => {
   assert.equal(chatSource.includes(`${["APP", "USR"].join("_")}-`), false);
@@ -108,6 +122,20 @@ test("la telemetría rechaza campos sensibles", () => {
   assert.match(operationalMigration, /'telefono'/);
   assert.match(operationalMigration, /'transcript'/);
   assert.match(operationalMigration, /SENSITIVE_EVENT_CONTEXT/);
+});
+
+test("las notificaciones transaccionales son idempotentes y se reclaman con bloqueo", () => {
+  assert.match(transactionalNotificationsMigration, /event_key text not null unique/);
+  assert.match(transactionalNotificationsMigration, /for update skip locked/);
+  assert.match(transactionalNotificationsMigration, /notificaciones_transactional_outbox_uidx/);
+  assert.match(transactionalNotificationsFunction, /claim_transactional_notifications/);
+  assert.match(transactionalNotificationsFunction, /transactional_outbox_id: row\.id/);
+});
+
+test("el procesador conserva correo pendiente cuando todav\u00eda no hay proveedor configurado", () => {
+  assert.match(transactionalNotificationsFunction, /RESEND_API_KEY/);
+  assert.match(transactionalNotificationsFunction, /TRANSACTIONAL_EMAIL_FROM/);
+  assert.match(transactionalNotificationsFunction, /waiting_configuration/);
 });
 
 test("interpreta el retorno aprobado de Mercado Pago", () => {
