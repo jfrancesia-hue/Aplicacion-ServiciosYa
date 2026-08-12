@@ -1,32 +1,37 @@
-import React, { useEffect, useState, useContext } from "react";
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-  TouchableOpacity,
-  Image,
-  Alert,
-} from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { supabase } from "../lib/supabase";
-import { AuthContext } from "../lib/context/AppContext";
+import { useQuery } from "@tanstack/react-query";
+import React, { useEffect, useState, useContext } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import BotonVolver from "../components/BotonVolver";
-import type { NotificacionRow, ServicioRow } from "../types/db.overrides.types";
-import type { MainStackParamList } from "../types/navigation";
+import { AuthContext } from "../lib/context/AppContext";
+import { supabase } from "../lib/supabase";
+import { userNotificationsQueryOptions } from "../lib/utils/notificationes";
+import { respondToUrgentWorkAlert } from "../lib/utils/urgentWorkNotification";
 import vexo from "../lib/vexo";
 import { getUserID } from "../store/authStore";
-import { useQuery } from "@tanstack/react-query";
-import { userNotificationsQueryOptions } from "../lib/utils/notificationes";
+import type { NotificacionRow, ServicioRow } from "../types/db.overrides.types";
+import type { MainStackParamList } from "../types/navigation";
 
 type NotificationItem = NotificacionRow & { foto_perfil?: string | null };
 type Navigation = NativeStackNavigationProp<MainStackParamList>;
 
 export default function Notificaciones() {
   const [notificaciones, setNotificaciones] = useState<NotificationItem[]>([]);
-  const { data, isFetched } = useQuery({ ...userNotificationsQueryOptions, staleTime: 200, refetchOnMount: true })
+  const { data, isFetched } = useQuery({
+    ...userNotificationsQueryOptions,
+    staleTime: 200,
+    refetchOnMount: true,
+  });
   const navigation = useNavigation<Navigation>();
 
   const { loadUnreadMessages } = useContext(AuthContext);
@@ -35,7 +40,7 @@ export default function Notificaciones() {
     if (data && isFetched) {
       setNotificaciones(data as NotificationItem[]);
     }
-  }, [data, isFetched])
+  }, [data, isFetched]);
 
   const marcarComoLeida = async (id: string) => {
     const { error } = await supabase
@@ -81,57 +86,91 @@ export default function Notificaciones() {
     }
     vexo.accept(notificacion.servicio_id ?? "");
 
-    // Continuar con el resto del flujo normalmente
-    const { error: errorEstado } = await supabase
-      .from("notificaciones")
-      .update({ estado: "aceptado" })
-      .eq("id", notificacion.id);
-
-    if (!errorEstado) {
-      console.log('Estado actualizado correctamente a "aceptado"');
-    }
-
-    // Llamar a la API PHP para registrar evento contratacion_aceptada
-    try {
-      const eventoPayload = {
-        tipo_evento: "contratacion_aceptada",
-        datos: {
-          contratante_id: notificacion.emisor_id, // este es el ID de la contratación
-          contratado_id: userId, // este es quien acepta
-        },
-      };
-
-      const response = await fetch(
-        "https://insightpulse.store/api/registrar_evento.php",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(eventoPayload),
-        },
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || result.error) {
+    const urgentAlertId = notificacion.urgent_work_alert_id;
+    const isUrgent = Boolean(urgentAlertId);
+    if (urgentAlertId) {
+      try {
+        const result = await respondToUrgentWorkAlert(
+          urgentAlertId,
+          "accepted",
+        );
+        if (!result.ok) {
+          await marcarComoLeida(notificacion.id);
+          Alert.alert(
+            "La solicitud ya no está disponible",
+            result.reason === "expired"
+              ? "Venció el plazo de 20 minutos y el pedido comenzó a reasignarse."
+              : "Esta urgencia ya había sido respondida.",
+          );
+          return;
+        }
+      } catch (error) {
         Alert.alert(
           "Error",
-          "No se pudo registrar la aceptación en el servidor.",
+          error instanceof Error
+            ? error.message
+            : "No se pudo responder la urgencia.",
         );
-        console.error("API error:", result);
         return;
       }
+    }
 
-      console.log("Evento registrado correctamente:", result);
-    } catch (error) {
-      console.error("Error al llamar la API:", error);
-      Alert.alert("Error", "Error al comunicarse con el servidor.");
+    // Continuar con el resto del flujo normalmente
+    if (!isUrgent) {
+      const { error: errorEstado } = await supabase
+        .from("notificaciones")
+        .update({ estado: "aceptado" })
+        .eq("id", notificacion.id);
+
+      if (!errorEstado) {
+        console.log('Estado actualizado correctamente a "aceptado"');
+      }
+
+      // Llamar a la API PHP para registrar evento contratacion_aceptada
+      try {
+        const eventoPayload = {
+          tipo_evento: "contratacion_aceptada",
+          datos: {
+            contratante_id: notificacion.emisor_id, // este es el ID de la contratación
+            contratado_id: userId, // este es quien acepta
+          },
+        };
+
+        const response = await fetch(
+          "https://insightpulse.store/api/registrar_evento.php",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(eventoPayload),
+          },
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || result.error) {
+          Alert.alert(
+            "Error",
+            "No se pudo registrar la aceptación en el servidor.",
+          );
+          console.error("API error:", result);
+          return;
+        }
+
+        console.log("Evento registrado correctamente:", result);
+      } catch (error) {
+        console.error("Error al llamar la API:", error);
+        Alert.alert("Error", "Error al comunicarse con el servidor.");
+        return;
+      }
     }
 
     Alert.alert("✅ Servicio confirmado", "Has aceptado la solicitud.");
     await marcarComoLeida(notificacion.id);
 
     // chats.participant_a < participant_b (CHECK constraint)
-    const [participantA, participantB] = [userId, notificacion.emisor_id].slice().sort();
+    const [participantA, participantB] = [userId, notificacion.emisor_id]
+      .slice()
+      .sort();
 
     // Verificar si ya existe un chat entre los dos usuarios
     const { data: chatExistente, error: errorCheck } = await supabase
@@ -218,67 +257,113 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
     });
   };
 
-  const rechazarNotificacion = async (id: string) => {
+  const rechazarNotificacion = async (notificacion: NotificacionRow) => {
+    if (notificacion.urgent_work_alert_id) {
+      try {
+        const result = await respondToUrgentWorkAlert(
+          notificacion.urgent_work_alert_id,
+          "declined",
+        );
+        await marcarComoLeida(notificacion.id);
+        Alert.alert(
+          result.ok ? "Solicitud rechazada" : "Solicitud cerrada",
+          result.ok
+            ? "Gracias por responder. Buscaremos otro prestador."
+            : "La urgencia ya no estaba disponible.",
+        );
+      } catch (error) {
+        Alert.alert(
+          "Error",
+          error instanceof Error
+            ? error.message
+            : "No se pudo rechazar la urgencia.",
+        );
+      }
+      return;
+    }
     const { error } = await supabase
       .from("notificaciones")
       .update({ estado: "rechazado" })
-      .eq("id", id);
+      .eq("id", notificacion.id);
 
     if (!error) {
-      await eliminarNotificacion(id);
+      await eliminarNotificacion(notificacion.id);
       Alert.alert("❌ Solicitud rechazada", "Has rechazado la solicitud.");
     } else {
       Alert.alert("Error", "No se pudo rechazar la solicitud.");
     }
   };
 
-  const renderItem = ({ item }: { item: NotificationItem }) => (
-    <View style={[styles.item, !item.leido && styles.noLeido]}>
-      {item.foto_perfil && (
-        <Image source={{ uri: item.foto_perfil }} style={styles.fotoPerfil} />
-      )}
-      <Text style={styles.mensaje}>{item.mensaje}</Text>
-      <Text style={styles.fecha}>
-        {new Date(item.created_at).toLocaleString("es-ES", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })}
-      </Text>
-      <View style={styles.botones}>
-        {!item.leido ? (
-          <>
+  const renderItem = ({ item }: { item: NotificationItem }) => {
+    const isUrgent = Boolean(item.urgent_work_alert_id);
+    const isLegacyRequest = Boolean(
+      item.emisor_id && item.servicio_id && !item.estado,
+    );
+    const canRespond = !item.leido && (isUrgent || isLegacyRequest);
+    return (
+      <View style={[styles.item, !item.leido && styles.noLeido]}>
+        {item.foto_perfil && (
+          <Image source={{ uri: item.foto_perfil }} style={styles.fotoPerfil} />
+        )}
+        <Text style={styles.mensaje}>{item.mensaje}</Text>
+        <Text style={styles.fecha}>
+          {new Date(item.created_at).toLocaleString("es-ES", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+        </Text>
+        {isUrgent && item.urgent_response_deadline ? (
+          <Text style={styles.urgentDeadline}>
+            Responder antes de{" "}
+            {new Date(item.urgent_response_deadline).toLocaleTimeString(
+              "es-AR",
+              { hour: "2-digit", minute: "2-digit" },
+            )}
+          </Text>
+        ) : null}
+        <View style={styles.botones}>
+          {canRespond ? (
+            <>
+              <TouchableOpacity
+                style={[styles.boton, styles.botonAceptar]}
+                onPress={() => aceptarNotificacion(item)}
+              >
+                <Text style={styles.botonTexto}>Aceptar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.boton, styles.botonRechazar]}
+                onPress={() => rechazarNotificacion(item)}
+              >
+                <Text style={styles.botonTexto}>Rechazar</Text>
+              </TouchableOpacity>
+            </>
+          ) : !item.leido ? (
             <TouchableOpacity
               style={[styles.boton, styles.botonAceptar]}
-              onPress={() => aceptarNotificacion(item)}
+              onPress={() => marcarComoLeida(item.id)}
             >
-              <Text style={styles.botonTexto}>Aceptar</Text>
+              <Text style={styles.botonTexto}>Marcar como leída</Text>
             </TouchableOpacity>
-
+          ) : (
             <TouchableOpacity
-              style={[styles.boton, styles.botonRechazar]}
-              onPress={() => rechazarNotificacion(item.id)}
+              style={[styles.boton, styles.botonEliminar]}
+              onPress={() => eliminarNotificacion(item.id)}
             >
-              <Text style={styles.botonTexto}>Rechazar</Text>
+              <Text style={styles.botonTexto}>Eliminar</Text>
             </TouchableOpacity>
-          </>
-        ) : (
-          <TouchableOpacity
-            style={[styles.boton, styles.botonEliminar]}
-            onPress={() => eliminarNotificacion(item.id)}
-          >
-            <Text style={styles.botonTexto}>Eliminar</Text>
-          </TouchableOpacity>
-        )}
-        <Text style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
-          Estado: {item.estado || "pendiente"}
-        </Text>
+          )}
+          <Text style={{ fontSize: 12, color: "#555", marginTop: 4 }}>
+            Estado: {item.estado || "pendiente"}
+          </Text>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (!isFetched) {
     return (
@@ -360,6 +445,12 @@ const styles = StyleSheet.create({
     color: "#999",
     marginBottom: 5,
     paddingRight: 55,
+  },
+  urgentDeadline: {
+    color: "#a43b32",
+    fontSize: 13,
+    fontWeight: "800",
+    marginBottom: 4,
   },
   botones: {
     flexDirection: "row",

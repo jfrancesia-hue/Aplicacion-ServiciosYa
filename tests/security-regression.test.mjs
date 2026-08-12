@@ -26,7 +26,10 @@ const operationalDashboard = await readFile(
   "utf8",
 );
 const paymentPreference = await readFile(
-  new URL("../supabase/functions/create-payment-preference/index.ts", import.meta.url),
+  new URL(
+    "../supabase/functions/create-payment-preference/index.ts",
+    import.meta.url,
+  ),
   "utf8",
 );
 const micaOrder = await readFile(
@@ -50,6 +53,27 @@ const transactionalNotificationsMigration = await readFile(
 const transactionalNotificationsFunction = await readFile(
   new URL(
     "../supabase/functions/process-transactional-notifications/index.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const urgentSlaMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812180000_urgent_work_sla.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const urgentProcessor = await readFile(
+  new URL(
+    "../supabase/functions/process-urgent-work-alerts/index.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const messageNotification = await readFile(
+  new URL(
+    "../supabase/functions/send-message-notification/index.ts",
     import.meta.url,
   ),
   "utf8",
@@ -104,18 +128,12 @@ test("el panel operativo exige rol administrador y no lee conversaciones", () =>
 });
 
 test("las calificaciones requieren un pago aprobado y aplican RLS", () => {
-  assert.match(
-    operationalMigration,
-    /v_payment\.status <> 'approved'/,
-  );
+  assert.match(operationalMigration, /v_payment\.status <> 'approved'/);
   assert.match(
     operationalMigration,
     /alter table public\.service_job_reviews enable row level security/,
   );
-  assert.match(
-    chatSource,
-    /submit_service_job_review/,
-  );
+  assert.match(chatSource, /submit_service_job_review/);
 });
 
 test("la telemetría rechaza campos sensibles", () => {
@@ -125,17 +143,57 @@ test("la telemetría rechaza campos sensibles", () => {
 });
 
 test("las notificaciones transaccionales son idempotentes y se reclaman con bloqueo", () => {
-  assert.match(transactionalNotificationsMigration, /event_key text not null unique/);
+  assert.match(
+    transactionalNotificationsMigration,
+    /event_key text not null unique/,
+  );
   assert.match(transactionalNotificationsMigration, /for update skip locked/);
-  assert.match(transactionalNotificationsMigration, /notificaciones_transactional_outbox_uidx/);
-  assert.match(transactionalNotificationsFunction, /claim_transactional_notifications/);
-  assert.match(transactionalNotificationsFunction, /transactional_outbox_id: row\.id/);
+  assert.match(
+    transactionalNotificationsMigration,
+    /notificaciones_transactional_outbox_uidx/,
+  );
+  assert.match(
+    transactionalNotificationsFunction,
+    /claim_transactional_notifications/,
+  );
+  assert.match(
+    transactionalNotificationsFunction,
+    /transactional_outbox_id: row\.id/,
+  );
 });
 
 test("el procesador conserva correo pendiente cuando todav\u00eda no hay proveedor configurado", () => {
   assert.match(transactionalNotificationsFunction, /RESEND_API_KEY/);
   assert.match(transactionalNotificationsFunction, /TRANSACTIONAL_EMAIL_FROM/);
   assert.match(transactionalNotificationsFunction, /waiting_configuration/);
+});
+
+test("las urgencias exigen respuesta expl\u00edcita dentro de 20 minutos", () => {
+  assert.match(urgentSlaMigration, /sla_minutes integer not null default 20/);
+  assert.match(urgentSlaMigration, /respond_to_urgent_work_alert/);
+  assert.match(
+    urgentSlaMigration,
+    /p_response not in \('accepted', 'declined'\)/,
+  );
+  assert.doesNotMatch(
+    urgentProcessor,
+    /notification\?\.leido|\.from\("mensajes"\).*reply/s,
+  );
+});
+
+test("las urgencias vencidas se registran y se reasignan con disciplina configurable", () => {
+  assert.match(urgentSlaMigration, /urgent_work_misses/);
+  assert.match(
+    urgentSlaMigration,
+    /enforcement_enabled boolean not null default false/,
+  );
+  assert.match(urgentProcessor, /createReplacement/);
+  assert.match(urgentProcessor, /max_reassignments/);
+});
+
+test("los mensajes comunes ya no crean falsas urgencias", () => {
+  assert.doesNotMatch(messageNotification, /urgent_work_alerts/);
+  assert.match(messageNotification, /channelId: "default"/);
 });
 
 test("interpreta el retorno aprobado de Mercado Pago", () => {

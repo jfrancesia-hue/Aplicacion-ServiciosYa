@@ -98,20 +98,36 @@ type UsuarioInsertOverride = Omit<
   perfilPublico?: boolean | null;
 };
 
-type MensajeRowOverride = DatabaseGenerated["public"]["Tables"]["mensajes"]["Row"] & {
-  created_at: string | null;
-};
+type MensajeRowOverride =
+  DatabaseGenerated["public"]["Tables"]["mensajes"]["Row"] & {
+    created_at: string | null;
+  };
 
-type MensajeInsertOverride = DatabaseGenerated["public"]["Tables"]["mensajes"]["Insert"] & {
-  created_at?: string | null;
-};
+type MensajeInsertOverride =
+  DatabaseGenerated["public"]["Tables"]["mensajes"]["Insert"] & {
+    created_at?: string | null;
+  };
+
+type NotificacionRowOverride =
+  DatabaseGenerated["public"]["Tables"]["notificaciones"]["Row"] & {
+    transactional_outbox_id: string | null;
+    urgent_work_alert_id: string | null;
+    urgent_response_deadline: string | null;
+  };
 
 type UrgentWorkAlertRow = {
   id: string;
   created_at: string;
   updated_at: string;
   source: "service_request" | "direct_contact" | "chat_message";
-  status: "pending" | "accepted" | "cancelled" | "escalation_ready";
+  status:
+    | "pending"
+    | "accepted"
+    | "declined"
+    | "expired"
+    | "cancelled"
+    | "reassigned"
+    | "escalation_ready";
   worker_id: string;
   cliente_id: string | null;
   servicio_id: string | null;
@@ -124,6 +140,16 @@ type UrgentWorkAlertRow = {
   next_attempt_at: string;
   last_sent_at: string | null;
   escalation_ready_at: string | null;
+  response_deadline: string;
+  responded_at: string | null;
+  response_action: "accepted" | "declined" | null;
+  missed_at: string | null;
+  processing_at: string | null;
+  root_alert_id: string | null;
+  reassigned_from_id: string | null;
+  reassigned_alert_id: string | null;
+  reassignment_processed_at: string | null;
+  assignment_round: number;
   metadata: Json;
 };
 
@@ -280,6 +306,12 @@ export type Database = MergeDeep<
           Update: Partial<ServiceJobReviewRow>;
           Relationships: [];
         };
+        notificaciones: {
+          Row: NotificacionRowOverride;
+          Insert: Partial<NotificacionRowOverride> & { receptor_id: string };
+          Update: Partial<NotificacionRowOverride>;
+          Relationships: [];
+        };
         service_job_incidents: {
           Row: ServiceJobIncidentRow;
           Insert: Partial<ServiceJobIncidentRow> & {
@@ -295,6 +327,26 @@ export type Database = MergeDeep<
         };
       };
       Functions: {
+        create_urgent_work_alert: {
+          Args: {
+            p_worker_id: string;
+            p_source: "service_request" | "direct_contact";
+            p_category?: string | null;
+            p_chat_id?: string | null;
+            p_servicio_id?: string | null;
+            p_title?: string;
+            p_body?: string;
+            p_metadata?: Json;
+          };
+          Returns: Json;
+        };
+        respond_to_urgent_work_alert: {
+          Args: {
+            p_alert_id: string;
+            p_response: "accepted" | "declined";
+          };
+          Returns: Json;
+        };
         track_marketplace_event: {
           Args: {
             p_event_name: string;
@@ -341,7 +393,10 @@ export type Database = MergeDeep<
             p_ciudad?: string | null;
             p_provincia?: string | null;
             p_urgencia?: "normal" | "pronto" | "urgente";
-            p_responsable_herramientas?: "cliente" | "prestador" | "a_coordinar";
+            p_responsable_herramientas?:
+              | "cliente"
+              | "prestador"
+              | "a_coordinar";
             p_cantidad_personas?: number;
             p_modalidad_preferida?: "a_coordinar" | "proyecto" | "hora" | "dia";
           };
@@ -487,7 +542,8 @@ export type Database = MergeDeep<
 >;
 
 export type UserUpdate = Database["public"]["Tables"]["usuarios"]["Update"];
-export type NotificacionRow = Database["public"]["Tables"]["notificaciones"]["Row"];
+export type NotificacionRow =
+  Database["public"]["Tables"]["notificaciones"]["Row"];
 export type ChatRow = Database["public"]["Tables"]["chats"]["Row"];
 export type MensajeRow = Database["public"]["Tables"]["mensajes"]["Row"];
 export type ServicioRow = Database["public"]["Tables"]["servicios"]["Row"];

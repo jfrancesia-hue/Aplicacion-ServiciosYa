@@ -341,8 +341,9 @@ export default function PublicarNecesidad({ navigation }: Props) {
           </View>
           {urgency === "urgente" ? (
             <Text style={styles.noticeText}>
-              La prioridad queda informada en la publicación. El SLA automático
-              de 20 minutos se activará en el bloque de urgencias.
+              La publicación quedará destacada como prioritaria. El plazo de
+              respuesta de 20 minutos se usa al elegir un prestador y enviarle
+              una solicitud urgente explícita.
             </Text>
           ) : null}
 
