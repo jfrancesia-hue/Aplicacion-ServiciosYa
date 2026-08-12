@@ -26,6 +26,7 @@ import { withModalProvider } from "../components/sheet/withModalProvider";
 import { parseQuoteMessage, formatQuoteAmount, getQuotePricing } from "../lib/utils/quoteMessage";
 import { pricingModeLabel, quotePricingSummary } from "../lib/utils/quotePricing";
 import ServiceSchedulePanel from "../components/chat/ServiceSchedulePanel";
+import MicaIncidentIntakeModal from "../components/chat/MicaIncidentIntakeModal";
 import { calculateServiceConfirmationFee } from "../lib/constants/billing";
 import VoiceMessageBubble from "../components/chat/VoiceMessageBubble";
 import {
@@ -68,6 +69,7 @@ function ChatIndividual({ route }) {
   const [servicioData, setServicioData] = useState(servicio || {});
   const [canSendQuote, setCanSendQuote] = useState(false);
   const [reportandoIncidente, setReportandoIncidente] = useState(false);
+  const [incidentIntakeVisible, setIncidentIntakeVisible] = useState(false);
   const processingPaymentReturn = useRef(null);
   const flatListRef = useRef(null);
   const messageChannelRef = useRef(null);
@@ -967,67 +969,50 @@ function ChatIndividual({ route }) {
     }
   };
 
-  const reportarIncidente = useCallback((category) => {
+  const reportarIncidente = useCallback(async (category, intake) => {
     if (!jobStatus?.payment_record_id || reportandoIncidente) return;
-    const label =
-      category === "provider_no_show"
-        ? "El prestador no se presentó"
-        : "El trabajo no se realizó";
-    Alert.alert(
-      "Abrir reclamo con MICA",
-      `${label}. MICA registrará el caso y, si requiere intervención humana, lo enviará a la bandeja operativa de Agustín.`,
-      [
-        { text: "Cancelar", style: "cancel" },
+    setReportandoIncidente(true);
+    try {
+      const { data, error } = await supabase.rpc(
+        "submit_service_incident_intake",
         {
-          text: "Abrir reclamo",
-          style: "destructive",
-          onPress: async () => {
-            setReportandoIncidente(true);
-            try {
-              const { data, error } = await supabase.rpc(
-                "report_service_job_incident",
-                {
-                  p_payment_record_id: jobStatus.payment_record_id,
-                  p_category: category,
-                  p_details: label,
-                },
-              );
-              if (error || !data?.ok) {
-                throw new Error(error?.message || "No se pudo registrar el reclamo.");
-              }
-              await cargarEstadoTrabajo();
-              Alert.alert(
-                "Reclamo registrado",
-                `MICA abrió el caso ${data.case_number}. Quedó en revisión y también aparecerá en la bandeja operativa de Agustín.`,
-              );
-            } catch (error) {
-              Alert.alert(
-                "No se pudo abrir el reclamo",
-                error instanceof Error ? error.message : "Intentá nuevamente.",
-              );
-            } finally {
-              setReportandoIncidente(false);
-            }
-          },
+          p_payment_record_id: jobStatus.payment_record_id,
+          p_category: category,
+          p_intake: intake,
         },
-      ],
-    );
+      );
+      if (error || !data?.ok) {
+        throw new Error(error?.message || "No se pudo registrar el reclamo.");
+      }
+      setIncidentIntakeVisible(false);
+      await cargarEstadoTrabajo();
+      Alert.alert(
+        "Reclamo registrado",
+        `MICA abrió el caso ${data.case_number}. El resumen quedó derivado a la bandeja operativa de Agustín.`,
+      );
+    } catch (error) {
+      Alert.alert(
+        "No se pudo abrir el reclamo",
+        error instanceof Error ? error.message : "Intentá nuevamente.",
+      );
+      throw error;
+    } finally {
+      setReportandoIncidente(false);
+    }
   }, [cargarEstadoTrabajo, jobStatus?.payment_record_id, reportandoIncidente]);
 
   const elegirTipoIncidente = useCallback(() => {
-    Alert.alert(
-      "¿Qué pasó con el servicio?",
-      "MICA puede iniciar el reclamo sin cerrar el trabajo ni ordenar un reembolso automático.",
-      [
-        { text: "No se presentó", onPress: () => reportarIncidente("provider_no_show") },
-        { text: "No se realizó", onPress: () => reportarIncidente("work_not_completed") },
-        { text: "Cancelar", style: "cancel" },
-      ],
-    );
-  }, [reportarIncidente]);
+    setIncidentIntakeVisible(true);
+  }, []);
 
   return (
     <>
+      <MicaIncidentIntakeModal
+        visible={incidentIntakeVisible}
+        submitting={reportandoIncidente}
+        onClose={() => setIncidentIntakeVisible(false)}
+        onSubmit={reportarIncidente}
+      />
       <BotonVolver />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}

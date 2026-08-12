@@ -421,6 +421,14 @@ export type Database = MergeDeep<
           };
           Returns: Json;
         };
+        submit_service_incident_intake: {
+          Args: {
+            p_payment_record_id: string;
+            p_category: "provider_no_show" | "work_not_completed" | "other";
+            p_intake: Json;
+          };
+          Returns: Json;
+        };
         get_provider_contact_access: {
           Args: {
             p_cliente_id?: string | null;

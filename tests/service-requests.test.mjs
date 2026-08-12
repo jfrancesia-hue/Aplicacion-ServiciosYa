@@ -57,6 +57,17 @@ const jobsOverview = await readFile(
   new URL("../components/jobs/JobsOverview.tsx", import.meta.url),
   "utf8",
 );
+const incidentIntakeMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812160000_mica_incident_intake.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const incidentIntakeModal = await readFile(
+  new URL("../components/chat/MicaIncidentIntakeModal.tsx", import.meta.url),
+  "utf8",
+);
 
 test("las publicaciones manuales reutilizan nuevaOferta con un origen distinguible", () => {
   assert.match(migration, /create_manual_service_request/);
@@ -140,4 +151,20 @@ test("el panel global reúne acciones, agenda, cierres y reclamos de ambos roles
   assert.match(jobsOverview, /Necesitan tu acción/);
   assert.match(jobsOverview, /Próximos trabajos/);
   assert.match(jobsOverview, /Reclamos/);
+});
+
+test("MICA completa el intake antes de derivar el reclamo", () => {
+  for (const field of [
+    "occurred",
+    "contactAttempts",
+    "impact",
+    "evidence",
+    "requestedResolution",
+  ]) {
+    assert.match(incidentIntakeMigration, new RegExp(field));
+    assert.match(incidentIntakeModal, new RegExp(field));
+  }
+  assert.match(incidentIntakeMigration, /INCIDENT_INTAKE_INCOMPLETE/);
+  assert.match(incidentIntakeMigration, /'escalated'/);
+  assert.match(incidentIntakeModal, /Confirmar y derivar/);
 });
