@@ -85,6 +85,13 @@ const quoteNoticeModal = await readFile(
   ),
   "utf8",
 );
+const bilateralReviewsMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812183000_bilateral_service_reviews.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("el cliente no contiene credenciales ni llama directo a Mercado Pago", () => {
   assert.equal(chatSource.includes(`${["APP", "USR"].join("_")}-`), false);
@@ -212,6 +219,14 @@ test("el resumen operativo distingue la comisi\u00f3n del pago del trabajo", () 
   assert.match(quoteNoticeModal, /Seguir conversando/);
   assert.match(paymentPreference, /operationalNotice/);
   assert.match(paymentPreference, /operational_notice_accepted_at/);
+});
+
+test("la reputación es bilateral sin sanciones automáticas por reseña", () => {
+  assert.match(bilateralReviewsMigration, /submit_client_job_review/);
+  assert.match(bilateralReviewsMigration, /ONLY_PROVIDER_CAN_REVIEW_CLIENT/);
+  assert.match(bilateralReviewsMigration, /job_status <> 'completed'/);
+  assert.match(bilateralReviewsMigration, /client_trust_summary/);
+  assert.doesNotMatch(bilateralReviewsMigration, /suspend|ban|block/i);
 });
 
 test("interpreta el retorno aprobado de Mercado Pago", () => {

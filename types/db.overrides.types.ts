@@ -368,6 +368,14 @@ export type Database = MergeDeep<
           };
           Returns: Json;
         };
+        submit_client_job_review: {
+          Args: {
+            p_payment_record_id: string;
+            p_rating: number;
+            p_comment?: string | null;
+          };
+          Returns: Json;
+        };
         create_mica_app_request: {
           Args: {
             p_categoria: string;
