@@ -1,6 +1,6 @@
 # Base normativa de los documentos legales de Servicios Ya
 
-Versión integrada: `legal-2026-08-12-v1`.
+Versión integrada: `legal-2026-08-12-v2`.
 
 Los textos vigentes dentro de la aplicación se encuentran en
 `lib/legal/documents.ts`. Esta nota registra las fuentes y decisiones de

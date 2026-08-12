@@ -71,6 +71,13 @@ const urgentPolicyAdminMigration = await readFile(
   ),
   "utf8",
 );
+const progressiveUrgencyDisciplineMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812191000_activate_progressive_urgency_discipline.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const canonicalChatParticipantsMigration = await readFile(
   new URL(
     "../supabase/migrations/20260812185000_fix_canonical_chat_participants.sql",
@@ -330,6 +337,39 @@ test("la política de urgencias fija el máximo de 20 minutos y audita cambios a
   assert.match(urgentPolicyAdminMigration, /u\.rol::text = 'admin'/);
   assert.match(operationalDashboard, /update-urgency-policy/);
   assert.match(operationalDashboard, /p_updated_by: adminUserId/);
+});
+
+test("la política A aplica bloques nuevos de tres y escala 7, 14 y 30 días", () => {
+  assert.match(
+    progressiveUrgencyDisciplineMigration,
+    /enforcement_enabled = true/,
+  );
+  assert.match(progressiveUrgencyDisciplineMigration, /missed_threshold = 3/);
+  assert.match(progressiveUrgencyDisciplineMigration, /window_days = 30/);
+  assert.match(
+    progressiveUrgencyDisciplineMigration,
+    /recurrence_window_days = 90/,
+  );
+  assert.match(
+    progressiveUrgencyDisciplineMigration,
+    /second_suspension_days = 14/,
+  );
+  assert.match(
+    progressiveUrgencyDisciplineMigration,
+    /subsequent_suspension_days = 30/,
+  );
+  assert.match(
+    progressiveUrgencyDisciplineMigration,
+    /not m\.enforcement_applied/,
+  );
+  assert.match(
+    progressiveUrgencyDisciplineMigration,
+    /urgent_work_discipline_events/,
+  );
+  assert.match(
+    progressiveUrgencyDisciplineMigration,
+    /new\.occurred_at < v_policy\.enforcement_started_at/,
+  );
 });
 
 test("chat protegido, urgencias y pagos usan los participantes canónicos", () => {

@@ -21,7 +21,7 @@ const contact =
 export const TERMS_DOCUMENT: LegalDocument = {
   kind: "terms",
   title: "Términos y Condiciones de Servicios Ya",
-  version: "terms-2026-08-12-v1",
+  version: "terms-2026-08-12-v2",
   effectiveDate: "12 de agosto de 2026",
   summary:
     "Regulan el acceso a Servicios Ya, la conexión entre clientes y prestadores, los presupuestos, la comisión del 10%, la coordinación del trabajo y el sistema de reclamos.",
@@ -95,7 +95,7 @@ export const TERMS_DOCUMENT: LegalDocument = {
       title: "9. Urgencias",
       paragraphs: [
         "Una solicitud marcada como urgente exige una respuesta explícita del prestador dentro del plazo mostrado, que nunca será superior a veinte minutos. Leer una notificación o abrir la app no cuenta como respuesta. El prestador puede aceptar o rechazar; rechazar dentro del plazo permite una reasignación rápida y no se considera un incumplimiento de respuesta.",
-        "Si el plazo vence sin respuesta explícita, la Plataforma puede ofrecer el pedido a otro prestador y registrar una urgencia incumplida. Los incumplimientos se evalúan dentro de una ventana temporal visible en el panel operativo. Cuando esté habilitada una política disciplinaria, la reiteración puede suspender temporalmente el acceso prioritario a urgencias. Toda medida relevante queda auditada y puede ser revisada por una persona.",
+        "Si el plazo vence sin respuesta explícita, la Plataforma puede ofrecer el pedido a otro prestador y registrar una urgencia incumplida. Tres incumplimientos dentro de treinta días suspenden la prioridad por siete días. Si el prestador vuelve a alcanzar tres incumplimientos dentro de los noventa días posteriores a una sanción, la suspensión es de catorce días; las nuevas reincidencias dentro de esa ventana suspenden la prioridad por treinta días. Cada sanción consume un nuevo grupo de incumplimientos, queda auditada y puede solicitarse su revisión humana por soporte.",
         "La prioridad de urgencia mejora la distribución del pedido, pero no constituye un servicio de emergencias ni garantiza que exista un prestador disponible. Ante riesgos para la vida, salud, seguridad, incendios, fugas de gas u otras emergencias, el usuario debe contactar a los servicios públicos competentes.",
       ],
     },

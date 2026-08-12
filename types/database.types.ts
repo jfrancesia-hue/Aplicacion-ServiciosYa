@@ -4157,6 +4157,53 @@ export type Database = {
           },
         ]
       }
+      urgent_work_discipline_events: {
+        Row: {
+          created_at: string
+          id: string
+          policy_snapshot: Json
+          qualifying_misses: number
+          sanction_level: number
+          suspended_from: string
+          suspended_until: string
+          suspension_days: number
+          triggered_by_miss_id: string
+          worker_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          policy_snapshot: Json
+          qualifying_misses: number
+          sanction_level: number
+          suspended_from: string
+          suspended_until: string
+          suspension_days: number
+          triggered_by_miss_id: string
+          worker_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          policy_snapshot?: Json
+          qualifying_misses?: number
+          sanction_level?: number
+          suspended_from?: string
+          suspended_until?: string
+          suspension_days?: number
+          triggered_by_miss_id?: string
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "urgent_work_discipline_events_triggered_by_miss_id_fkey"
+            columns: ["triggered_by_miss_id"]
+            isOneToOne: true
+            referencedRelation: "urgent_work_misses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       urgent_work_misses: {
         Row: {
           alert_id: string
@@ -4201,36 +4248,48 @@ export type Database = {
       urgent_work_policy: {
         Row: {
           enforcement_enabled: boolean
+          enforcement_started_at: string | null
           max_reassignments: number
           missed_threshold: number
           priority_suspension_days: number
+          recurrence_window_days: number
           reminder_minutes: number
+          second_suspension_days: number
           singleton: boolean
           sla_minutes: number
+          subsequent_suspension_days: number
           updated_at: string
           updated_by: string | null
           window_days: number
         }
         Insert: {
           enforcement_enabled?: boolean
+          enforcement_started_at?: string | null
           max_reassignments?: number
           missed_threshold?: number
           priority_suspension_days?: number
+          recurrence_window_days?: number
           reminder_minutes?: number
+          second_suspension_days?: number
           singleton?: boolean
           sla_minutes?: number
+          subsequent_suspension_days?: number
           updated_at?: string
           updated_by?: string | null
           window_days?: number
         }
         Update: {
           enforcement_enabled?: boolean
+          enforcement_started_at?: string | null
           max_reassignments?: number
           missed_threshold?: number
           priority_suspension_days?: number
+          recurrence_window_days?: number
           reminder_minutes?: number
+          second_suspension_days?: number
           singleton?: boolean
           sla_minutes?: number
+          subsequent_suspension_days?: number
           updated_at?: string
           updated_by?: string | null
           window_days?: number
@@ -4678,19 +4737,28 @@ export type Database = {
       worker_urgent_discipline: {
         Row: {
           last_missed_at: string | null
+          last_suspended_at: string | null
           priority_suspended_until: string | null
+          sanction_level: number
+          suspension_count: number
           updated_at: string
           worker_id: string
         }
         Insert: {
           last_missed_at?: string | null
+          last_suspended_at?: string | null
           priority_suspended_until?: string | null
+          sanction_level?: number
+          suspension_count?: number
           updated_at?: string
           worker_id: string
         }
         Update: {
           last_missed_at?: string | null
+          last_suspended_at?: string | null
           priority_suspended_until?: string | null
+          sanction_level?: number
+          suspension_count?: number
           updated_at?: string
           worker_id?: string
         }

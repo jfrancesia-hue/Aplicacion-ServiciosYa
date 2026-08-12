@@ -592,6 +592,10 @@ type UrgentPolicyRow = {
   missed_threshold: number;
   window_days: number;
   priority_suspension_days: number;
+  recurrence_window_days: number;
+  second_suspension_days: number;
+  subsequent_suspension_days: number;
+  enforcement_started_at: string | null;
   updated_at: string;
 };
 
@@ -604,6 +608,10 @@ function urgentPolicyPayload(policy: UrgentPolicyRow) {
     missedThreshold: policy.missed_threshold,
     windowDays: policy.window_days,
     prioritySuspensionDays: policy.priority_suspension_days,
+    recurrenceWindowDays: policy.recurrence_window_days,
+    secondSuspensionDays: policy.second_suspension_days,
+    subsequentSuspensionDays: policy.subsequent_suspension_days,
+    enforcementStartedAt: policy.enforcement_started_at,
     updatedAt: policy.updated_at,
   };
 }
@@ -612,7 +620,7 @@ async function getUrgencyPolicy(admin: ReturnType<typeof createClient>) {
   const { data: policyData, error: policyError } = await admin
     .from("urgent_work_policy")
     .select(
-      "sla_minutes,reminder_minutes,max_reassignments,enforcement_enabled,missed_threshold,window_days,priority_suspension_days,updated_at",
+      "sla_minutes,reminder_minutes,max_reassignments,enforcement_enabled,missed_threshold,window_days,priority_suspension_days,recurrence_window_days,second_suspension_days,subsequent_suspension_days,enforcement_started_at,updated_at",
     )
     .eq("singleton", true)
     .single();

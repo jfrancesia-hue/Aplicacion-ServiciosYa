@@ -7,7 +7,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -96,6 +95,10 @@ type UrgencyPolicy = {
   missedThreshold: number;
   windowDays: number;
   prioritySuspensionDays: number;
+  recurrenceWindowDays: number;
+  secondSuspensionDays: number;
+  subsequentSuspensionDays: number;
+  enforcementStartedAt: string | null;
   updatedAt: string;
 };
 
@@ -122,20 +125,12 @@ type NotificationHealth = {
 };
 
 type UrgencyPolicyDraft = {
-  enforcementEnabled: boolean;
   maxReassignments: string;
-  missedThreshold: string;
-  windowDays: string;
-  prioritySuspensionDays: string;
 };
 
 function policyToDraft(policy: UrgencyPolicy): UrgencyPolicyDraft {
   return {
-    enforcementEnabled: policy.enforcementEnabled,
     maxReassignments: String(policy.maxReassignments),
-    missedThreshold: String(policy.missedThreshold),
-    windowDays: String(policy.windowDays),
-    prioritySuspensionDays: String(policy.prioritySuspensionDays),
   };
 }
 
@@ -493,7 +488,7 @@ export default function OperationalDashboard() {
   );
 
   const updateUrgencyDraft = useCallback(
-    (field: keyof UrgencyPolicyDraft, value: string | boolean) => {
+    (field: keyof UrgencyPolicyDraft, value: string) => {
       setUrgencyDraft((current) =>
         current ? { ...current, [field]: value } : current,
       );
@@ -510,11 +505,11 @@ export default function OperationalDashboard() {
           {
             body: {
               action: "update-urgency-policy",
-              enforcementEnabled: draft.enforcementEnabled,
+              enforcementEnabled: true,
               maxReassignments: Number(draft.maxReassignments),
-              missedThreshold: Number(draft.missedThreshold),
-              windowDays: Number(draft.windowDays),
-              prioritySuspensionDays: Number(draft.prioritySuspensionDays),
+              missedThreshold: 3,
+              windowDays: 30,
+              prioritySuspensionDays: 7,
             },
           },
         );
@@ -530,10 +525,8 @@ export default function OperationalDashboard() {
         setUrgency(nextUrgency);
         setUrgencyDraft(policyToDraft(nextUrgency.policy));
         Alert.alert(
-          "Política guardada",
-          draft.enforcementEnabled
-            ? "La disciplina automática quedó activa y el cambio fue auditado."
-            : "La disciplina automática quedó desactivada y el cambio fue auditado.",
+          "Reasignaciones guardadas",
+          "La política A continúa activa y el cambio operativo fue auditado.",
         );
       } catch (error) {
         Alert.alert(
@@ -551,9 +544,6 @@ export default function OperationalDashboard() {
     if (!urgencyDraft) return;
     const entries = [
       ["reasignaciones", urgencyDraft.maxReassignments, 0, 10],
-      ["incumplimientos", urgencyDraft.missedThreshold, 1, 20],
-      ["días de ventana", urgencyDraft.windowDays, 1, 365],
-      ["días de suspensión", urgencyDraft.prioritySuspensionDays, 1, 90],
     ] as const;
     const invalid = entries.find(([, value, minimum, maximum]) => {
       const parsed = Number(value);
@@ -567,19 +557,13 @@ export default function OperationalDashboard() {
       return;
     }
 
-    const message = urgencyDraft.enforcementEnabled
-      ? `Al guardar, cada prestador perderá prioridad por ${urgencyDraft.prioritySuspensionDays} días cuando acumule ${urgencyDraft.missedThreshold} urgencias sin responder dentro de ${urgencyDraft.windowDays} días.`
-      : "Al guardar, se seguirán registrando los incumplimientos pero no se aplicarán suspensiones automáticas.";
     Alert.alert(
-      urgencyDraft.enforcementEnabled
-        ? "Activar disciplina automática"
-        : "Mantener disciplina desactivada",
-      `${message}\n\nEl SLA continúa fijo en 20 minutos y toda modificación queda auditada.`,
+      "Guardar reasignaciones",
+      `El sistema podrá intentar hasta ${urgencyDraft.maxReassignments} prestadores alternativos. La política A continúa activa: 3 incumplimientos en 30 días y suspensiones progresivas de 7, 14 y 30 días.`,
       [
         { text: "Cancelar", style: "cancel" },
         {
           text: "Guardar política",
-          style: urgencyDraft.enforcementEnabled ? "destructive" : "default",
           onPress: () => void persistUrgencyPolicy(urgencyDraft),
         },
       ],
@@ -892,44 +876,19 @@ export default function OperationalDashboard() {
                   <View
                     style={[
                       styles.policyStatusIcon,
-                      urgencyDraft.enforcementEnabled &&
-                        styles.policyStatusIconEnabled,
+                      styles.policyStatusIconEnabled,
                     ]}
                   >
-                    <Ionicons
-                      name={
-                        urgencyDraft.enforcementEnabled
-                          ? "shield-checkmark"
-                          : "pause-circle"
-                      }
-                      size={21}
-                      color={
-                        urgencyDraft.enforcementEnabled ? "#fff" : "#76541c"
-                      }
-                    />
+                    <Ionicons name="shield-checkmark" size={21} color="#fff" />
                   </View>
                   <View style={styles.policyStatusCopy}>
                     <Text style={styles.policyStatusTitle}>
                       Disciplina automática
                     </Text>
                     <Text style={styles.policyStatusText}>
-                      {urgencyDraft.enforcementEnabled
-                        ? "Activa: los incumplimientos pueden suspender la prioridad."
-                        : "Desactivada: se registran incumplimientos sin sancionar."}
+                      Activa desde la confirmación de la política A.
                     </Text>
                   </View>
-                  <Switch
-                    accessibilityLabel="Disciplina automática de urgencias"
-                    disabled={savingUrgency}
-                    onValueChange={(value) =>
-                      updateUrgencyDraft("enforcementEnabled", value)
-                    }
-                    trackColor={{ false: "#d8dedc", true: "#78c9bd" }}
-                    thumbColor={
-                      urgencyDraft.enforcementEnabled ? "#087a68" : "#f5f5f5"
-                    }
-                    value={urgencyDraft.enforcementEnabled}
-                  />
                 </View>
 
                 <View style={styles.policyMetricsRow}>
@@ -959,6 +918,29 @@ export default function OperationalDashboard() {
                   </Text>
                 </View>
 
+                <View style={styles.policyFixedRow}>
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={18}
+                    color="#047a8f"
+                  />
+                  <Text style={styles.policyFixedText}>
+                    3 incumplimientos en 30 días · suspensión inicial de 7 días
+                  </Text>
+                </View>
+
+                <View style={styles.policyFixedRow}>
+                  <Ionicons
+                    name="trending-up-outline"
+                    size={18}
+                    color="#047a8f"
+                  />
+                  <Text style={styles.policyFixedText}>
+                    Reincidencia dentro de 90 días: 14 días · siguientes: 30
+                    días
+                  </Text>
+                </View>
+
                 <PolicyNumberField
                   label="Máximo de reasignaciones"
                   helper="Cantidad de prestadores alternativos que puede intentar el sistema (0–10)."
@@ -967,31 +949,6 @@ export default function OperationalDashboard() {
                     updateUrgencyDraft("maxReassignments", value)
                   }
                 />
-                <PolicyNumberField
-                  label="Incumplimientos para sancionar"
-                  helper="Cantidad acumulada dentro de la ventana (1–20)."
-                  value={urgencyDraft.missedThreshold}
-                  onChangeText={(value) =>
-                    updateUrgencyDraft("missedThreshold", value)
-                  }
-                />
-                <PolicyNumberField
-                  label="Ventana de evaluación"
-                  helper="Días hacia atrás que se consideran para el cálculo (1–365)."
-                  value={urgencyDraft.windowDays}
-                  onChangeText={(value) =>
-                    updateUrgencyDraft("windowDays", value)
-                  }
-                />
-                <PolicyNumberField
-                  label="Suspensión de prioridad"
-                  helper="Días sin recibir asignaciones urgentes prioritarias (1–90)."
-                  value={urgencyDraft.prioritySuspensionDays}
-                  onChangeText={(value) =>
-                    updateUrgencyDraft("prioritySuspensionDays", value)
-                  }
-                />
-
                 <TouchableOpacity
                   activeOpacity={0.8}
                   disabled={savingUrgency}
@@ -1007,7 +964,7 @@ export default function OperationalDashboard() {
                     <>
                       <Ionicons name="save-outline" size={18} color="#fff" />
                       <Text style={styles.policySaveText}>
-                        Revisar y guardar política
+                        Guardar reasignaciones
                       </Text>
                     </>
                   )}
