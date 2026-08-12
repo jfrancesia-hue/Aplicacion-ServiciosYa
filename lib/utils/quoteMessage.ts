@@ -1,7 +1,5 @@
-import type {
-  QuotePricingMode,
-  QuoteReferenceType,
-} from "./quotePricing";
+import type { QuotePricingMode, QuoteReferenceType } from "./quotePricing";
+import { QUOTE_OPERATIONAL_NOTICE_VERSION } from "../constants/billing.ts";
 
 export type QuoteMessage = {
   type: "quote";
@@ -18,6 +16,8 @@ export type QuoteMessage = {
   unitRate?: number;
   estimatedUnits?: number;
   referenceType?: QuoteReferenceType;
+  operationalNoticeVersion?: string;
+  operationalNoticeAcceptedAt?: string;
   createdAt: string;
 };
 
@@ -45,6 +45,16 @@ export function parseQuoteMessage(content: unknown): QuoteMessage | null {
   } catch {
     return null;
   }
+}
+
+export function acknowledgeQuoteOperationalNotice(content: string) {
+  const quote = parseQuoteMessage(content);
+  if (!quote) throw new Error("Presupuesto inválido.");
+  return `${QUOTE_PREFIX}${JSON.stringify({
+    ...quote,
+    operationalNoticeVersion: QUOTE_OPERATIONAL_NOTICE_VERSION,
+    operationalNoticeAcceptedAt: new Date().toISOString(),
+  } satisfies QuoteMessage)}`;
 }
 
 export function getQuotePricing(quote: QuoteMessage) {

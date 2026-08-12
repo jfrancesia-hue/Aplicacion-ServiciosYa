@@ -94,6 +94,8 @@ export function respondToMicaOrder(
         warranty?: string;
         validUntil?: string;
         notes?: string;
+        operationalNoticeVersion?: string;
+        operationalNoticeAcceptedAt?: string;
       }
     | { type: "decline" },
 ) {

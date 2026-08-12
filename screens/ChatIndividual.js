@@ -27,7 +27,11 @@ import { parseQuoteMessage, formatQuoteAmount, getQuotePricing } from "../lib/ut
 import { pricingModeLabel, quotePricingSummary } from "../lib/utils/quotePricing";
 import ServiceSchedulePanel from "../components/chat/ServiceSchedulePanel";
 import MicaIncidentIntakeModal from "../components/chat/MicaIncidentIntakeModal";
-import { calculateServiceConfirmationFee } from "../lib/constants/billing";
+import QuoteOperationalNoticeModal from "../components/quotes/QuoteOperationalNoticeModal";
+import {
+  calculateServiceConfirmationFee,
+  QUOTE_OPERATIONAL_NOTICE_VERSION,
+} from "../lib/constants/billing";
 import VoiceMessageBubble from "../components/chat/VoiceMessageBubble";
 import {
   CHAT_AUDIO_BUCKET,
@@ -70,6 +74,7 @@ function ChatIndividual({ route }) {
   const [canSendQuote, setCanSendQuote] = useState(false);
   const [reportandoIncidente, setReportandoIncidente] = useState(false);
   const [incidentIntakeVisible, setIncidentIntakeVisible] = useState(false);
+  const [pendingPaymentQuote, setPendingPaymentQuote] = useState(null);
   const processingPaymentReturn = useRef(null);
   const flatListRef = useRef(null);
   const messageChannelRef = useRef(null);
@@ -838,7 +843,9 @@ function ChatIndividual({ route }) {
         {esPresupuesto && !esMio && jobStatus?.status !== "approved" && (
           <TouchableOpacity
             style={styles.pagarBtn}
-            onPress={() => pagarPresupuesto(item.id)}
+            onPress={() =>
+              setPendingPaymentQuote({ messageId: item.id, amount: montoNumerico })
+            }
             disabled={pagando}
             activeOpacity={0.8}
           >
@@ -933,6 +940,10 @@ function ChatIndividual({ route }) {
           body: {
             chatId,
             messageId,
+            operationalNotice: {
+              version: QUOTE_OPERATIONAL_NOTICE_VERSION,
+              acceptedAt: new Date().toISOString(),
+            },
           },
         },
       );
@@ -1229,6 +1240,19 @@ function ChatIndividual({ route }) {
             if (!askingMica) setMicaAssistantVisible(false);
           }}
           onAsk={pedirAyudaAMica}
+        />
+
+        <QuoteOperationalNoticeModal
+          visible={Boolean(pendingPaymentQuote)}
+          mode="accept"
+          amount={pendingPaymentQuote?.amount ?? 0}
+          busy={pagando}
+          onClose={() => setPendingPaymentQuote(null)}
+          onConfirm={async () => {
+            if (!pendingPaymentQuote?.messageId || pagando) return;
+            await pagarPresupuesto(pendingPaymentQuote.messageId);
+            setPendingPaymentQuote(null);
+          }}
         />
 
         {partnerId ? (

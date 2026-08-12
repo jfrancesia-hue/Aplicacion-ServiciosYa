@@ -110,8 +110,12 @@ function hasExternalContact(value: unknown) {
   const text = String(value ?? "");
   return (
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(text) ||
-    /(?:https?:\/\/|www\.|wa\.me\/|t\.me\/|instagram\.com|facebook\.com|messenger\.com)/i.test(text) ||
-    /\b(?:whats?app|telegram|instagram|facebook|messenger)\b|(?:^|\s)@[a-z0-9_.]{3,}/i.test(text) ||
+    /(?:https?:\/\/|www\.|wa\.me\/|t\.me\/|instagram\.com|facebook\.com|messenger\.com)/i.test(
+      text,
+    ) ||
+    /\b(?:whats?app|telegram|instagram|facebook|messenger)\b|(?:^|\s)@[a-z0-9_.]{3,}/i.test(
+      text,
+    ) ||
     /(?:\+?\d[\s().-]*){7,}/.test(text)
   );
 }
@@ -442,7 +446,10 @@ Deno.serve(async (req) => {
       ].join(" ");
       if (!isDecline && hasExternalContact(protectedDetails)) {
         return json(
-          { error: "El presupuesto no puede incluir teléfonos, emails, enlaces ni redes sociales." },
+          {
+            error:
+              "El presupuesto no puede incluir teléfonos, emails, enlaces ni redes sociales.",
+          },
           400,
         );
       }
@@ -483,6 +490,11 @@ Deno.serve(async (req) => {
               warranty: String(response?.warranty ?? "7 días").trim(),
               validUntil: String(response?.validUntil ?? "24 horas").trim(),
               notes: String(response?.notes ?? "").trim() || null,
+              operationalNoticeVersion:
+                String(response?.operationalNoticeVersion ?? "").trim() || null,
+              operationalNoticeAcceptedAt:
+                String(response?.operationalNoticeAcceptedAt ?? "").trim() ||
+                null,
             },
         estado: isDecline ? "rechazado" : "activo",
         estado_confirmacion: isDecline ? "rechazado" : "pendiente",
@@ -641,16 +653,24 @@ Deno.serve(async (req) => {
         .eq("remitente_id", quote.workerId)
         .order("created_at", { ascending: false })
         .limit(50);
-      let quoteMessageId = existingQuoteMessages.data?.find((message: { id: string; contenido: string | null }) =>
-        String(message.contenido ?? "").includes(`\"sourceBudgetId\":\"${quote.id}\"`),
+      let quoteMessageId = existingQuoteMessages.data?.find(
+        (message: { id: string; contenido: string | null }) =>
+          String(message.contenido ?? "").includes(
+            `\"sourceBudgetId\":\"${quote.id}\"`,
+          ),
       )?.id;
       if (!quoteMessageId) {
-        const insertedQuote = await admin.from("mensajes").insert({
-          chat_id: chat.id,
-          remitente_id: quote.workerId,
-          contenido: quoteContent,
-        }).select("id").single();
-        if (insertedQuote.error || !insertedQuote.data) throw insertedQuote.error;
+        const insertedQuote = await admin
+          .from("mensajes")
+          .insert({
+            chat_id: chat.id,
+            remitente_id: quote.workerId,
+            contenido: quoteContent,
+          })
+          .select("id")
+          .single();
+        if (insertedQuote.error || !insertedQuote.data)
+          throw insertedQuote.error;
         quoteMessageId = insertedQuote.data.id;
       }
 

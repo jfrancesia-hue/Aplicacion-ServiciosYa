@@ -4,6 +4,7 @@ const QUOTE_PREFIX = "__TOORI_QUOTE__";
 const COMMISSION_RATE = 0.1;
 const MIN_QUOTE_ARS = 100;
 const MAX_QUOTE_ARS = 100_000_000;
+const OPERATIONAL_NOTICE_VERSION = "quote-operation-v1-2026-08-12";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -133,8 +134,26 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const chatId = body?.chatId;
     const messageId = body?.messageId;
+    const noticeVersion = body?.operationalNotice?.version;
+    const noticeAcceptedAt = body?.operationalNotice?.acceptedAt;
     if (!isUuid(chatId) || !isUuid(messageId)) {
       return json({ error: "No se pudo identificar el presupuesto." }, 400);
+    }
+    const noticeProvided = noticeVersion != null || noticeAcceptedAt != null;
+    const noticeDate = noticeProvided
+      ? new Date(String(noticeAcceptedAt ?? ""))
+      : null;
+    if (
+      noticeProvided &&
+      (noticeVersion !== OPERATIONAL_NOTICE_VERSION ||
+        !noticeDate ||
+        !Number.isFinite(noticeDate.getTime()) ||
+        Math.abs(Date.now() - noticeDate.getTime()) > 30 * 60 * 1000)
+    ) {
+      return json(
+        { error: "Revisá y confirmá el resumen operativo antes de continuar." },
+        400,
+      );
     }
 
     const { data: chat, error: chatError } = await admin
@@ -193,6 +212,16 @@ Deno.serve(async (req) => {
       .eq("quote_message_id", messageId)
       .maybeSingle();
     if (existingError) throw existingError;
+    if (existing && noticeDate) {
+      const { error: noticeError } = await admin
+        .from("service_confirmation_payments")
+        .update({
+          operational_notice_version: OPERATIONAL_NOTICE_VERSION,
+          operational_notice_accepted_at: noticeDate.toISOString(),
+        })
+        .eq("id", existing.id);
+      if (noticeError) throw noticeError;
+    }
     if (existing?.status === "approved") {
       return json({ ok: true, approved: true, paymentRecordId: existing.id });
     }
@@ -222,6 +251,10 @@ Deno.serve(async (req) => {
             unit_rate: pricing.unitRate,
             estimated_units: pricing.estimatedUnits,
             reference_total_type: pricing.referenceType,
+            operational_notice_version: noticeDate
+              ? OPERATIONAL_NOTICE_VERSION
+              : null,
+            operational_notice_accepted_at: noticeDate?.toISOString() ?? null,
             status: "creating",
           })
           .select("id,status,checkout_url,preference_id")

@@ -78,6 +78,13 @@ const messageNotification = await readFile(
   ),
   "utf8",
 );
+const quoteNoticeModal = await readFile(
+  new URL(
+    "../components/quotes/QuoteOperationalNoticeModal.tsx",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("el cliente no contiene credenciales ni llama directo a Mercado Pago", () => {
   assert.equal(chatSource.includes(`${["APP", "USR"].join("_")}-`), false);
@@ -194,6 +201,17 @@ test("las urgencias vencidas se registran y se reasignan con disciplina configur
 test("los mensajes comunes ya no crean falsas urgencias", () => {
   assert.doesNotMatch(messageNotification, /urgent_work_alerts/);
   assert.match(messageNotification, /channelId: "default"/);
+});
+
+test("el resumen operativo distingue la comisi\u00f3n del pago del trabajo", () => {
+  assert.match(
+    quoteNoticeModal,
+    /comisi\u00f3n de conexi\u00f3n y confirmaci\u00f3n/,
+  );
+  assert.match(quoteNoticeModal, /no es un adelanto del trabajo/);
+  assert.match(quoteNoticeModal, /Seguir conversando/);
+  assert.match(paymentPreference, /operationalNotice/);
+  assert.match(paymentPreference, /operational_notice_accepted_at/);
 });
 
 test("interpreta el retorno aprobado de Mercado Pago", () => {
