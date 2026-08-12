@@ -23,7 +23,8 @@ import MicaAssistantModal from "../components/chat/MicaAssistantModal";
 import MicaSystemBubble from "../components/chat/MicaSystemBubble";
 import BotonVolver from "../components/BotonVolver";
 import { withModalProvider } from "../components/sheet/withModalProvider";
-import { parseQuoteMessage, formatQuoteAmount } from "../lib/utils/quoteMessage";
+import { parseQuoteMessage, formatQuoteAmount, getQuotePricing } from "../lib/utils/quoteMessage";
+import { pricingModeLabel, quotePricingSummary } from "../lib/utils/quotePricing";
 import { calculateServiceConfirmationFee } from "../lib/constants/billing";
 import VoiceMessageBubble from "../components/chat/VoiceMessageBubble";
 import {
@@ -816,6 +817,9 @@ function ChatIndividual({ route }) {
             </View>
 
             <Text style={styles.quoteAmount}>{formatQuoteAmount(quote.amount)}</Text>
+            <Text style={styles.quotePricingMode}>
+              {pricingModeLabel(getQuotePricing(quote).pricingMode)} · {quotePricingSummary(getQuotePricing(quote))}
+            </Text>
 
             <View style={styles.quoteDivider} />
             <QuoteRow icon="construct-outline" label="Incluye" value={quote.scope} />
@@ -1691,6 +1695,12 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "900",
     marginTop: 12,
+  },
+  quotePricingMode: {
+    color: "#53747c",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
   },
   quoteDivider: {
     height: 1,

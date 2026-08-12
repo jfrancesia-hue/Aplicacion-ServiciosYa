@@ -35,26 +35,70 @@ function isUuid(value: unknown): value is string {
   );
 }
 
-function quoteAmount(content: unknown) {
-  if (typeof content !== "string") return 0;
+function quotePricing(content: unknown) {
+  const invalid = {
+    amount: 0,
+    pricingMode: "project",
+    unitRate: 0,
+    estimatedUnits: 1,
+    referenceType: "fixed",
+  };
+  if (typeof content !== "string") return invalid;
 
   if (content.startsWith(QUOTE_PREFIX)) {
     try {
       const parsed = JSON.parse(content.slice(QUOTE_PREFIX.length));
-      return Number(parsed?.amount ?? 0);
+      const pricingMode = ["project", "hour", "day"].includes(
+        String(parsed?.pricingMode),
+      )
+        ? String(parsed.pricingMode)
+        : "project";
+      const unitRate = Number(parsed?.unitRate ?? parsed?.amount ?? 0);
+      const estimatedUnits =
+        pricingMode === "project" ? 1 : Number(parsed?.estimatedUnits ?? 0);
+      const referenceType =
+        pricingMode === "project"
+          ? "fixed"
+          : String(parsed?.referenceType) === "cap"
+            ? "cap"
+            : "estimate";
+      const amount = Math.round(unitRate * estimatedUnits * 100) / 100;
+      const submittedAmount = Number(parsed?.amount ?? 0);
+      if (
+        !Number.isFinite(amount) ||
+        !Number.isFinite(unitRate) ||
+        !Number.isFinite(estimatedUnits) ||
+        unitRate <= 0 ||
+        estimatedUnits <= 0 ||
+        Math.abs(amount - submittedAmount) >= 0.01
+      ) {
+        return invalid;
+      }
+      return { amount, pricingMode, unitRate, estimatedUnits, referenceType };
     } catch {
-      return 0;
+      return invalid;
     }
   }
 
   if (content.startsWith("💰 Presupuesto:")) {
     const match = content.match(/\$([\d.,]+)/);
-    return match
+    const amount = match
       ? Number.parseFloat(match[1].replace(/\./g, "").replace(",", "."))
       : 0;
+    return {
+      amount,
+      pricingMode: "project",
+      unitRate: amount,
+      estimatedUnits: 1,
+      referenceType: "fixed",
+    };
   }
 
-  return 0;
+  return invalid;
+}
+
+function quoteAmount(content: unknown) {
+  return quotePricing(content).amount;
 }
 
 function commissionFor(amount: number) {
@@ -131,6 +175,7 @@ Deno.serve(async (req) => {
       return json({ error: "El presupuesto no pertenece a este chat." }, 409);
     }
 
+    const pricing = quotePricing(message.contenido);
     const amountTotal = quoteAmount(message.contenido);
     if (
       !Number.isFinite(amountTotal) ||
@@ -173,6 +218,10 @@ Deno.serve(async (req) => {
             provider_id: message.remitente_id,
             amount_total: amountTotal,
             commission_amount: commissionAmount,
+            pricing_mode: pricing.pricingMode,
+            unit_rate: pricing.unitRate,
+            estimated_units: pricing.estimatedUnits,
+            reference_total_type: pricing.referenceType,
             status: "creating",
           })
           .select("id,status,checkout_url,preference_id")

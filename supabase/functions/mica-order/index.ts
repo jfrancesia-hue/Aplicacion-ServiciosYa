@@ -19,6 +19,10 @@ type BudgetRow = {
   estado: string | null;
   estado_confirmacion: string | null;
   metadata: Record<string, unknown> | null;
+  pricing_mode: string | null;
+  unit_rate: number | string | null;
+  estimated_units: number | string | null;
+  reference_total_type: string | null;
 };
 
 type UserProfileRow = {
@@ -64,6 +68,42 @@ function getBearerToken(req: Request) {
 function normalizeAmount(value: number | string | null) {
   const amount = Number(value ?? 0);
   return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+}
+
+function normalizePricing(response: Record<string, unknown>) {
+  const pricingMode = ["project", "hour", "day"].includes(
+    String(response.pricingMode),
+  )
+    ? String(response.pricingMode)
+    : "project";
+  const unitRate = normalizeAmount(
+    (response.unitRate ?? response.amount ?? null) as number | string | null,
+  );
+  const estimatedUnits =
+    pricingMode === "project"
+      ? 1
+      : normalizeAmount(
+          (response.estimatedUnits ?? null) as number | string | null,
+        );
+  const referenceType =
+    pricingMode === "project"
+      ? "fixed"
+      : String(response.referenceType) === "cap"
+        ? "cap"
+        : "estimate";
+  const amount = Math.round(unitRate * estimatedUnits * 100) / 100;
+  const submittedAmount = normalizeAmount(
+    (response.amount ?? null) as number | string | null,
+  );
+
+  return {
+    pricingMode,
+    unitRate,
+    estimatedUnits,
+    referenceType,
+    amount,
+    matchesSubmittedTotal: Math.abs(amount - submittedAmount) < 0.01,
+  };
 }
 
 function hasExternalContact(value: unknown) {
@@ -132,7 +172,7 @@ async function loadQuotes(
   const { data: budgetRows, error } = await admin
     .from("presupuestos")
     .select(
-      "id,monto,trabajador_uuid,horarios_disponibles,descripcion,estado,estado_confirmacion,metadata",
+      "id,monto,trabajador_uuid,horarios_disponibles,descripcion,estado,estado_confirmacion,metadata,pricing_mode,unit_rate,estimated_units,reference_total_type",
     )
     .eq("oferta_id", offerId)
     .not("trabajador_uuid", "is", null)
@@ -209,6 +249,18 @@ async function loadQuotes(
         marketplaceProfile?.nombre ||
         "Profesional de TOORI",
       amount: normalizeAmount(budget.monto),
+      pricingMode:
+        budget.pricing_mode === "hour" || budget.pricing_mode === "day"
+          ? budget.pricing_mode
+          : "project",
+      unitRate: normalizeAmount(budget.unit_rate ?? budget.monto),
+      estimatedUnits: normalizeAmount(budget.estimated_units ?? 1),
+      referenceType:
+        budget.reference_total_type === "cap"
+          ? "cap"
+          : budget.reference_total_type === "estimate"
+            ? "estimate"
+            : "fixed",
       rating: rating ? Math.round(rating * 10) / 10 : null,
       jobs: jobs.filter(
         (item) => item.contratado_id === workerId && item.aceptado !== false,
@@ -370,8 +422,14 @@ Deno.serve(async (req) => {
       const response = body?.response ?? {};
       const responseType = String(response?.type ?? "");
       const isDecline = responseType === "decline";
-      const amount = normalizeAmount(response?.amount ?? null);
-      if (!isDecline && (responseType !== "budget" || amount <= 0)) {
+      const pricing = normalizePricing(response as Record<string, unknown>);
+      const amount = pricing.amount;
+      if (
+        !isDecline &&
+        (responseType !== "budget" ||
+          amount <= 0 ||
+          !pricing.matchesSubmittedTotal)
+      ) {
         return json({ error: "El monto debe ser mayor a cero." }, 400);
       }
       const protectedDetails = [
@@ -402,6 +460,10 @@ Deno.serve(async (req) => {
         oferta_id: offer.id,
         trabajador_uuid: user.id,
         monto: isDecline ? 0 : amount,
+        pricing_mode: isDecline ? "project" : pricing.pricingMode,
+        unit_rate: isDecline ? 0 : pricing.unitRate,
+        estimated_units: isDecline ? 1 : pricing.estimatedUnits,
+        reference_total_type: isDecline ? "fixed" : pricing.referenceType,
         horarios_disponibles: isDecline
           ? null
           : String(response?.availability ?? "").trim() || null,
@@ -413,6 +475,10 @@ Deno.serve(async (req) => {
           ? { source: "mica_app" }
           : {
               source: "mica_app",
+              pricingMode: pricing.pricingMode,
+              unitRate: pricing.unitRate,
+              estimatedUnits: pricing.estimatedUnits,
+              referenceType: pricing.referenceType,
               materials: String(response?.materials ?? "A confirmar").trim(),
               warranty: String(response?.warranty ?? "7 días").trim(),
               validUntil: String(response?.validUntil ?? "24 horas").trim(),
@@ -554,6 +620,10 @@ Deno.serve(async (req) => {
       const quoteContent = `${QUOTE_PREFIX}${JSON.stringify({
         type: "quote",
         amount: quote.amount,
+        pricingMode: quote.pricingMode,
+        unitRate: quote.unitRate,
+        estimatedUnits: quote.estimatedUnits,
+        referenceType: quote.referenceType,
         scope: quote.description,
         materials: quote.materials,
         timeframe: quote.availability,

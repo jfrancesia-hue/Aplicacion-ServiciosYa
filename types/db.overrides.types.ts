@@ -64,6 +64,10 @@ type PresupuestoRow = {
   horarios_disponibles: string | null;
   estado: string | null;
   metadata: Json;
+  pricing_mode: "project" | "hour" | "day";
+  unit_rate: number | null;
+  estimated_units: number | null;
+  reference_total_type: "fixed" | "estimate" | "cap";
 };
 
 type UsuarioRowOverride = Omit<

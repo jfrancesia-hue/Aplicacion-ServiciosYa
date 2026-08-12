@@ -1,10 +1,18 @@
 import { supabase } from "./supabase";
+import type {
+  QuotePricingMode,
+  QuoteReferenceType,
+} from "./utils/quotePricing";
 
 export type MicaOrderQuote = {
   id: string;
   workerId: string;
   name: string;
   amount: number;
+  pricingMode: QuotePricingMode;
+  unitRate: number;
+  estimatedUnits: number;
+  referenceType: QuoteReferenceType;
   rating: number | null;
   jobs: number;
   availability: string;
@@ -76,6 +84,10 @@ export function respondToMicaOrder(
     | {
         type: "budget";
         amount: number;
+        pricingMode: QuotePricingMode;
+        unitRate: number;
+        estimatedUnits: number;
+        referenceType: QuoteReferenceType;
         availability?: string;
         description?: string;
         materials?: string;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -23,6 +23,12 @@ import { supabase } from "../../lib/supabase";
 import { obtenerPedidosDisponibles } from "../../lib/tooriApi";
 import { respondToMicaOrder } from "../../lib/micaOrder";
 import { getWorkerServiceRequests } from "../../lib/serviceRequests";
+import {
+  buildQuotePricing,
+  pricingModeLabel,
+  type QuotePricingMode,
+  type QuoteReferenceType,
+} from "../../lib/utils/quotePricing";
 import WorkerState from "./WorkerState";
 
 type Tab = "calendario" | "ofertas" | "contratar";
@@ -240,7 +246,11 @@ function OfertasView({ navigation }: { navigation: any }) {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [ofertaSeleccionada, setOfertaSeleccionada] = useState<any>(null);
+  const [modalidad, setModalidad] = useState<QuotePricingMode>("project");
   const [monto, setMonto] = useState("");
+  const [unidades, setUnidades] = useState("1");
+  const [tipoReferencia, setTipoReferencia] =
+    useState<QuoteReferenceType>("estimate");
   const [descripcion, setDescripcion] = useState("");
   const [horarios, setHorarios] = useState("");
   const [materiales, setMateriales] = useState("Materiales incluidos");
@@ -248,10 +258,23 @@ function OfertasView({ navigation }: { navigation: any }) {
   const [validez, setValidez] = useState("24 horas");
   const [notas, setNotas] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const pricing = useMemo(
+    () =>
+      buildQuotePricing({
+        pricingMode: modalidad,
+        unitRate: Number(monto.replace(",", ".")),
+        estimatedUnits: Number(unidades.replace(",", ".")),
+        referenceType: tipoReferencia,
+      }),
+    [modalidad, monto, tipoReferencia, unidades],
+  );
 
   const enviarPresupuesto = (oferta: any) => {
     setOfertaSeleccionada(oferta);
+    setModalidad("project");
     setMonto("");
+    setUnidades("1");
+    setTipoReferencia("estimate");
     setDescripcion("");
     setHorarios("");
     setMateriales("Materiales incluidos");
@@ -262,7 +285,7 @@ function OfertasView({ navigation }: { navigation: any }) {
   };
 
   const confirmarPresupuesto = async () => {
-    if (!monto.trim() || !descripcion.trim() || !horarios.trim()) {
+    if (pricing.amount <= 0 || !descripcion.trim() || !horarios.trim()) {
       Alert.alert("Campos incompletos", "Completá todos los campos antes de enviar.");
       return;
     }
@@ -270,7 +293,11 @@ function OfertasView({ navigation }: { navigation: any }) {
     try {
       await respondToMicaOrder(String(ofertaSeleccionada.id), {
         type: "budget",
-        amount: parseFloat(monto.replace(",", ".")),
+        amount: pricing.amount,
+        pricingMode: pricing.pricingMode,
+        unitRate: pricing.unitRate,
+        estimatedUnits: pricing.estimatedUnits,
+        referenceType: pricing.referenceType,
         description: descripcion.trim(),
         availability: horarios.trim(),
         materials: materiales.trim() || "A confirmar",
@@ -419,7 +446,24 @@ function OfertasView({ navigation }: { navigation: any }) {
               </View>
             )}
 
-            <Text style={styles.modalLabel}>Monto final ($)</Text>
+            <Text style={styles.modalLabel}>Modalidad</Text>
+            <View style={styles.quoteModeRow}>
+              {(["project", "hour", "day"] as QuotePricingMode[]).map((mode) => (
+                <TouchableOpacity
+                  key={mode}
+                  style={[styles.quoteModeChip, modalidad === mode && styles.quoteModeChipActive]}
+                  onPress={() => setModalidad(mode)}
+                >
+                  <Text style={[styles.quoteModeText, modalidad === mode && styles.quoteModeTextActive]}>
+                    {pricingModeLabel(mode)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.modalLabel}>
+              {modalidad === "project" ? "Importe cerrado ($)" : modalidad === "hour" ? "Tarifa por hora ($)" : "Tarifa por día ($)"}
+            </Text>
             <TextInput
               style={styles.modalInput}
               placeholder="Ej: 5000"
@@ -428,6 +472,42 @@ function OfertasView({ navigation }: { navigation: any }) {
               value={monto}
               onChangeText={setMonto}
             />
+
+            {modalidad !== "project" ? (
+              <>
+                <Text style={styles.modalLabel}>
+                  {modalidad === "hour" ? "Horas estimadas" : "Días estimados"}
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Ej: 3"
+                  placeholderTextColor="#aaa"
+                  keyboardType="decimal-pad"
+                  value={unidades}
+                  onChangeText={setUnidades}
+                />
+                <View style={styles.quoteModeRow}>
+                  {(["estimate", "cap"] as QuoteReferenceType[]).map((kind) => (
+                    <TouchableOpacity
+                      key={kind}
+                      style={[styles.quoteModeChip, tipoReferencia === kind && styles.quoteModeChipActive]}
+                      onPress={() => setTipoReferencia(kind)}
+                    >
+                      <Text style={[styles.quoteModeText, tipoReferencia === kind && styles.quoteModeTextActive]}>
+                        {kind === "estimate" ? "Total estimado" : "Tope máximo"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </>
+            ) : null}
+
+            <View style={styles.quoteTotalBox}>
+              <Text style={styles.quoteTotalLabel}>Total de referencia</Text>
+              <Text style={styles.quoteTotalValue}>
+                ${Math.round(pricing.amount).toLocaleString("es-AR")}
+              </Text>
+            </View>
 
             <Text style={styles.modalLabel}>Que incluye tu propuesta</Text>
             <TextInput
@@ -877,6 +957,43 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#222",
   },
+  quoteModeRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 5,
+  },
+  quoteModeChip: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#c7dadd",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  quoteModeChipActive: {
+    borderColor: "#069eb3",
+    backgroundColor: "#e8f8fa",
+  },
+  quoteModeText: {
+    color: "#61787d",
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  quoteModeTextActive: { color: "#057f91" },
+  quoteTotalBox: {
+    marginTop: 12,
+    borderRadius: 12,
+    backgroundColor: "#e9f8fa",
+    padding: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  quoteTotalLabel: { color: "#315e67", fontSize: 12, fontWeight: "800" },
+  quoteTotalValue: { color: "#047a8f", fontSize: 19, fontWeight: "900" },
   modalTwoColumns: {
     flexDirection: "row",
     gap: 10,

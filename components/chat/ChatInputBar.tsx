@@ -10,6 +10,12 @@ import {
   formatAudioDuration,
 } from "../../lib/utils/audioMessage";
 import { inspectChatContent, inspectChatText } from "../../lib/utils/chatPolicy";
+import {
+  buildQuotePricing,
+  pricingModeLabel,
+  type QuotePricingMode,
+  type QuoteReferenceType,
+} from "../../lib/utils/quotePricing";
 
 interface ChatInputBarProps {
   onSend: (message: string) => void | Promise<void>;
@@ -30,7 +36,11 @@ function ChatInputBar({ onSend, onSendAudio, canSendQuote = false, contentProtec
   const [isRecording, setIsRecording] = React.useState(false);
   const [recordingSeconds, setRecordingSeconds] = React.useState(0);
   const [presupuestoVisible, setPresupuestoVisible] = React.useState(false);
+  const [modalidad, setModalidad] = React.useState<QuotePricingMode>("project");
   const [monto, setMonto] = React.useState("");
+  const [unidades, setUnidades] = React.useState("1");
+  const [tipoReferencia, setTipoReferencia] =
+    React.useState<QuoteReferenceType>("estimate");
   const [alcance, setAlcance] = React.useState("");
   const [materiales, setMateriales] = React.useState("Materiales incluidos");
   const [tiempo, setTiempo] = React.useState("A coordinar");
@@ -38,6 +48,16 @@ function ChatInputBar({ onSend, onSendAudio, canSendQuote = false, contentProtec
   const [validez, setValidez] = React.useState("24 horas");
   const [notas, setNotas] = React.useState("");
   const [enviandoPresupuesto, setEnviandoPresupuesto] = React.useState(false);
+  const pricing = React.useMemo(
+    () =>
+      buildQuotePricing({
+        pricingMode: modalidad,
+        unitRate: Number(monto),
+        estimatedUnits: Number(unidades),
+        referenceType: tipoReferencia,
+      }),
+    [modalidad, monto, tipoReferencia, unidades],
+  );
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingStartedAtRef = useRef(0);
@@ -171,7 +191,10 @@ function ChatInputBar({ onSend, onSendAudio, canSendQuote = false, contentProtec
   };
 
   const resetQuoteForm = () => {
+    setModalidad("project");
     setMonto("");
+    setUnidades("1");
+    setTipoReferencia("estimate");
     setAlcance("");
     setMateriales("Materiales incluidos");
     setTiempo("A coordinar");
@@ -282,7 +305,28 @@ function ChatInputBar({ onSend, onSendAudio, canSendQuote = false, contentProtec
                 </View>
               </View>
 
-              <Text style={styles.fieldLabel}>Monto final</Text>
+              <Text style={styles.fieldLabel}>Modalidad</Text>
+              <View style={styles.modeRow}>
+                {(["project", "hour", "day"] as QuotePricingMode[]).map((mode) => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.modeChip, modalidad === mode && styles.modeChipActive]}
+                    onPress={() => setModalidad(mode)}
+                  >
+                    <Text style={[styles.modeChipText, modalidad === mode && styles.modeChipTextActive]}>
+                      {pricingModeLabel(mode)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.fieldLabel}>
+                {modalidad === "project"
+                  ? "Importe cerrado"
+                  : modalidad === "hour"
+                    ? "Tarifa por hora"
+                    : "Tarifa por día"}
+              </Text>
               <View style={styles.montoRow}>
                 <Text style={styles.montoPrefix}>$</Text>
                 <TextInput
@@ -294,6 +338,55 @@ function ChatInputBar({ onSend, onSendAudio, canSendQuote = false, contentProtec
                   onChangeText={(t) => setMonto(t.replace(/[^0-9]/g, ""))}
                   autoFocus
                 />
+              </View>
+
+              {modalidad !== "project" ? (
+                <>
+                  <Text style={styles.fieldLabel}>
+                    {modalidad === "hour" ? "Horas estimadas" : "Días estimados"}
+                  </Text>
+                  <TextInput
+                    style={styles.quoteInput}
+                    keyboardType="decimal-pad"
+                    placeholder={modalidad === "hour" ? "Ej: 3" : "Ej: 2"}
+                    placeholderTextColor="#94a3b8"
+                    value={unidades}
+                    onChangeText={(value) =>
+                      setUnidades(value.replace(/[^0-9.,]/g, "").replace(",", "."))
+                    }
+                  />
+                  <View style={styles.referenceRow}>
+                    {(["estimate", "cap"] as QuoteReferenceType[]).map((kind) => (
+                      <TouchableOpacity
+                        key={kind}
+                        style={[
+                          styles.referenceChip,
+                          tipoReferencia === kind && styles.referenceChipActive,
+                        ]}
+                        onPress={() => setTipoReferencia(kind)}
+                      >
+                        <Text
+                          style={[
+                            styles.referenceChipText,
+                            tipoReferencia === kind && styles.referenceChipTextActive,
+                          ]}
+                        >
+                          {kind === "estimate" ? "Total estimado" : "Tope máximo"}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              ) : null}
+
+              <View style={styles.referenceTotalBox}>
+                <View>
+                  <Text style={styles.referenceTotalLabel}>Total de referencia</Text>
+                  <Text style={styles.referenceTotalHint}>Base para calcular la comisión del 10%</Text>
+                </View>
+                <Text style={styles.referenceTotalValue}>
+                  ${Math.round(pricing.amount).toLocaleString("es-AR")}
+                </Text>
               </View>
 
               <Text style={styles.fieldLabel}>Que incluye el trabajo</Text>
@@ -367,14 +460,18 @@ function ChatInputBar({ onSend, onSendAudio, canSendQuote = false, contentProtec
                 <Text style={styles.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalSendBtn, (!monto || !alcance.trim() || enviandoPresupuesto) && { opacity: 0.5 }]}
-                disabled={!monto || !alcance.trim() || enviandoPresupuesto}
+                style={[styles.modalSendBtn, (pricing.amount <= 0 || !alcance.trim() || enviandoPresupuesto) && { opacity: 0.5 }]}
+                disabled={pricing.amount <= 0 || !alcance.trim() || enviandoPresupuesto}
                 onPress={async () => {
-                  if (!monto || !alcance.trim()) return;
+                  if (pricing.amount <= 0 || !alcance.trim()) return;
                   setEnviandoPresupuesto(true);
                   try {
                     const quoteContent = createQuoteMessage({
-                      amount: Number(monto),
+                      amount: pricing.amount,
+                      pricingMode: pricing.pricingMode,
+                      unitRate: pricing.unitRate,
+                      estimatedUnits: pricing.estimatedUnits,
+                      referenceType: pricing.referenceType,
                       scope: alcance.trim(),
                       materials: materiales.trim() || "A confirmar",
                       timeframe: tiempo.trim() || "A coordinar",
@@ -519,6 +616,20 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 12, fontWeight: "800", color: "#38515d", marginBottom: 6, marginTop: 8 },
   fieldGrid: { flexDirection: "row", gap: 10 },
   fieldGridItem: { flex: 1 },
+  modeRow: { flexDirection: "row", gap: 7, marginBottom: 4 },
+  modeChip: { flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1, borderColor: "#cfdde1", alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
+  modeChipActive: { backgroundColor: "#e6f7f9", borderColor: "#069eb3" },
+  modeChipText: { color: "#5d7379", fontSize: 11, fontWeight: "800", textAlign: "center" },
+  modeChipTextActive: { color: "#057f91" },
+  referenceRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  referenceChip: { flex: 1, borderRadius: 8, borderWidth: 1, borderColor: "#d6e1e4", paddingVertical: 9, alignItems: "center" },
+  referenceChipActive: { borderColor: "#069eb3", backgroundColor: "#effafb" },
+  referenceChipText: { color: "#667d83", fontSize: 11, fontWeight: "700" },
+  referenceChipTextActive: { color: "#057f91" },
+  referenceTotalBox: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, borderRadius: 10, backgroundColor: "#f0fafb", borderWidth: 1, borderColor: "#bfe6ea", padding: 12, marginTop: 12 },
+  referenceTotalLabel: { color: "#284b53", fontSize: 12, fontWeight: "900" },
+  referenceTotalHint: { color: "#71878c", fontSize: 10, marginTop: 2 },
+  referenceTotalValue: { color: "#047a8f", fontSize: 19, fontWeight: "900" },
   montoRow: { flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: "#8dd4df", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 9, marginBottom: 4, backgroundColor: "#f1fbfd" },
   montoPrefix: { fontSize: 22, fontWeight: "900", color: "#047a8f", marginRight: 4 },
   montoInput: { flex: 1, fontSize: 23, fontWeight: "900", color: "#102a35", paddingVertical: 0 },

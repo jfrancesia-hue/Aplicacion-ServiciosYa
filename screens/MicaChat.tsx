@@ -32,6 +32,10 @@ import {
 import { supabase } from "../lib/supabase";
 import { calculateServiceConfirmationFee } from "../lib/constants/billing";
 import { resolveArgentineProvince } from "../lib/utils/geoSegmentation";
+import {
+  pricingModeLabel,
+  quotePricingSummary,
+} from "../lib/utils/quotePricing";
 import { useLocationStore } from "../store/locationStore";
 import type { MainStackParamList, MicaChatMode } from "../types/navigation";
 
@@ -56,6 +60,16 @@ type AgentInsight = {
   units?: string;
   contactIntent?: string;
 };
+
+function micaQuotePricingSummary(quote: MicaOrderQuote) {
+  return `${pricingModeLabel(quote.pricingMode ?? "project")} · ${quotePricingSummary({
+    pricingMode: quote.pricingMode ?? "project",
+    unitRate: quote.unitRate ?? quote.amount,
+    estimatedUnits: quote.estimatedUnits ?? 1,
+    referenceType: quote.referenceType ?? "fixed",
+    amount: quote.amount,
+  })}`;
+}
 type MicaProfileFallback = {
   nombre?: string | null;
   celular?: string | number | null;
@@ -1347,6 +1361,9 @@ export default function MicaChat({ navigation, route }: Props) {
                         </>
                       ) : null}
                     </View>
+                    <Text style={styles.quotePricing} numberOfLines={1}>
+                      {micaQuotePricingSummary(quote)}
+                    </Text>
                     <Text style={styles.quoteNote} numberOfLines={1}>
                       {quote.availability}
                     </Text>
@@ -1393,6 +1410,9 @@ export default function MicaChat({ navigation, route }: Props) {
                   ]}
                 >
                   {formatMicaOrderAmount(selectedQuote.amount)}
+                </Text>
+                <Text style={styles.selectionPricing}>
+                  {micaQuotePricingSummary(selectedQuote)}
                 </Text>
               </View>
               <View style={styles.selectionSummaryDivider} />
@@ -1903,6 +1923,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 4,
   },
+  quotePricing: {
+    color: "#46727a",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 5,
+  },
   quoteIncluded: {
     color: "#0f8f58",
     fontSize: 11,
@@ -1963,6 +1989,13 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 16,
     fontWeight: "900",
+  },
+  selectionPricing: {
+    color: "#607d82",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 2,
+    maxWidth: 170,
   },
   selectionSummaryDivider: {
     width: 1,
