@@ -158,6 +158,7 @@ const BottomNavBar = ({ unreadMessagesCount: unreadProp }: BottomNavBarProps) =>
     >
       <NavButton name="home-outline" screen="Home" />
       <NavButton name="list-outline" screen="MisServicios" />
+      <NavButton name="calendar-outline" screen="TrabajosPendientes" />
 
       {/*<TouchableOpacity
         onPress={hanndleCenterPress}

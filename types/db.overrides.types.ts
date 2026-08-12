@@ -375,6 +375,37 @@ export type Database = MergeDeep<
           Args: { p_chat_id: string };
           Returns: Json;
         };
+        get_my_service_jobs: {
+          Args: { p_limit?: number };
+          Returns: {
+            payment_record_id: string;
+            chat_id: string;
+            payer_id: string;
+            provider_id: string;
+            is_payer: boolean;
+            is_provider: boolean;
+            counterpart_id: string;
+            counterpart_name: string;
+            counterpart_avatar: string | null;
+            title: string;
+            description: string;
+            amount_total: number;
+            pricing_mode: string;
+            job_status: string;
+            schedule_status: string;
+            schedule_round: number;
+            schedule_proposed_by: string | null;
+            scheduled_start: string | null;
+            scheduled_end: string | null;
+            incident_id: string | null;
+            incident_case_number: string | null;
+            incident_status: string | null;
+            review_rating: number | null;
+            requires_action: boolean;
+            can_close: boolean;
+            created_at: string;
+          }[];
+        };
         propose_service_schedule: {
           Args: {
             p_payment_record_id: string;

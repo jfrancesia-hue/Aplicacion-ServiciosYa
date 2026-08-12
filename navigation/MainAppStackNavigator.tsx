@@ -38,6 +38,7 @@ import ChatListScreen from "../screens/ChatListScreen";
 import MicaChat from "../screens/MicaChat";
 import OperationalDashboard from "../screens/OperationalDashboard";
 import PublicarNecesidad from "../screens/PublicarNecesidad";
+import TrabajosPendientes from "../screens/TrabajosPendientes";
 
 const withSafeArea = <P extends object>(Component: FC<P>) => {
   const WrappedComponent: FC<P> = (props: PropsWithChildren<P>) => (
@@ -70,6 +71,7 @@ export default function MainStackNavigator() {
       <Stack.Screen name="Perfil" component={withSafeArea(Perfil)} />
       <Stack.Screen name="OfrecerServicio" component={OfrecerServicio} />
       <Stack.Screen name="PublicarNecesidad" component={PublicarNecesidad} />
+      <Stack.Screen name="TrabajosPendientes" component={TrabajosPendientes} />
       <Stack.Screen
         name="pagoInicial"
         component={pagoInicial}

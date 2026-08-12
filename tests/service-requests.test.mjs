@@ -46,6 +46,17 @@ const schedulePanel = await readFile(
   new URL("../components/chat/ServiceSchedulePanel.tsx", import.meta.url),
   "utf8",
 );
+const jobsMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812150000_my_pending_jobs_dashboard.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const jobsOverview = await readFile(
+  new URL("../components/jobs/JobsOverview.tsx", import.meta.url),
+  "utf8",
+);
 
 test("las publicaciones manuales reutilizan nuevaOferta con un origen distinguible", () => {
   assert.match(migration, /create_manual_service_request/);
@@ -117,4 +128,16 @@ test("las reprogramaciones conservan rondas y requieren aceptación", () => {
   assert.match(scheduleMigration, /schedule_round = v_proposal\.round/);
   assert.match(scheduleMigration, /schedule_status = 'scheduled'/);
   assert.match(scheduleMigration, /can_replace_expired/);
+});
+
+test("el panel global reúne acciones, agenda, cierres y reclamos de ambos roles", () => {
+  assert.match(
+    jobsMigration,
+    /auth\.uid\(\) in \(payment\.payer_id, payment\.provider_id\)/,
+  );
+  assert.match(jobsMigration, /requires_action boolean/);
+  assert.match(jobsMigration, /incident_case_number/);
+  assert.match(jobsOverview, /Necesitan tu acción/);
+  assert.match(jobsOverview, /Próximos trabajos/);
+  assert.match(jobsOverview, /Reclamos/);
 });

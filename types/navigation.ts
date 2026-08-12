@@ -16,6 +16,7 @@ export type MainStackParamList = {
   Perfil: undefined;
   OfrecerServicio: undefined;
   PublicarNecesidad: undefined;
+  TrabajosPendientes: undefined;
   Configuracion: undefined;
   ServiciosPorCategoria: { categoria: string };
   pagoInicial: undefined;

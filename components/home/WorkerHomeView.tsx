@@ -6,9 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Animated,
-  FlatList,
   ActivityIndicator,
-  Image,
   RefreshControl,
   Modal,
   TextInput,
@@ -16,7 +14,6 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import CategoryList from "./CategoryList";
 import { supabase } from "../../lib/supabase";
@@ -30,6 +27,7 @@ import {
   type QuoteReferenceType,
 } from "../../lib/utils/quotePricing";
 import WorkerState from "./WorkerState";
+import JobsOverview from "../jobs/JobsOverview";
 
 type Tab = "calendario" | "ofertas" | "contratar";
 
@@ -78,7 +76,7 @@ export default function WorkerHomeView({ navigation, onCategoryPress, busqueda =
         <ContratarView navigation={navigation} onCategoryPress={onCategoryPress} busqueda={busqueda} />
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} bounces={true}>
-          {activeTab === "calendario" && <CalendarioView />}
+          {activeTab === "calendario" && <CalendarioView navigation={navigation} />}
           {activeTab === "ofertas" && <OfertasView navigation={navigation} />}
         </ScrollView>
       )}
@@ -86,62 +84,8 @@ export default function WorkerHomeView({ navigation, onCategoryPress, busqueda =
   );
 }
 
-function CalendarioView() {
-  const today = new Date();
-  const month = today.toLocaleString("es", { month: "long", year: "numeric" });
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-  const firstDay = new Date(today.getFullYear(), today.getMonth(), 1).getDay();
-
-  const dayLabels = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-
-  const cells: (number | null)[] = [
-    ...Array(firstDay).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-
-  return (
-    <View style={styles.calendarCard}>
-      <LinearGradient
-        colors={["#069eb3", "#047a8f"]}
-        style={styles.calendarHeader}
-      >
-        <MaterialIcons name="calendar-today" size={28} color="#fff" />
-        <Text style={styles.calendarMonthTitle}>{month.charAt(0).toUpperCase() + month.slice(1)}</Text>
-      </LinearGradient>
-
-      <View style={styles.dayLabelsRow}>
-        {dayLabels.map((d) => (
-          <Text key={d} style={styles.dayLabel}>{d}</Text>
-        ))}
-      </View>
-
-      <View style={styles.daysGrid}>
-        {cells.map((day, idx) => {
-          const isToday = day === today.getDate();
-          return (
-            <View
-              key={idx}
-              style={[styles.dayCell, isToday && styles.dayCellToday]}
-            >
-              {day !== null && (
-                <Text style={[styles.dayNumber, isToday && styles.dayNumberToday]}>
-                  {day}
-                </Text>
-              )}
-            </View>
-          );
-        })}
-      </View>
-
-      <View style={styles.emptyCalendarMsg}>
-        <MaterialIcons name="info-outline" size={22} color="#a8dfe8" />
-        <Text style={styles.emptyCalendarText}>
-          Aquí se van a mostrar tus servicios programados en el calendario.{"\n"}
-          ¡Próximamente disponible!
-        </Text>
-      </View>
-    </View>
-  );
+function CalendarioView({ navigation }: { navigation: any }) {
+  return <JobsOverview navigation={navigation} compact />;
 }
 
 function OfertasView({ navigation }: { navigation: any }) {
@@ -665,84 +609,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 16,
     paddingBottom: 100,
-  },
-  // Calendar
-  calendarCard: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    overflow: "hidden",
-    shadowColor: "#069eb3",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  calendarHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 18,
-    gap: 10,
-  },
-  calendarMonthTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  dayLabelsRow: {
-    flexDirection: "row",
-    paddingHorizontal: 8,
-    paddingTop: 12,
-    paddingBottom: 4,
-  },
-  dayLabel: {
-    flex: 1,
-    textAlign: "center",
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#069eb3",
-  },
-  daysGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    paddingHorizontal: 8,
-    paddingBottom: 8,
-  },
-  dayCell: {
-    width: `${100 / 7}%`,
-    aspectRatio: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 8,
-  },
-  dayCellToday: {
-    backgroundColor: "#069eb3",
-    borderRadius: 50,
-  },
-  dayNumber: {
-    fontSize: 14,
-    color: "#333",
-  },
-  dayNumberToday: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-  emptyCalendarMsg: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 10,
-    margin: 16,
-    backgroundColor: "#f0f8fa",
-    padding: 14,
-    borderRadius: 12,
-    borderLeftWidth: 3,
-    borderLeftColor: "#069eb3",
-  },
-  emptyCalendarText: {
-    flex: 1,
-    color: "#047a8f",
-    fontSize: 13,
-    lineHeight: 20,
   },
   // Placeholder views
   placeholderCard: {
