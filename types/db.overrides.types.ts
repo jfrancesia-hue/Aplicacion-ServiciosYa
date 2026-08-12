@@ -54,6 +54,7 @@ type PresupuestoRow = {
   descripcion: string | null;
   horarios_disponibles: string | null;
   estado: string | null;
+  metadata: Json;
 };
 
 type UsuarioRowOverride = Omit<
@@ -160,6 +161,24 @@ type ServiceJobReviewRow = {
   updated_at: string;
 };
 
+type ServiceJobIncidentRow = {
+  id: string;
+  case_number: string;
+  payment_record_id: string;
+  chat_id: string;
+  reporter_id: string;
+  provider_id: string;
+  category: "provider_no_show" | "work_not_completed" | "other";
+  details: string | null;
+  mica_summary: string | null;
+  status: "mica_intake" | "escalated" | "reviewing" | "resolved" | "dismissed";
+  assigned_to: string | null;
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+};
+
 export type Database = MergeDeep<
   DatabaseGenerated,
   {
@@ -246,6 +265,19 @@ export type Database = MergeDeep<
             rating: number;
           };
           Update: Partial<ServiceJobReviewRow>;
+          Relationships: [];
+        };
+        service_job_incidents: {
+          Row: ServiceJobIncidentRow;
+          Insert: Partial<ServiceJobIncidentRow> & {
+            case_number: string;
+            payment_record_id: string;
+            chat_id: string;
+            reporter_id: string;
+            provider_id: string;
+            category: ServiceJobIncidentRow["category"];
+          };
+          Update: Partial<ServiceJobIncidentRow>;
           Relationships: [];
         };
       };

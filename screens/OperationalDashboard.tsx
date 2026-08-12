@@ -55,15 +55,24 @@ type DashboardSummary = {
 
 type ModerationReport = {
   id: string;
-  source: "profile" | "service";
+  source: "profile" | "service" | "incident";
   provider_id: string;
   reason_category: string;
   details: string | null;
-  status: "pending" | "reviewing" | "resolved" | "dismissed";
+  status:
+    | "pending"
+    | "mica_intake"
+    | "escalated"
+    | "reviewing"
+    | "resolved"
+    | "dismissed";
   service_id: number | null;
   created_at: string;
   providerName: string;
   providerLocation: string;
+  case_number?: string;
+  chat_id?: string;
+  payment_record_id?: string;
 };
 
 const REPORT_REASON_LABELS: Record<string, string> = {
@@ -73,6 +82,8 @@ const REPORT_REASON_LABELS: Record<string, string> = {
   potential_scam: "Posible estafa",
   security_issue: "Problema de seguridad",
   other: "Otro motivo",
+  provider_no_show: "Prestador no se presentó",
+  work_not_completed: "Trabajo no realizado",
 };
 
 const PERIODS = [7, 30, 90] as const;
@@ -581,14 +592,14 @@ export default function OperationalDashboard() {
             <View style={styles.section}>
               <SectionHeader
                 icon="shield-outline"
-                title="Cola de moderación"
-                subtitle="Los datos de quien reportó permanecen protegidos"
+                title="Reclamos y moderación"
+                subtitle="MICA toma el caso inicial y escala aquí lo que requiere a Agustín"
               />
               {reports.length === 0 ? (
                 <View style={styles.emptyModeration}>
                   <Ionicons name="checkmark-circle" size={30} color="#12815e" />
                   <Text style={styles.emptyModerationTitle}>
-                    No hay reportes de perfiles pendientes
+                    No hay reclamos ni reportes pendientes
                   </Text>
                   <Text style={styles.emptyText}>La cola está al día.</Text>
                 </View>
@@ -611,11 +622,18 @@ export default function OperationalDashboard() {
                         </Text>
                       </View>
                       <Text style={styles.reportProvider}>
-                        {report.providerName}
+                        {report.source === "incident" && report.case_number
+                          ? `${report.case_number} · ${report.providerName}`
+                          : report.providerName}
                       </Text>
                       <Text style={styles.reportLocation}>
                         {report.providerLocation}
                       </Text>
+                      {report.source === "incident" ? (
+                        <Text style={styles.reportReference}>
+                          Chat {report.chat_id?.slice(0, 8) ?? "—"} · Pago {report.payment_record_id?.slice(0, 8) ?? "—"}
+                        </Text>
+                      ) : null}
                       {report.details ? (
                         <Text style={styles.reportDetails}>
                           {report.details}
@@ -641,7 +659,7 @@ export default function OperationalDashboard() {
                               style={styles.reviewButton}
                             >
                               <Text style={styles.reviewButtonText}>
-                                Tomar revisión
+                                {report.source === "incident" ? "Tomar caso" : "Tomar revisión"}
                               </Text>
                             </TouchableOpacity>
                           ) : null}
@@ -658,7 +676,7 @@ export default function OperationalDashboard() {
                             style={styles.resolveButton}
                           >
                             <Text style={styles.resolveButtonText}>
-                              Resolver
+                              {report.source === "incident" ? "Cerrar revisión" : "Resolver"}
                             </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
@@ -1127,6 +1145,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: "#5f7b80",
     fontSize: 10,
+  },
+  reportReference: {
+    marginTop: 4,
+    color: "#047a8f",
+    fontSize: 11,
+    fontWeight: "700",
   },
   reportDetails: {
     marginTop: 10,

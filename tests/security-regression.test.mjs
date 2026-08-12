@@ -25,6 +25,21 @@ const operationalDashboard = await readFile(
   ),
   "utf8",
 );
+const paymentPreference = await readFile(
+  new URL("../supabase/functions/create-payment-preference/index.ts", import.meta.url),
+  "utf8",
+);
+const micaOrder = await readFile(
+  new URL("../supabase/functions/mica-order/index.ts", import.meta.url),
+  "utf8",
+);
+const protectedChatMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260812110000_protected_quotes_and_service_incidents.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("el cliente no contiene credenciales ni llama directo a Mercado Pago", () => {
   assert.equal(chatSource.includes(`${["APP", "USR"].join("_")}-`), false);
@@ -49,6 +64,21 @@ test("las funciones de pago exigen JWT", () => {
     supabaseConfig,
     /\[functions\.operational-dashboard\][\s\S]*?verify_jwt = true/,
   );
+});
+
+test("la comisión es 10% tanto en chat directo como en MICA", () => {
+  assert.match(paymentPreference, /COMMISSION_RATE = 0\.1/);
+  assert.match(micaOrder, /quote\.amount \* 0\.1/);
+  assert.doesNotMatch(paymentPreference, /15%|0\.15/);
+  assert.doesNotMatch(micaOrder, /quote\.amount \* 0\.15/);
+});
+
+test("el servidor protege contacto y montos y conserva el canal de reclamos", () => {
+  assert.match(protectedChatMigration, /CHAT_CONTACT_BLOCKED/);
+  assert.match(protectedChatMigration, /CHAT_PRICE_REQUIRES_QUOTE/);
+  assert.match(protectedChatMigration, /CHAT_QUOTE_PROVIDER_ONLY/);
+  assert.match(protectedChatMigration, /report_service_job_incident/);
+  assert.match(protectedChatMigration, /service_job_incidents/);
 });
 
 test("el panel operativo exige rol administrador y no lee conversaciones", () => {

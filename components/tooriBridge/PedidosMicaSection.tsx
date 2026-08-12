@@ -109,6 +109,10 @@ export default function PedidosMicaSection() {
   const [monto, setMonto] = useState("");
   const [horario, setHorario] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [materiales, setMateriales] = useState("A confirmar");
+  const [garantia, setGarantia] = useState("7 días");
+  const [validez, setValidez] = useState("24 horas");
+  const [notas, setNotas] = useState("");
 
   const enabled = isTooriBridgeConfigured();
 
@@ -178,6 +182,10 @@ export default function PedidosMicaSection() {
           amount: montoNumero,
           availability: horario,
           description: descripcion || "Presupuesto enviado desde la app Servicios Ya",
+          materials: materiales,
+          warranty: garantia,
+          validUntil: validez,
+          notes: notas,
         });
       }
 
@@ -191,6 +199,10 @@ export default function PedidosMicaSection() {
       setMonto("");
       setHorario("");
       setDescripcion("");
+      setMateriales("A confirmar");
+      setGarantia("7 días");
+      setValidez("24 horas");
+      setNotas("");
       queryClient.invalidateQueries({
         queryKey: ["tooriBridge", "pedidosDisponibles"],
       });
@@ -298,9 +310,35 @@ export default function PedidosMicaSection() {
               <TextInput
                 value={descripcion}
                 onChangeText={setDescripcion}
-                placeholder="Mensaje breve para el cliente"
+                placeholder="Alcance: qué incluye el trabajo"
                 style={[styles.input, styles.textArea]}
                 multiline
+              />
+              <TextInput
+                value={materiales}
+                onChangeText={setMateriales}
+                placeholder="Materiales incluidos o aparte"
+                style={styles.input}
+              />
+              <View style={styles.compactFields}>
+                <TextInput
+                  value={garantia}
+                  onChangeText={setGarantia}
+                  placeholder="Garantía"
+                  style={[styles.input, styles.compactInput]}
+                />
+                <TextInput
+                  value={validez}
+                  onChangeText={setValidez}
+                  placeholder="Validez"
+                  style={[styles.input, styles.compactInput]}
+                />
+              </View>
+              <TextInput
+                value={notas}
+                onChangeText={setNotas}
+                placeholder="Notas opcionales (sin datos de contacto)"
+                style={styles.input}
               />
               <View style={styles.actionsRow}>
                 <TouchableOpacity
@@ -418,6 +456,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },
+  compactFields: { flexDirection: "row", gap: 8 },
+  compactInput: { flex: 1 },
   actionsRow: { flexDirection: "row", gap: 8 },
   actionButton: {
     flex: 1,

@@ -142,7 +142,7 @@ export default function PasarelaPagoWorker() {
           <Text style={styles.titulo}>Aceptar trabajo</Text>
           <Text style={styles.descripcion}>
             Por ahora los prestadores no pagan para aceptar trabajos. El cobro
-            activo es el 15% al cliente cuando confirma presupuesto.
+            activo es el 10% al cliente cuando confirma presupuesto.
           </Text>
           <Pressable style={styles.boton} onPress={manejarPagoExitoso}>
             <Text style={styles.textoBoton}>Continuar sin cobro</Text>

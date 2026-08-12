@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const HANDOFF_PREFIX = "__TOORI_MICA_HANDOFF_V1__:";
+const QUOTE_PREFIX = "__TOORI_QUOTE__";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +18,7 @@ type BudgetRow = {
   descripcion: string | null;
   estado: string | null;
   estado_confirmacion: string | null;
+  metadata: Record<string, unknown> | null;
 };
 
 type UserProfileRow = {
@@ -62,6 +64,16 @@ function getBearerToken(req: Request) {
 function normalizeAmount(value: number | string | null) {
   const amount = Number(value ?? 0);
   return Number.isFinite(amount) ? Math.max(0, amount) : 0;
+}
+
+function hasExternalContact(value: unknown) {
+  const text = String(value ?? "");
+  return (
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(text) ||
+    /(?:https?:\/\/|www\.|wa\.me\/|t\.me\/|instagram\.com|facebook\.com|messenger\.com)/i.test(text) ||
+    /\b(?:whats?app|telegram|instagram|facebook|messenger)\b|(?:^|\s)@[a-z0-9_.]{3,}/i.test(text) ||
+    /(?:\+?\d[\s().-]*){7,}/.test(text)
+  );
 }
 
 function orderPhase(
@@ -120,7 +132,7 @@ async function loadQuotes(
   const { data: budgetRows, error } = await admin
     .from("presupuestos")
     .select(
-      "id,monto,trabajador_uuid,horarios_disponibles,descripcion,estado,estado_confirmacion",
+      "id,monto,trabajador_uuid,horarios_disponibles,descripcion,estado,estado_confirmacion,metadata",
     )
     .eq("oferta_id", offerId)
     .not("trabajador_uuid", "is", null)
@@ -167,6 +179,10 @@ async function loadQuotes(
   const jobs = (jobsResult.data ?? []) as JobRow[];
 
   return budgets.map((budget) => {
+    const metadata =
+      budget.metadata && typeof budget.metadata === "object"
+        ? budget.metadata
+        : {};
     const workerId = budget.trabajador_uuid as string;
     const profile = profiles.find((item) => item.id === workerId);
     const marketplaceProfile = marketplaceProfiles.find(
@@ -201,6 +217,10 @@ async function loadQuotes(
         budget.horarios_disponibles?.trim() || "Disponibilidad a coordinar",
       description:
         budget.descripcion?.trim() || "Presupuesto enviado desde la app",
+      materials: String(metadata.materials ?? "A confirmar"),
+      warranty: String(metadata.warranty ?? "7 días"),
+      validUntil: String(metadata.validUntil ?? "24 horas"),
+      notes: metadata.notes ? String(metadata.notes) : undefined,
       verified: Boolean(profile?.verificado || marketplaceProfile?.verificado),
       avatar: profile?.foto_perfil || marketplaceProfile?.foto_url || null,
       selected: String(selectedBudgetId ?? "") === String(budget.id),
@@ -354,6 +374,20 @@ Deno.serve(async (req) => {
       if (!isDecline && (responseType !== "budget" || amount <= 0)) {
         return json({ error: "El monto debe ser mayor a cero." }, 400);
       }
+      const protectedDetails = [
+        response?.availability,
+        response?.description,
+        response?.materials,
+        response?.warranty,
+        response?.validUntil,
+        response?.notes,
+      ].join(" ");
+      if (!isDecline && hasExternalContact(protectedDetails)) {
+        return json(
+          { error: "El presupuesto no puede incluir teléfonos, emails, enlaces ni redes sociales." },
+          400,
+        );
+      }
 
       const { data: existingBudget, error: existingBudgetError } = await admin
         .from("presupuestos")
@@ -375,6 +409,15 @@ Deno.serve(async (req) => {
           ? "Prestador no disponible"
           : String(response?.description ?? "").trim() ||
             "Presupuesto enviado desde la app TOORI",
+        metadata: isDecline
+          ? { source: "mica_app" }
+          : {
+              source: "mica_app",
+              materials: String(response?.materials ?? "A confirmar").trim(),
+              warranty: String(response?.warranty ?? "7 días").trim(),
+              validUntil: String(response?.validUntil ?? "24 horas").trim(),
+              notes: String(response?.notes ?? "").trim() || null,
+            },
         estado: isDecline ? "rechazado" : "activo",
         estado_confirmacion: isDecline ? "rechazado" : "pendiente",
       };
@@ -479,14 +522,14 @@ Deno.serve(async (req) => {
       }
 
       const chat = await findOrCreateChat(admin, user.id, quote.workerId);
-      const commission = Math.round(quote.amount * 0.15 * 100) / 100;
+      const commission = Math.round(quote.amount * 0.1 * 100) / 100;
       const now = new Date().toISOString();
 
       const { error: offerUpdateError } = await admin
         .from("nuevaOferta")
         .update({
           presupuesto_seleccionado_id: Number(quote.id),
-          monto_final: commission,
+          monto_final: quote.amount,
           comision: commission,
           paso: 995,
           estado: "completa",
@@ -507,6 +550,39 @@ Deno.serve(async (req) => {
         .eq("id", quote.id)
         .eq("oferta_id", offer.id);
       if (budgetUpdateError) throw budgetUpdateError;
+
+      const quoteContent = `${QUOTE_PREFIX}${JSON.stringify({
+        type: "quote",
+        amount: quote.amount,
+        scope: quote.description,
+        materials: quote.materials,
+        timeframe: quote.availability,
+        warranty: quote.warranty,
+        validUntil: quote.validUntil,
+        notes: quote.notes,
+        source: "mica",
+        sourceBudgetId: quote.id,
+        createdAt: now,
+      })}`;
+      const existingQuoteMessages = await admin
+        .from("mensajes")
+        .select("id,contenido")
+        .eq("chat_id", chat.id)
+        .eq("remitente_id", quote.workerId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      let quoteMessageId = existingQuoteMessages.data?.find((message: { id: string; contenido: string | null }) =>
+        String(message.contenido ?? "").includes(`\"sourceBudgetId\":\"${quote.id}\"`),
+      )?.id;
+      if (!quoteMessageId) {
+        const insertedQuote = await admin.from("mensajes").insert({
+          chat_id: chat.id,
+          remitente_id: quote.workerId,
+          contenido: quoteContent,
+        }).select("id").single();
+        if (insertedQuote.error || !insertedQuote.data) throw insertedQuote.error;
+        quoteMessageId = insertedQuote.data.id;
+      }
 
       const handoffText = [
         `Pedido: ${offer.categoria ?? "Servicio"}`,
@@ -555,6 +631,7 @@ Deno.serve(async (req) => {
           providerName: quote.name,
         },
         quote: { ...quote, selected: true },
+        quoteMessageId,
       });
     }
 

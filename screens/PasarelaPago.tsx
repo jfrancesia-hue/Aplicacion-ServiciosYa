@@ -20,7 +20,7 @@ export default function PasarelaPago() {
         <Text style={styles.title}>Sin pago por adelantado</Text>
         <Text style={styles.body}>
           Por ahora no cobramos registro, creditos ni planes para pedir servicios.
-          El unico cobro activo es el 15% cuando el cliente confirma un
+          El único cobro activo es el 10% cuando el cliente confirma un
           presupuesto dentro del chat.
         </Text>
         {!!categoria && (

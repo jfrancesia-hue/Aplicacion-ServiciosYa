@@ -1,7 +1,6 @@
 import React, { useCallback, useRef, useEffect, memo } from "react";
 import CustomTextInput from "../inputs/CustomTextInput";
-import { TouchableOpacity, View, StyleSheet, Text, Modal, TextInput, KeyboardAvoidingView, Platform, Animated, ScrollView, ActivityIndicator, Alert } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { TouchableOpacity, View, StyleSheet, Text, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Audio } from "expo-av";
@@ -10,6 +9,7 @@ import {
   CHAT_AUDIO_MAX_SECONDS,
   formatAudioDuration,
 } from "../../lib/utils/audioMessage";
+import { inspectChatContent, inspectChatText } from "../../lib/utils/chatPolicy";
 
 interface ChatInputBarProps {
   onSend: (message: string) => void | Promise<void>;
@@ -19,9 +19,11 @@ interface ChatInputBarProps {
     mimeType: string;
   }) => void | Promise<void>;
   serviceId?: string;
+  canSendQuote?: boolean;
+  contentProtectionActive?: boolean;
 }
 
-function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
+function ChatInputBar({ onSend, onSendAudio, canSendQuote = false, contentProtectionActive = true }: ChatInputBarProps) {
   const [message, setMessage] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendingAudio, setSendingAudio] = React.useState(false);
@@ -37,8 +39,6 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
   const [notas, setNotas] = React.useState("");
   const [enviandoPresupuesto, setEnviandoPresupuesto] = React.useState(false);
 
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const shimmerAnim = useRef(new Animated.Value(-1)).current;
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingStartedAtRef = useRef(0);
 
@@ -124,20 +124,6 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
   }, [sendingAudio]);
 
   useEffect(() => {
-    // Pulso suave de escala
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.025, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-      ])
-    ).start();
-    // Efecto shimmer de izquierda a derecha
-    Animated.loop(
-      Animated.timing(shimmerAnim, { toValue: 2, duration: 2000, delay: 600, useNativeDriver: true })
-    ).start();
-  }, []);
-
-  useEffect(() => {
     if (!isRecording) return;
 
     const interval = setInterval(() => {
@@ -165,8 +151,12 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
 
   const handleSend = async () => {
     if (!message.trim() || sending) return;
-    if (/\d/.test(message)) {
-      alert("No podés enviar números en el chat. Usá el botón \"Enviar presupuesto\" para eso.");
+    const policy = inspectChatText(message);
+    if (contentProtectionActive && !policy.allowed) {
+      Alert.alert(
+        policy.reason === "price" ? "Usá Crear presupuesto" : "Cuidemos el contacto",
+        policy.message,
+      );
       return;
     }
 
@@ -192,45 +182,23 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
 
   return (
     <>
-      {/* Botón enviar presupuesto */}
-      <Animated.View style={[styles.presupuestoBtnWrapper, { transform: [{ scale: pulseAnim }] }]}>
-        <TouchableOpacity onPress={() => setPresupuestoVisible(true)} activeOpacity={0.82}>
-          <LinearGradient
-            colors={["#00c2d4", "#007fa8"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.presupuestoBtn}
-          >
-            <MaterialIcons name="attach-money" size={22} color="#fff" />
-            <Text style={styles.presupuestoBtnText}>Enviar presupuesto</Text>
-            <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.7)" style={{ marginLeft: "auto" }} />
-            {/* Shimmer sweep */}
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                StyleSheet.absoluteFillObject,
-                {
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  transform: [{
-                    translateX: shimmerAnim.interpolate({
-                      inputRange: [-1, 2],
-                      outputRange: [-220, 440],
-                    }),
-                  }],
-                },
-              ]}
-            >
-              <LinearGradient
-                colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.22)", "rgba(255,255,255,0)"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ width: 80, height: "100%" }}
-              />
-            </Animated.View>
-          </LinearGradient>
+      {canSendQuote ? (
+        <TouchableOpacity
+          accessibilityLabel="Crear presupuesto"
+          activeOpacity={0.8}
+          onPress={() => setPresupuestoVisible(true)}
+          style={styles.presupuestoBtn}
+        >
+          <View style={styles.presupuestoIcon}>
+            <MaterialIcons name="receipt-long" size={18} color="#047a8f" />
+          </View>
+          <View style={styles.presupuestoCopy}>
+            <Text style={styles.presupuestoBtnText}>Crear presupuesto</Text>
+            <Text style={styles.presupuestoHint}>Monto, alcance y garantía</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={20} color="#047a8f" />
         </TouchableOpacity>
-      </Animated.View>
+      ) : null}
 
       <View style={styles.inputBarContainer}>
         {isRecording ? (
@@ -405,7 +373,7 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
                   if (!monto || !alcance.trim()) return;
                   setEnviandoPresupuesto(true);
                   try {
-                    await onSend(createQuoteMessage({
+                    const quoteContent = createQuoteMessage({
                       amount: Number(monto),
                       scope: alcance.trim(),
                       materials: materiales.trim() || "A confirmar",
@@ -413,7 +381,14 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
                       warranty: garantia.trim() || "Sin garantia especificada",
                       validUntil: validez.trim() || "24 horas",
                       notes: notas.trim() || undefined,
-                    }));
+                      source: "chat",
+                    });
+                    const policy = inspectChatContent(quoteContent);
+                    if (contentProtectionActive && !policy.allowed) {
+                      Alert.alert("Revisá el presupuesto", policy.message);
+                      return;
+                    }
+                    await onSend(quoteContent);
                     setPresupuestoVisible(false);
                     resetQuoteForm();
                   } finally {
@@ -511,27 +486,30 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#fff1f0",
   },
-  presupuestoBtnWrapper: {
-    marginHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 2,
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 4,
-    shadowColor: "#007fa8",
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 8,
-  },
   presupuestoBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#a9dce3",
+    backgroundColor: "#f4fcfd",
   },
-  presupuestoBtnText: { fontSize: 15, fontWeight: "800", color: "#fff", letterSpacing: 0.2 },
+  presupuestoIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#dff5f7",
+  },
+  presupuestoCopy: { flex: 1, marginLeft: 10 },
+  presupuestoBtnText: { fontSize: 14, fontWeight: "800", color: "#075f6f" },
+  presupuestoHint: { fontSize: 11, color: "#638087", marginTop: 1 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(7,18,28,0.58)", justifyContent: "center", alignItems: "center", padding: 18 },
   modalBox: { backgroundColor: "#fff", borderRadius: 8, padding: 16, width: "100%", maxWidth: 440, maxHeight: "88%", shadowColor: "#000", shadowOpacity: 0.16, shadowOffset: { width: 0, height: 8 }, shadowRadius: 18, elevation: 8 },
   modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },

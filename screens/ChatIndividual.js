@@ -39,6 +39,7 @@ import TrustSafetyModal from "../components/trust/TrustSafetyModal";
 import { useNavigation } from "@react-navigation/native";
 import vexo from "../lib/vexo";
 import { getPaymentReturnParam } from "../lib/utils/paymentReturn";
+import { inspectChatContent, inspectChatText } from "../lib/utils/chatPolicy";
 
 const CHAT_PAGE_SIZE = 40;
 
@@ -63,6 +64,8 @@ function ChatIndividual({ route }) {
   const [transcriptEditor, setTranscriptEditor] = useState(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [servicioData, setServicioData] = useState(servicio || {});
+  const [canSendQuote, setCanSendQuote] = useState(false);
+  const [reportandoIncidente, setReportandoIncidente] = useState(false);
   const processingPaymentReturn = useRef(null);
   const flatListRef = useRef(null);
   const messageChannelRef = useRef(null);
@@ -71,6 +74,9 @@ function ChatIndividual({ route }) {
       ? usuarioId2
       : usuarioId1
     : usuarioId1 || usuarioId2;
+  const chatUnlocked =
+    jobStatus?.status === "approved" &&
+    ["confirmed", "completed", "disputed"].includes(jobStatus?.job_status);
 
   const cargarEstadoTrabajo = useCallback(async () => {
     try {
@@ -225,6 +231,15 @@ function ChatIndividual({ route }) {
       if (!isMounted) return;
 
       setUsuarioId(user.id);
+      const [{ data: appProfile }, { data: marketplaceProfile }] =
+        await Promise.all([
+          supabase.from("usuarios").select("rol").eq("id", user.id).maybeSingle(),
+          supabase.from("sy_perfiles").select("rol").eq("id", user.id).maybeSingle(),
+        ]);
+      setCanSendQuote(
+        String(appProfile?.rol ?? "").toLowerCase() === "worker" ||
+          String(marketplaceProfile?.rol ?? "").toLowerCase() === "prestador",
+      );
       await cargarMensajes(user.id);
       suscribirRealtime(user.id);
     };
@@ -369,22 +384,36 @@ function ChatIndividual({ route }) {
   const enviarMensaje = useCallback(async (mensaje) => {
     if (!mensaje.trim() || !usuarioId) return;
 
+    const cleanMessage = mensaje.trim();
+    const quote = parseQuoteMessage(cleanMessage);
+    if (quote && !canSendQuote) {
+      throw new Error("Solo el prestador puede crear un presupuesto.");
+    }
+    const policy = inspectChatContent(cleanMessage);
+    if (!chatUnlocked && !policy.allowed) throw new Error(policy.message);
+
     const { error } = await supabase.from("mensajes").insert({
       chat_id: chatId,
       remitente_id: usuarioId,
-      contenido: mensaje.trim(),
+      contenido: cleanMessage,
     });
 
     if (error) {
       console.error("Error al enviar mensaje:", error.message);
       throw new Error(
-        error.message?.includes("CHAT_BLOCKED")
-          ? "La conversación está bloqueada y no admite mensajes nuevos."
-          : "No se pudo enviar el mensaje. Intentá nuevamente.",
+        error.message?.includes("CHAT_CONTACT_BLOCKED")
+          ? "No se pueden compartir datos de contacto antes de confirmar el servicio."
+          : error.message?.includes("CHAT_PRICE_REQUIRES_QUOTE")
+            ? "Para hablar de montos, el prestador debe usar Crear presupuesto."
+            : error.message?.includes("CHAT_QUOTE_PROVIDER_ONLY")
+              ? "Solo el prestador puede crear un presupuesto."
+              : error.message?.includes("CHAT_BLOCKED")
+                ? "La conversación está bloqueada y no admite mensajes nuevos."
+                : "No se pudo enviar el mensaje. Intentá nuevamente.",
       );
     }
 
-    if (parseQuoteMessage(mensaje.trim())) {
+    if (quote) {
       vexo.marketplace("quote_sent", {
         categoria: servicioData?.categoria || servicioData?.titulo || "sin_categoria",
       });
@@ -394,7 +423,7 @@ function ChatIndividual({ route }) {
       .from("chats")
       .update({ updated_at: new Date().toISOString() })
       .eq("id", chatId);
-  }, [usuarioId, chatId, servicioData?.categoria, servicioData?.titulo]);
+  }, [usuarioId, chatId, canSendQuote, chatUnlocked, servicioData?.categoria, servicioData?.titulo]);
 
   const enviarAudio = useCallback(async ({
     uri,
@@ -456,6 +485,28 @@ function ChatIndividual({ route }) {
       transcript = transcriptionData.transcript;
     }
 
+    const descartarAudio = () =>
+      supabase.functions.invoke("chat-audio", {
+        body: { action: "discard", chatId, path: ticket.path },
+      });
+
+    const isConfirmed =
+      jobStatus?.status === "approved" &&
+      ["confirmed", "completed", "disputed"].includes(jobStatus?.job_status);
+    if (!isConfirmed) {
+      if (!transcript?.trim()) {
+        await descartarAudio();
+        throw new Error(
+          "Antes de aceptar el presupuesto, los audios necesitan transcripción para mantener protegido el chat.",
+        );
+      }
+      const policy = inspectChatText(transcript);
+      if (!policy.allowed) {
+        await descartarAudio();
+        throw new Error(policy.message);
+      }
+    }
+
     const contenido = createAudioMessageContent({
       path: ticket.path,
       durationMs,
@@ -470,6 +521,7 @@ function ChatIndividual({ route }) {
     });
 
     if (messageError) {
+      await descartarAudio();
       throw new Error(
         messageError.message?.includes("CHAT_BLOCKED")
           ? "El audio se guardó, pero la conversación está bloqueada."
@@ -495,7 +547,7 @@ function ChatIndividual({ route }) {
       .from("chats")
       .update({ updated_at: new Date().toISOString() })
       .eq("id", chatId);
-  }, [chatId, usuarioId]);
+  }, [chatId, usuarioId, jobStatus?.status, jobStatus?.job_status]);
 
   const sanitizeMicaContext = (value) =>
     String(value ?? "")
@@ -776,7 +828,7 @@ function ChatIndividual({ route }) {
         ) : (
           <Text style={styles.textoMensaje}>{item.contenido}</Text>
         )}
-        {esPresupuesto && !esMio && (
+        {esPresupuesto && !esMio && jobStatus?.status !== "approved" && (
           <TouchableOpacity
             style={styles.pagarBtn}
             onPress={() => pagarPresupuesto(item.id)}
@@ -785,7 +837,7 @@ function ChatIndividual({ route }) {
           >
             <Ionicons name="card-outline" size={15} color="#fff" />
             <Text style={styles.pagarBtnText}>
-              {pagando ? 'Procesando...' : `Confirmar presupuesto en la app ($${Math.round(calculateServiceConfirmationFee(montoNumerico)).toLocaleString('es-AR')})`}
+              {pagando ? 'Procesando...' : `Aceptar y pagar 10% ($${Math.round(calculateServiceConfirmationFee(montoNumerico)).toLocaleString('es-AR')})`}
             </Text>
           </TouchableOpacity>
         )}
@@ -910,6 +962,65 @@ function ChatIndividual({ route }) {
     }
   };
 
+  const reportarIncidente = useCallback((category) => {
+    if (!jobStatus?.payment_record_id || reportandoIncidente) return;
+    const label =
+      category === "provider_no_show"
+        ? "El prestador no se presentó"
+        : "El trabajo no se realizó";
+    Alert.alert(
+      "Abrir reclamo con MICA",
+      `${label}. MICA registrará el caso y, si requiere intervención humana, lo enviará a la bandeja operativa de Agustín.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Abrir reclamo",
+          style: "destructive",
+          onPress: async () => {
+            setReportandoIncidente(true);
+            try {
+              const { data, error } = await supabase.rpc(
+                "report_service_job_incident",
+                {
+                  p_payment_record_id: jobStatus.payment_record_id,
+                  p_category: category,
+                  p_details: label,
+                },
+              );
+              if (error || !data?.ok) {
+                throw new Error(error?.message || "No se pudo registrar el reclamo.");
+              }
+              await cargarEstadoTrabajo();
+              Alert.alert(
+                "Reclamo registrado",
+                `MICA abrió el caso ${data.case_number}. Quedó en revisión y también aparecerá en la bandeja operativa de Agustín.`,
+              );
+            } catch (error) {
+              Alert.alert(
+                "No se pudo abrir el reclamo",
+                error instanceof Error ? error.message : "Intentá nuevamente.",
+              );
+            } finally {
+              setReportandoIncidente(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [cargarEstadoTrabajo, jobStatus?.payment_record_id, reportandoIncidente]);
+
+  const elegirTipoIncidente = useCallback(() => {
+    Alert.alert(
+      "¿Qué pasó con el servicio?",
+      "MICA puede iniciar el reclamo sin cerrar el trabajo ni ordenar un reembolso automático.",
+      [
+        { text: "No se presentó", onPress: () => reportarIncidente("provider_no_show") },
+        { text: "No se realizó", onPress: () => reportarIncidente("work_not_completed") },
+        { text: "Cancelar", style: "cancel" },
+      ],
+    );
+  }, [reportarIncidente]);
+
   return (
     <>
       <BotonVolver />
@@ -962,6 +1073,8 @@ function ChatIndividual({ route }) {
                 {jobStatus ? (
                   <JobStatusBanner
                     status={jobStatus}
+                    reporting={reportandoIncidente}
+                    onReportIssue={elegirTipoIncidente}
                     onReview={() => {
                       setEstrellas(0);
                       setComentarioCalificacion("");
@@ -1003,6 +1116,8 @@ function ChatIndividual({ route }) {
             serviceId={servicioId}
             onSend={enviarMensaje}
             onSendAudio={enviarAudio}
+            canSendQuote={canSendQuote}
+            contentProtectionActive={!chatUnlocked}
           />
         )}
 
@@ -1162,14 +1277,17 @@ function QuoteRow({ icon, label, value }) {
   );
 }
 
-function JobStatusBanner({ status, onReview }) {
+function JobStatusBanner({ status, onReview, onReportIssue, reporting }) {
   const completed = status.job_status === "completed";
+  const disputed = status.job_status === "disputed";
+  const incidentClosed = ["resolved", "dismissed"].includes(status.incident_status);
   const amount = Number(status.amount_total ?? 0);
   return (
     <View
       style={[
         jobStyles.container,
         completed && jobStyles.containerCompleted,
+        disputed && jobStyles.containerDisputed,
       ]}
     >
       <View
@@ -1179,19 +1297,21 @@ function JobStatusBanner({ status, onReview }) {
         ]}
       >
         <Ionicons
-          name={completed ? "checkmark-done" : "shield-checkmark"}
+          name={completed ? "checkmark-done" : disputed ? "alert-circle" : "shield-checkmark"}
           size={19}
           color="#fff"
         />
       </View>
       <View style={jobStyles.copy}>
         <Text style={jobStyles.eyebrow}>
-          {completed ? "TRABAJO VERIFICADO" : "SERVICIO CONFIRMADO"}
+          {completed ? "TRABAJO VERIFICADO" : disputed ? incidentClosed ? "RECLAMO REVISADO" : "RECLAMO EN REVISIÓN" : "SERVICIO CONFIRMADO"}
         </Text>
         <Text style={jobStyles.title}>
           {completed
             ? "Trabajo terminado dentro de la app"
-            : "El presupuesto quedó confirmado"}
+            : disputed
+              ? `Caso ${status.incident_case_number ?? "abierto"} ${incidentClosed ? "cerrado por soporte" : "derivado a soporte"}`
+              : "El presupuesto quedó confirmado"}
         </Text>
         <Text style={jobStyles.text}>
           {amount > 0
@@ -1201,6 +1321,10 @@ function JobStatusBanner({ status, onReview }) {
             ? status.rating
               ? `Calificación registrada: ${status.rating}/5.`
               : "El cierre quedó registrado."
+            : disputed
+              ? incidentClosed
+                ? "La revisión humana finalizó. El pago conserva su historial y no se reembolsa automáticamente."
+                : "MICA reunió el contexto y el equipo operativo puede tomar el caso desde su bandeja."
             : status.is_payer
               ? "Cuando finalice, cerralo y calificá al prestador."
               : "El cliente podrá cerrarlo y calificar al finalizar."}
@@ -1214,6 +1338,19 @@ function JobStatusBanner({ status, onReview }) {
             <Ionicons name="star-outline" size={16} color="#fff" />
             <Text style={jobStyles.reviewButtonText}>
               Finalizar y calificar
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+        {status.is_payer && status.job_status === "confirmed" ? (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            disabled={reporting}
+            onPress={onReportIssue}
+            style={jobStyles.issueButton}
+          >
+            <Ionicons name="help-circle-outline" size={15} color="#8a4b08" />
+            <Text style={jobStyles.issueButtonText}>
+              {reporting ? "Abriendo reclamo..." : "¿No se presentó o hubo un problema?"}
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -1237,6 +1374,10 @@ const jobStyles = StyleSheet.create({
   containerCompleted: {
     borderColor: "#bde4d5",
     backgroundColor: "#edf9f4",
+  },
+  containerDisputed: {
+    borderColor: "#f0c78a",
+    backgroundColor: "#fff8e8",
   },
   icon: {
     width: 36,
@@ -1286,12 +1427,26 @@ const jobStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
   },
+  issueButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+    paddingVertical: 5,
+  },
+  issueButtonText: {
+    color: "#8a4b08",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
 });
 
 function ChatRules() {
   const rules = [
     { icon: "🔢", text: "No compartas teléfonos ni datos de contacto externos. Coordiná todo dentro del chat seguro." },
-    { icon: "💰", text: "Para acordar un precio, usá el botón \"Enviar presupuesto\". El pago se gestiona dentro de la app." },
+    { icon: "💬", text: "Podés conversar y pedir aclaraciones antes de aceptar. Mantené toda la coordinación dentro de este chat." },
+    { icon: "💰", text: "El prestador envía el monto con \"Crear presupuesto\". Al aceptar, el cliente paga la comisión del 10% dentro de la app." },
     { icon: "🤝", text: "Tratá con respeto a todos los usuarios. El lenguaje ofensivo puede resultar en una suspensión." },
     { icon: "🔒", text: "No compartas contraseñas, datos bancarios ni información personal sensible." },
     { icon: "⚠️", text: "Los acuerdos fuera de la plataforma no tienen cobertura ni garantía de Servicios Ya." },

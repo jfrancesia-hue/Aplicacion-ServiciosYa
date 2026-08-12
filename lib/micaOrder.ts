@@ -9,6 +9,10 @@ export type MicaOrderQuote = {
   jobs: number;
   availability: string;
   description: string;
+  materials: string;
+  warranty: string;
+  validUntil: string;
+  notes?: string;
   verified: boolean;
   avatar?: string | null;
   selected: boolean;
@@ -38,6 +42,7 @@ export type MicaOrderSelection = {
     providerName: string;
   };
   quote: MicaOrderQuote;
+  quoteMessageId: string;
 };
 
 async function invokeMicaOrder<T>(body: Record<string, unknown>) {
@@ -73,6 +78,10 @@ export function respondToMicaOrder(
         amount: number;
         availability?: string;
         description?: string;
+        materials?: string;
+        warranty?: string;
+        validUntil?: string;
+        notes?: string;
       }
     | { type: "decline" },
 ) {

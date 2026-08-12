@@ -153,6 +153,15 @@ Deno.serve(async (req) => {
       return json({ error: "Ruta de audio inválida." }, 400);
     }
 
+    if (action === "discard") {
+      if (!path.startsWith(`${chatId}/${user.id}/`)) {
+        return json({ error: "Solo podés descartar tus propios audios." }, 403);
+      }
+      const { error } = await admin.storage.from(BUCKET).remove([path]);
+      if (error) return json({ error: "No se pudo descartar el audio." }, 500);
+      return json({ ok: true });
+    }
+
     if (action === "signed-url") {
       const { data, error } = await admin.storage
         .from(BUCKET)

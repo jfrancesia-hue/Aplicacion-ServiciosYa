@@ -16,7 +16,7 @@ export default function PagoInicial() {
         <Text style={styles.title}>No hay pago inicial</Text>
         <Text style={styles.body}>
           El registro queda habilitado sin cobro. En esta etapa, Servicios Ya cobra
-          solo el 15% cuando el cliente confirma un presupuesto enviado por un
+          solo el 10% cuando el cliente confirma un presupuesto enviado por un
           profesional.
         </Text>
         <TouchableOpacity

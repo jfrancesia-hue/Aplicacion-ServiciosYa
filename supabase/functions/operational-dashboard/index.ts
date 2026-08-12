@@ -85,6 +85,19 @@ type LegacyReportRow = {
   created_at: string | null;
 };
 
+type IncidentRow = {
+  id: string;
+  case_number: string;
+  payment_record_id: string;
+  chat_id: string;
+  provider_id: string;
+  category: string;
+  details: string | null;
+  mica_summary: string | null;
+  status: string;
+  created_at: string;
+};
+
 type ServiceOwnerRow = {
   id: number;
   user_id: string | null;
@@ -173,6 +186,7 @@ async function buildSummary(
     messagesResult,
     profileReportsResult,
     legacyReportsResult,
+    incidentsResult,
     paymentsResult,
     eventsResult,
     reviewsResult,
@@ -204,6 +218,10 @@ async function buildSummary(
       .select("id", { count: "exact", head: true })
       .in("status", ["pending", "reviewing"]),
     admin
+      .from("service_job_incidents")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["mica_intake", "escalated", "reviewing"]),
+    admin
       .from("service_confirmation_payments")
       .select("status,job_status,created_at")
       .gte("created_at", periodStart)
@@ -234,6 +252,7 @@ async function buildSummary(
     messagesResult.error,
     profileReportsResult.error,
     legacyReportsResult.error,
+    incidentsResult.error,
     paymentsResult.error,
     eventsResult.error,
     reviewsResult.error,
@@ -340,7 +359,9 @@ async function buildSummary(
       chatsInPeriod: chatsResult.count ?? 0,
       messagesLast24Hours: messagesResult.count ?? 0,
       openReports:
-        (profileReportsResult.count ?? 0) + (legacyReportsResult.count ?? 0),
+        (profileReportsResult.count ?? 0) +
+        (legacyReportsResult.count ?? 0) +
+        (incidentsResult.count ?? 0),
       reviewsInPeriod: reviewsResult.count ?? 0,
       measuredResponseProviders: measuredResponseProviders.length,
       averageResponseMinutes,
@@ -353,7 +374,7 @@ async function buildSummary(
 }
 
 async function getReports(admin: ReturnType<typeof createClient>) {
-  const [profileResult, legacyResult] = await Promise.all([
+  const [profileResult, legacyResult, incidentResult] = await Promise.all([
     admin
       .from("profile_reports")
       .select(
@@ -368,12 +389,20 @@ async function getReports(admin: ReturnType<typeof createClient>) {
       .in("status", ["pending", "reviewing"])
       .order("created_at", { ascending: false })
       .limit(50),
+    admin
+      .from("service_job_incidents")
+      .select("id,case_number,payment_record_id,chat_id,provider_id,category,details,mica_summary,status,created_at")
+      .in("status", ["mica_intake", "escalated", "reviewing"])
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
   if (profileResult.error) throw profileResult.error;
   if (legacyResult.error) throw legacyResult.error;
+  if (incidentResult.error) throw incidentResult.error;
 
   const profileReports = (profileResult.data ?? []) as ReportRow[];
   const legacyReports = (legacyResult.data ?? []) as LegacyReportRow[];
+  const incidents = (incidentResult.data ?? []) as IncidentRow[];
   const serviceIds = Array.from(
     new Set(legacyReports.map((report) => report.service_id)),
   );
@@ -403,6 +432,19 @@ async function getReports(admin: ReturnType<typeof createClient>) {
         source: "service" as const,
       };
     }),
+    ...incidents.map((incident) => ({
+      id: incident.id,
+      source: "incident" as const,
+      provider_id: incident.provider_id,
+      reason_category: incident.category,
+      details: [incident.mica_summary, incident.details].filter(Boolean).join("\n"),
+      status: incident.status,
+      service_id: null,
+      created_at: incident.created_at,
+      case_number: incident.case_number,
+      chat_id: incident.chat_id,
+      payment_record_id: incident.payment_record_id,
+    })),
   ]
     .sort(
       (a, b) =>
@@ -448,10 +490,15 @@ async function updateReport(
   reportId: unknown,
   status: unknown,
   source: unknown,
+  adminUserId?: string,
 ) {
   const cleanId = String(reportId ?? "").trim();
   const cleanStatus = String(status ?? "").trim();
-  const table = source === "service" ? "reports" : "profile_reports";
+  const table = source === "service"
+    ? "reports"
+    : source === "incident"
+      ? "service_job_incidents"
+      : "profile_reports";
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       cleanId,
@@ -461,9 +508,19 @@ async function updateReport(
     return json({ error: "Datos de moderación inválidos." }, 400);
   }
 
+  const updatePayload = source === "incident"
+    ? {
+        status: cleanStatus,
+        assigned_to: cleanStatus === "reviewing" ? adminUserId : undefined,
+        resolved_at: ["resolved", "dismissed"].includes(cleanStatus)
+          ? new Date().toISOString()
+          : null,
+        updated_at: new Date().toISOString(),
+      }
+    : { status: cleanStatus };
   const { data, error } = await admin
     .from(table)
-    .update({ status: cleanStatus })
+    .update(updatePayload)
     .eq("id", cleanId)
     .select("id,status")
     .maybeSingle();
@@ -505,7 +562,7 @@ Deno.serve(async (req) => {
       return json(await getReports(admin));
     }
     if (action === "update-report") {
-      return updateReport(admin, body?.reportId, body?.status, body?.source);
+      return updateReport(admin, body?.reportId, body?.status, body?.source, currentAdmin.id);
     }
 
     return json({ error: "Acción no permitida." }, 400);

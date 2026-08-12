@@ -1,7 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const QUOTE_PREFIX = "__TOORI_QUOTE__";
-const COMMISSION_RATE = 0.15;
+const COMMISSION_RATE = 0.1;
 const MIN_QUOTE_ARS = 100;
 const MAX_QUOTE_ARS = 100_000_000;
 
@@ -197,7 +197,7 @@ Deno.serve(async (req) => {
             {
               id: `service-confirmation-${messageId}`,
               title: "Confirmación de presupuesto - ServiciosYa",
-              description: "Comisión del 15% por confirmación dentro de la app",
+              description: "Comisión del 10% por confirmación dentro de la app",
               quantity: 1,
               unit_price: commissionAmount,
               currency_id: "ARS",

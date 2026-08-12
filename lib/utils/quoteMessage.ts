@@ -7,6 +7,8 @@ export type QuoteMessage = {
   warranty: string;
   validUntil: string;
   notes?: string;
+  source?: "chat" | "mica";
+  sourceBudgetId?: string;
   createdAt: string;
 };
 
