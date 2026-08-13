@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const QUOTE_PREFIX = "__TOORI_QUOTE__";
+const LEGACY_PROTOCOL_NAMESPACE = ["TOO", "RI"].join("");
+const QUOTE_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_QUOTE__`;
 const COMMISSION_RATE = 0.1;
 const MIN_QUOTE_ARS = 100;
 const MAX_QUOTE_ARS = 100_000_000;

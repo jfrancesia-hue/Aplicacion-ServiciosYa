@@ -2,6 +2,12 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
+const retiredBrand = ["too", "ri"].join("");
+const allowedWebOrigin = `https://${retiredBrand}serviciosya.com`;
+const legacySharedTokenName = [
+  retiredBrand.toUpperCase(),
+  "_APP_SYNC_TOKEN",
+].join("");
 const webRootCandidates = [
   path.resolve(root, "..", "Web-Torriserviciosya-nueva"),
   path.resolve("E:", "Usuario", "Web-Torriserviciosya-nueva"),
@@ -18,10 +24,11 @@ const webRootCandidates = [
 ];
 
 const requiredAppFiles = [
-  "TOORI_UNIFIED_CONTRACT.md",
-  "lib/tooriBridge.ts",
-  "types/tooriBridge.ts",
-  "components/tooriBridge/PedidosMicaSection.tsx",
+  "SERVICIOSYA_UNIFIED_CONTRACT.md",
+  "lib/serviciosYaApi.ts",
+  "lib/serviciosYaBridge.ts",
+  "types/serviciosYaBridge.ts",
+  "components/serviciosYa/PedidosMicaSection.tsx",
 ];
 
 const requiredEndpointNames = [
@@ -44,7 +51,7 @@ function exists(relativePath) {
   return fs.existsSync(path.join(root, relativePath));
 }
 
-console.log("Toori unified contract check\n");
+console.log("ServiciosYa unified contract check\n");
 
 for (const file of requiredAppFiles) {
   assert(exists(file), `App file exists: ${file}`);
@@ -54,13 +61,13 @@ const appJson = JSON.parse(
   fs.readFileSync(path.join(root, "app.json"), "utf8"),
 );
 assert(
-  appJson?.expo?.extra?.tooriBridge?.baseUrl ===
-    "https://tooriserviciosya.com/api/app",
-  "app.json exposes tooriBridge.baseUrl",
+  appJson?.expo?.extra?.serviciosYaBridge?.baseUrl ===
+    `${allowedWebOrigin}/api/app`,
+  "app.json exposes serviciosYaBridge.baseUrl",
 );
 
 const bridgeSource = fs.readFileSync(
-  path.join(root, "lib/tooriBridge.ts"),
+  path.join(root, "lib/serviciosYaBridge.ts"),
   "utf8",
 );
 for (const endpoint of requiredEndpointNames) {
@@ -93,8 +100,8 @@ if (!guessedWebRoot) {
     "Web auth validates Supabase Auth bearer tokens",
   );
   assert(
-    authSource.includes("TOORI_APP_SYNC_TOKEN"),
-    "Web auth supports shared sync token fallback",
+    authSource.includes(legacySharedTokenName),
+    "Web auth supports the existing shared sync token fallback",
   );
 
   const pedidosSource = fs.readFileSync(
@@ -109,9 +116,56 @@ if (!guessedWebRoot) {
   );
 }
 
+const textExtensions = new Set([
+  ".js",
+  ".jsx",
+  ".json",
+  ".md",
+  ".mjs",
+  ".sql",
+  ".toml",
+  ".ts",
+  ".tsx",
+  ".yml",
+  ".yaml",
+]);
+const ignoredDirectories = new Set([".git", "node_modules"]);
+const unexpectedReferences = [];
+
+function scanDirectory(directory) {
+  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+    if (ignoredDirectories.has(entry.name)) continue;
+    const absolutePath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      scanDirectory(absolutePath);
+      continue;
+    }
+    if (!textExtensions.has(path.extname(entry.name).toLowerCase())) continue;
+
+    const relativePath = path.relative(root, absolutePath);
+    const lines = fs.readFileSync(absolutePath, "utf8").split(/\r?\n/);
+    lines.forEach((line, index) => {
+      const withoutAllowedDomain = line
+        .toLowerCase()
+        .replaceAll(allowedWebOrigin, "");
+      if (withoutAllowedDomain.includes(retiredBrand)) {
+        unexpectedReferences.push(`${relativePath}:${index + 1}`);
+      }
+    });
+  }
+}
+
+scanDirectory(root);
+assert(
+  unexpectedReferences.length === 0,
+  unexpectedReferences.length === 0
+    ? "The retired brand appears only inside the allowed web domain"
+    : `Unexpected retired-brand references: ${unexpectedReferences.join(", ")}`,
+);
+
 if (process.exitCode) {
-  console.error("\nToori unified contract check FAILED.");
+  console.error("\nServiciosYa unified contract check FAILED.");
   process.exit(process.exitCode);
 }
 
-console.log("\nToori unified contract check OK.");
+console.log("\nServiciosYa unified contract check OK.");

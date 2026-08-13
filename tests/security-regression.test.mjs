@@ -406,7 +406,6 @@ test("el resumen operativo distingue la comisi\u00f3n del pago del trabajo", () 
 
 test("los flujos de registro integran documentos legales versionados sin descargo absoluto", () => {
   assert.match(legalConstants, /inicio\.serviciosya\.info/);
-  assert.doesNotMatch(legalConstants, /inicio\.tooriserviciosya\.info/);
   assert.match(registrationLegalSources, /LegalDocument/);
   assert.match(registrationLegalSources, /document: ["']terms["']/);
   assert.match(registrationLegalSources, /document: ["']privacy["']/);

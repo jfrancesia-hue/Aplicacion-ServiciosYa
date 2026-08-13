@@ -15,7 +15,7 @@ with servicios_por_usuario as (
 candidatos as (
   select
     u.id,
-    coalesce(nullif(trim(u.nombre), ''), split_part(u.email, '@', 1), 'Prestador Toori') as nombre,
+    coalesce(nullif(trim(u.nombre), ''), split_part(u.email, '@', 1), 'Prestador ServiciosYa') as nombre,
     regexp_replace(u.celular::text, '[^0-9]', '', 'g') as telefono_normalizado,
     u.celular::text as telefono,
     concat_ws(', ', nullif(trim(u.ciudad), ''), nullif(trim(u.provincia), ''), nullif(trim(u.barrio), '')) as zona_frecuente,

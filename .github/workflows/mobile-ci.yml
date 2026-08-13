@@ -37,8 +37,8 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: TOORI contract
-        run: npm run check:toori-contract
+      - name: ServiciosYa contract
+        run: npm run check:serviciosya-contract
 
       - name: Expo project health
         run: npx expo-doctor

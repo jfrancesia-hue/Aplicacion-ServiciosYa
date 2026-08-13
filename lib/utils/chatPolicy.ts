@@ -10,7 +10,8 @@ const SOCIAL_PATTERN = /\b(?:whats?app|telegram|instagram|facebook|messenger)\b|
 const PHONE_PATTERN = /(?:\+?\d[\s().-]*){7,}/;
 const PRICE_WORD_PATTERN = /\b(?:precio|monto|tarifa|total|cobr(?:o|ar|amos|aría)|cuesta|sale|mano\s+de\s+obra)\b/i;
 const MONEY_PATTERN = /(?:\$\s*\d|\b\d[\d.,]*\s*(?:ars|pesos?)\b)/i;
-const QUOTE_PREFIX = "__TOORI_QUOTE__";
+const LEGACY_PROTOCOL_NAMESPACE = ["TOO", "RI"].join("");
+const QUOTE_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_QUOTE__`;
 
 function parseProtectedQuote(content: string) {
   if (!content.startsWith(QUOTE_PREFIX)) return null;

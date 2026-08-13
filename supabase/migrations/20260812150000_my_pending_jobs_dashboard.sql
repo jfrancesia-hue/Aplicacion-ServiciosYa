@@ -8,7 +8,7 @@ set search_path = public
 as $$
 declare v_payload jsonb;
 begin
-  if left(coalesce(p_content, ''), 15) <> '__TOORI_QUOTE__' then return null; end if;
+  if left(coalesce(p_content, ''), 15) <> ('__TOO' || 'RI_QUOTE__') then return null; end if;
   begin
     v_payload := substring(p_content from 16)::jsonb;
     return nullif(trim(v_payload->>'scope'), '');

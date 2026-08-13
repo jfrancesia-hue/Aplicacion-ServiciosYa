@@ -11,7 +11,7 @@ const EXPO_CHUNK_SIZE = 100;
 const FORCE_UPDATE_MESSAGE = {
   id: 999,
   title: "⚠️ Actualización requerida",
-  body: "Hay una nueva versión de TOORI Servicios Ya. Actualizá la app para seguir usándola."
+  body: "Hay una nueva versión de ServiciosYa. Actualizá la app para seguir usándola."
 };
 
 function chunkArray(array: any[], chunkSize: number) {

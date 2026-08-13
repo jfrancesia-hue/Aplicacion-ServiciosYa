@@ -1,6 +1,6 @@
--- Bandeja mobile para pedidos creados desde MICA app.
--- Complementa el puente web: si /api/app/pedidos-disponibles.php no lista un pedido
--- creado por la app, el prestador puede verlo desde esta RPC.
+-- Bandeja móvil de respaldo para pedidos creados desde MICA en ServiciosYa.
+-- Complementa el endpoint web de ServiciosYa cuando un pedido todavía no está
+-- disponible mediante el puente principal.
 
 alter table public."nuevaOferta"
   add column if not exists modo_agente boolean default false;

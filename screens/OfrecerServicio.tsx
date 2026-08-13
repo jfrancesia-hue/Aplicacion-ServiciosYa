@@ -23,7 +23,10 @@ import LocationInput from "../components/location/LocationInput";
 import { withModalProvider } from "../components/sheet/withModalProvider";
 import { supabase } from "../lib/supabase";
 import showToast from "../lib/toast";
-import { isTooriBridgeConfigured, syncPrestador } from "../lib/tooriBridge";
+import {
+  isServiciosYaBridgeConfigured,
+  syncPrestador,
+} from "../lib/serviciosYaBridge";
 import { categoriasDisponibles } from "../lib/utils/categorias";
 import { locationQueryString } from "../lib/utils/location";
 import vexo from "../lib/vexo";
@@ -89,7 +92,7 @@ function OfrecerServicio({ navigation }: Props) {
         throw new Error(error.message || "Error desconocido de Supabase");
       }
       try {
-        if (isTooriBridgeConfigured()) {
+        if (isServiciosYaBridgeConfigured()) {
           const { data: perfil } = await supabase
             .from("usuarios")
             .select(

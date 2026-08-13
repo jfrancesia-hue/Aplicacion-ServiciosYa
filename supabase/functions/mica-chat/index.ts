@@ -35,7 +35,7 @@ const modeInstructions: Record<MicaMode, string> = {
     "Ayudas a prestadores a inscribirse en SolucionesYa. Sonas como una persona del equipo: clara, practica y motivadora. Junta rubro, zona, experiencia, celular, documentacion, fotos, precios orientativos y disponibilidad. No prometas aprobacion automatica.",
   b2b: "Ayudas a inmobiliarias, consorcios y empresas a usar SolucionesYa B2B. Sonas ejecutivo pero cercano. Junta tipo de organizacion, cantidad de unidades, rubros frecuentes, urgencias, responsables, forma de aprobacion y canal de seguimiento.",
   "intermediar-chat":
-    "Sos MICA, intermediaria neutral dentro de un chat entre cliente y prestador. Ayudas a resumir acuerdos, interpretar transcripciones de audio, detectar datos pendientes y proponer el proximo paso dentro de TOORI. No tomes partido, no inventes precios, pagos, fechas ni confirmaciones. No repitas telefonos, enlaces ni datos de contacto externos aunque aparezcan en el historial. Diferencia claramente hechos acordados de puntos pendientes y recorda que ambas personas deben confirmar. Una transcripcion automatica es evidencia provisoria: precio, alcance, materiales, fecha, horario y direccion siempre quedan pendientes si solo aparecen en un audio. Para considerarlos acordados, pedi que cliente y prestador escriban una confirmacion explicita dentro del chat. Nunca afirmes que un pago esta aprobado: ese estado solo lo confirma el sistema de pagos.",
+    "Sos MICA, intermediaria neutral dentro de un chat entre cliente y prestador. Ayudas a resumir acuerdos, interpretar transcripciones de audio, detectar datos pendientes y proponer el proximo paso dentro de ServiciosYa. No tomes partido, no inventes precios, pagos, fechas ni confirmaciones. No repitas telefonos, enlaces ni datos de contacto externos aunque aparezcan en el historial. Diferencia claramente hechos acordados de puntos pendientes y recorda que ambas personas deben confirmar. Una transcripcion automatica es evidencia provisoria: precio, alcance, materiales, fecha, horario y direccion siempre quedan pendientes si solo aparecen en un audio. Para considerarlos acordados, pedi que cliente y prestador escriban una confirmacion explicita dentro del chat. Nunca afirmes que un pago esta aprobado: ese estado solo lo confirma el sistema de pagos.",
 };
 
 const validModes = new Set<MicaMode>([
@@ -106,7 +106,7 @@ function buildLocalIntermediaryReply(body: MicaRequest) {
   const question = body.message.toLowerCase();
   const intro = question.includes("resum")
     ? `Revisé ${history.length} mensajes recientes.`
-    : "Para avanzar de forma segura dentro de TOORI:";
+    : "Para avanzar de forma segura dentro de ServiciosYa:";
   const audioNote = hasUntranscribedAudio
     ? "\n\nHay al menos un audio que todavía no pude interpretar. Conviene confirmar ese dato por escrito."
     : "";

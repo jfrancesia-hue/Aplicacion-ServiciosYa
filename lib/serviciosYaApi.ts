@@ -52,7 +52,7 @@ export type EstadoPedidoMicaInput = {
   appUserId?: string;
 };
 
-export type TooriApiResult<T> =
+export type ServiciosYaApiResult<T> =
   | {
       ok: true;
       skipped?: false;
@@ -66,7 +66,7 @@ export type TooriApiResult<T> =
       raw?: unknown;
     };
 
-export type SyncPrestadorResult = TooriApiResult<{
+export type SyncPrestadorResult = ServiciosYaApiResult<{
   action?: "created" | "updated";
   marketplaceId?: string;
 }>;
@@ -82,20 +82,25 @@ function getEnvValue(key: string): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function getTooriApiConfig() {
-  const baseUrl = getEnvValue("EXPO_PUBLIC_TOORI_SYNC_BASE_URL") ?? getExtraValue("tooriSyncBaseUrl");
-  const sharedToken = getEnvValue("EXPO_PUBLIC_TOORI_APP_SYNC_TOKEN") ?? getExtraValue("tooriAppSyncToken");
+function getServiciosYaApiConfig() {
+  const baseUrl =
+    getEnvValue("EXPO_PUBLIC_SERVICIOSYA_SYNC_BASE_URL") ??
+    getExtraValue("serviciosYaSyncBaseUrl");
+  const sharedToken =
+    getEnvValue("EXPO_PUBLIC_SERVICIOSYA_APP_SYNC_TOKEN") ??
+    getExtraValue("serviciosYaAppSyncToken");
   return { baseUrl, sharedToken };
 }
 
-function getEndpoint(path: string): TooriApiResult<{ endpoint: string }> {
-  const { baseUrl } = getTooriApiConfig();
+function getEndpoint(path: string): ServiciosYaApiResult<{ endpoint: string }> {
+  const { baseUrl } = getServiciosYaApiConfig();
 
   if (!baseUrl) {
     return {
       ok: false,
       skipped: true,
-      error: "Sync Toori no configurado: falta extra.tooriSyncBaseUrl o EXPO_PUBLIC_TOORI_SYNC_BASE_URL",
+      error:
+        "Sync ServiciosYa no configurado: falta extra.serviciosYaSyncBaseUrl o EXPO_PUBLIC_SERVICIOSYA_SYNC_BASE_URL",
     };
   }
 
@@ -108,14 +113,18 @@ function getEndpoint(path: string): TooriApiResult<{ endpoint: string }> {
 }
 
 async function getAuthorizationToken(): Promise<string | undefined> {
-  const { sharedToken } = getTooriApiConfig();
+  const { sharedToken } = getServiciosYaApiConfig();
   if (sharedToken) return sharedToken;
 
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token;
 }
 
-async function requestToori<T>(path: string, options: RequestInit, errorLabel: string): Promise<TooriApiResult<T>> {
+async function requestServiciosYa<T>(
+  path: string,
+  options: RequestInit,
+  errorLabel: string,
+): Promise<ServiciosYaApiResult<T>> {
   const config = getEndpoint(path);
   if (!config.ok) return config;
 
@@ -123,7 +132,7 @@ async function requestToori<T>(path: string, options: RequestInit, errorLabel: s
   if (!token) {
     return {
       ok: false,
-      error: "No hay sesión activa para conectar con Toori/Mica",
+      error: "No hay sesión activa para conectar con ServiciosYa/Mica",
     };
   }
 
@@ -162,16 +171,29 @@ async function requestToori<T>(path: string, options: RequestInit, errorLabel: s
   }
 }
 
-function postToori<T>(path: string, body: unknown, errorLabel: string): Promise<TooriApiResult<T>> {
-  return requestToori<T>(path, { method: "POST", body: JSON.stringify(body) }, errorLabel);
+function postServiciosYa<T>(
+  path: string,
+  body: unknown,
+  errorLabel: string,
+): Promise<ServiciosYaApiResult<T>> {
+  return requestServiciosYa<T>(
+    path,
+    { method: "POST", body: JSON.stringify(body) },
+    errorLabel,
+  );
 }
 
-function getToori<T>(path: string, errorLabel: string): Promise<TooriApiResult<T>> {
-  return requestToori<T>(path, { method: "GET" }, errorLabel);
+function getServiciosYa<T>(
+  path: string,
+  errorLabel: string,
+): Promise<ServiciosYaApiResult<T>> {
+  return requestServiciosYa<T>(path, { method: "GET" }, errorLabel);
 }
 
-export async function syncPrestadorConToori(input: SyncPrestadorInput): Promise<SyncPrestadorResult> {
-  const result = await postToori<Record<string, unknown>>(
+export async function syncPrestadorConServiciosYa(
+  input: SyncPrestadorInput,
+): Promise<SyncPrestadorResult> {
+  const result = await postServiciosYa<Record<string, unknown>>(
     "/api/app/sync-prestador.php",
     input,
     "sincronizando prestador",
@@ -189,8 +211,10 @@ export async function syncPrestadorConToori(input: SyncPrestadorInput): Promise<
   };
 }
 
-export async function obtenerPedidosDisponibles(input: PedidosDisponiblesInput): Promise<TooriApiResult<{ pedidos: PedidoMica[]; count: number }>> {
-  const result = await postToori<Record<string, unknown>>(
+export async function obtenerPedidosDisponibles(
+  input: PedidosDisponiblesInput,
+): Promise<ServiciosYaApiResult<{ pedidos: PedidoMica[]; count: number }>> {
+  const result = await postServiciosYa<Record<string, unknown>>(
     "/api/app/pedidos-disponibles.php",
     input,
     "obteniendo pedidos disponibles",
@@ -208,8 +232,16 @@ export async function obtenerPedidosDisponibles(input: PedidosDisponiblesInput):
   };
 }
 
-export async function responderPedidoMica(input: ResponderPedidoInput): Promise<TooriApiResult<{ action?: string; ofertaId?: string; presupuesto?: unknown }>> {
-  const result = await postToori<Record<string, unknown>>(
+export async function responderPedidoMica(
+  input: ResponderPedidoInput,
+): Promise<
+  ServiciosYaApiResult<{
+    action?: string;
+    ofertaId?: string;
+    presupuesto?: unknown;
+  }>
+> {
+  const result = await postServiciosYa<Record<string, unknown>>(
     "/api/app/responder-pedido.php",
     input,
     "respondiendo pedido",
@@ -228,11 +260,19 @@ export async function responderPedidoMica(input: ResponderPedidoInput): Promise<
   };
 }
 
-export async function obtenerEstadoPedidoMica(input: EstadoPedidoMicaInput): Promise<TooriApiResult<{ pedido?: unknown; presupuestos?: unknown[]; outreach?: unknown }>> {
+export async function obtenerEstadoPedidoMica(
+  input: EstadoPedidoMicaInput,
+): Promise<
+  ServiciosYaApiResult<{
+    pedido?: unknown;
+    presupuestos?: unknown[];
+    outreach?: unknown;
+  }>
+> {
   const params = new URLSearchParams({ ofertaId: String(input.ofertaId) });
   if (input.appUserId) params.set("appUserId", input.appUserId);
 
-  const result = await getToori<Record<string, unknown>>(
+  const result = await getServiciosYa<Record<string, unknown>>(
     `/api/app/estado-pedido.php?${params.toString()}`,
     "obteniendo estado del pedido",
   );
