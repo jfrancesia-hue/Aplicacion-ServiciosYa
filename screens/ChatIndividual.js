@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback  } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -23,8 +23,22 @@ import MicaAssistantModal from "../components/chat/MicaAssistantModal";
 import MicaSystemBubble from "../components/chat/MicaSystemBubble";
 import BotonVolver from "../components/BotonVolver";
 import { withModalProvider } from "../components/sheet/withModalProvider";
-import { parseQuoteMessage, formatQuoteAmount } from "../lib/utils/quoteMessage";
-import { calculateServiceConfirmationFee } from "../lib/constants/billing";
+import {
+  parseQuoteMessage,
+  formatQuoteAmount,
+  getQuotePricing,
+} from "../lib/utils/quoteMessage";
+import {
+  pricingModeLabel,
+  quotePricingSummary,
+} from "../lib/utils/quotePricing";
+import ServiceSchedulePanel from "../components/chat/ServiceSchedulePanel";
+import MicaIncidentIntakeModal from "../components/chat/MicaIncidentIntakeModal";
+import QuoteOperationalNoticeModal from "../components/quotes/QuoteOperationalNoticeModal";
+import {
+  calculateServiceConfirmationFee,
+  QUOTE_OPERATIONAL_NOTICE_VERSION,
+} from "../lib/constants/billing";
 import VoiceMessageBubble from "../components/chat/VoiceMessageBubble";
 import {
   CHAT_AUDIO_BUCKET,
@@ -39,17 +53,20 @@ import TrustSafetyModal from "../components/trust/TrustSafetyModal";
 import { useNavigation } from "@react-navigation/native";
 import vexo from "../lib/vexo";
 import { getPaymentReturnParam } from "../lib/utils/paymentReturn";
+import { inspectChatContent, inspectChatText } from "../lib/utils/chatPolicy";
 
 const CHAT_PAGE_SIZE = 40;
 
 function ChatIndividual({ route }) {
   const navigation = useNavigation();
-  const { chatId, nombre, servicio, usuarioId1, usuarioId2, servicioId } = route.params;
+  const { chatId, nombre, servicio, usuarioId1, usuarioId2, servicioId } =
+    route.params;
 
   const [mensajes, setMensajes] = useState([]);
   const [usuarioId, setUsuarioId] = useState(null);
   const [loadingMsg, setLoadingMsg] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState("provider");
   const [estrellas, setEstrellas] = useState(0);
   const [comentarioCalificacion, setComentarioCalificacion] = useState("");
   const [enviandoCalificacion, setEnviandoCalificacion] = useState(false);
@@ -63,6 +80,10 @@ function ChatIndividual({ route }) {
   const [transcriptEditor, setTranscriptEditor] = useState(null);
   const [savingTranscript, setSavingTranscript] = useState(false);
   const [servicioData, setServicioData] = useState(servicio || {});
+  const [canSendQuote, setCanSendQuote] = useState(false);
+  const [reportandoIncidente, setReportandoIncidente] = useState(false);
+  const [incidentIntakeVisible, setIncidentIntakeVisible] = useState(false);
+  const [pendingPaymentQuote, setPendingPaymentQuote] = useState(null);
   const processingPaymentReturn = useRef(null);
   const flatListRef = useRef(null);
   const messageChannelRef = useRef(null);
@@ -71,6 +92,9 @@ function ChatIndividual({ route }) {
       ? usuarioId2
       : usuarioId1
     : usuarioId1 || usuarioId2;
+  const chatUnlocked =
+    jobStatus?.status === "approved" &&
+    ["confirmed", "completed", "disputed"].includes(jobStatus?.job_status);
 
   const cargarEstadoTrabajo = useCallback(async () => {
     try {
@@ -88,87 +112,90 @@ function ChatIndividual({ route }) {
     }
   }, [chatId]);
 
-  const verificarRetornoPago = useCallback(async (url) => {
-    if (!url?.includes("presupuesto-confirmado")) return;
+  const verificarRetornoPago = useCallback(
+    async (url) => {
+      if (!url?.includes("presupuesto-confirmado")) return;
 
-    const paymentRecordId = getPaymentReturnParam(url, "payment_record_id");
-    const paymentId =
-      getPaymentReturnParam(url, "payment_id") ||
-      getPaymentReturnParam(url, "collection_id");
-    const returnStatus =
-      getPaymentReturnParam(url, "status") ||
-      getPaymentReturnParam(url, "collection_status");
+      const paymentRecordId = getPaymentReturnParam(url, "payment_record_id");
+      const paymentId =
+        getPaymentReturnParam(url, "payment_id") ||
+        getPaymentReturnParam(url, "collection_id");
+      const returnStatus =
+        getPaymentReturnParam(url, "status") ||
+        getPaymentReturnParam(url, "collection_status");
 
-    if (returnStatus === "failure" || returnStatus === "rejected") {
-      vexo.marketplace("payment_failed", {
-        etapa: "retorno",
-        estado: returnStatus,
-      });
-      Alert.alert(
-        "Pago no aprobado",
-        "Mercado Pago no aprobó la operación. Podés intentarlo nuevamente.",
-      );
-      return;
-    }
-
-    if (!paymentRecordId || !paymentId) {
-      if (returnStatus === "pending") {
-        vexo.marketplace("payment_started", {
-          etapa: "retorno_pendiente",
+      if (returnStatus === "failure" || returnStatus === "rejected") {
+        vexo.marketplace("payment_failed", {
+          etapa: "retorno",
+          estado: returnStatus,
         });
         Alert.alert(
-          "Pago pendiente",
-          "Mercado Pago todavía está procesando la operación.",
-        );
-      }
-      return;
-    }
-
-    const operationKey = `${paymentRecordId}:${paymentId}`;
-    if (processingPaymentReturn.current === operationKey) return;
-    processingPaymentReturn.current = operationKey;
-    setPagando(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke(
-        "verify-payment",
-        {
-          body: { paymentRecordId, paymentId },
-        },
-      );
-      if (error) throw error;
-      if (!data?.approved) {
-        Alert.alert(
-          data?.status === "pending" ? "Pago pendiente" : "Pago no aprobado",
-          data?.message ||
-            "La operación todavía no fue confirmada por Mercado Pago.",
+          "Pago no aprobado",
+          "Mercado Pago no aprobó la operación. Podés intentarlo nuevamente.",
         );
         return;
       }
 
-      Alert.alert(
-        "Pago verificado",
-        "La confirmación fue validada por Mercado Pago. Continuá coordinando el servicio desde este chat.",
-      );
-      vexo.marketplace("payment_confirmed", {
-        origen: "retorno_mercadopago",
-      });
-      await cargarEstadoTrabajo();
-    } catch (error) {
-      processingPaymentReturn.current = null;
-      vexo.marketplace("payment_failed", {
-        etapa: "verificacion",
-      });
-      Alert.alert(
-        "No pudimos verificar el pago",
-        error instanceof Error
-          ? error.message
-          : "Intentá nuevamente desde el presupuesto.",
-      );
-    } finally {
-      setPagando(false);
-    }
-  }, [cargarEstadoTrabajo]);
+      if (!paymentRecordId || !paymentId) {
+        if (returnStatus === "pending") {
+          vexo.marketplace("payment_started", {
+            etapa: "retorno_pendiente",
+          });
+          Alert.alert(
+            "Pago pendiente",
+            "Mercado Pago todavía está procesando la operación.",
+          );
+        }
+        return;
+      }
+
+      const operationKey = `${paymentRecordId}:${paymentId}`;
+      if (processingPaymentReturn.current === operationKey) return;
+      processingPaymentReturn.current = operationKey;
+      setPagando(true);
+
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          "verify-payment",
+          {
+            body: { paymentRecordId, paymentId },
+          },
+        );
+        if (error) throw error;
+        if (!data?.approved) {
+          Alert.alert(
+            data?.status === "pending" ? "Pago pendiente" : "Pago no aprobado",
+            data?.message ||
+              "La operación todavía no fue confirmada por Mercado Pago.",
+          );
+          return;
+        }
+
+        Alert.alert(
+          "Pago verificado",
+          "La confirmación fue validada por Mercado Pago. Continuá coordinando el servicio desde este chat.",
+        );
+        vexo.marketplace("payment_confirmed", {
+          origen: "retorno_mercadopago",
+        });
+        await cargarEstadoTrabajo();
+      } catch (error) {
+        processingPaymentReturn.current = null;
+        vexo.marketplace("payment_failed", {
+          etapa: "verificacion",
+        });
+        Alert.alert(
+          "No pudimos verificar el pago",
+          error instanceof Error
+            ? error.message
+            : "Intentá nuevamente desde el presupuesto.",
+        );
+      } finally {
+        setPagando(false);
+      }
+    },
+    [cargarEstadoTrabajo],
+  );
 
   useEffect(() => {
     void cargarEstadoTrabajo();
@@ -188,20 +215,25 @@ function ChatIndividual({ route }) {
   // Si el servicio llegó vacío, buscarlo desde la BD usando el usuario partner
   useEffect(() => {
     if (servicio?.titulo) return; // ya tiene datos
-    const partnerId = usuarioId1 && usuarioId2
-      ? (usuarioId1 !== usuarioId2 ? null : null) // se resuelve abajo
-      : null;
+    const partnerId =
+      usuarioId1 && usuarioId2
+        ? usuarioId1 !== usuarioId2
+          ? null
+          : null // se resuelve abajo
+        : null;
     // Buscar el primer servicio del otro usuario del chat
     const fetchServicio = async () => {
       // Determinar quién es el partner (no el usuario actual)
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       const myId = user?.id;
       const workerId = usuarioId1 === myId ? usuarioId2 : usuarioId1;
       if (!workerId) return;
       const { data } = await supabase
-        .from('servicios')
-        .select('id, titulo, descripcion, categoria, horario, precio')
-        .eq('usuario_id', workerId)
+        .from("servicios")
+        .select("id, titulo, descripcion, categoria, horario, precio")
+        .eq("usuario_id", workerId)
         .limit(1)
         .maybeSingle();
       if (data) setServicioData(data);
@@ -217,7 +249,10 @@ function ChatIndividual({ route }) {
     setHasOlderMessages(false);
 
     const init = async () => {
-      const { data: { user }, error } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
       if (error || !user) {
         console.error("No se pudo obtener el usuario:", error);
         return;
@@ -225,6 +260,23 @@ function ChatIndividual({ route }) {
       if (!isMounted) return;
 
       setUsuarioId(user.id);
+      const [{ data: appProfile }, { data: marketplaceProfile }] =
+        await Promise.all([
+          supabase
+            .from("usuarios")
+            .select("rol")
+            .eq("id", user.id)
+            .maybeSingle(),
+          supabase
+            .from("sy_perfiles")
+            .select("rol")
+            .eq("id", user.id)
+            .maybeSingle(),
+        ]);
+      setCanSendQuote(
+        String(appProfile?.rol ?? "").toLowerCase() === "worker" ||
+          String(marketplaceProfile?.rol ?? "").toLowerCase() === "prestador",
+      );
       await cargarMensajes(user.id);
       suscribirRealtime(user.id);
     };
@@ -263,8 +315,10 @@ function ChatIndividual({ route }) {
       marcarComoLeidos(initialMessages, userId);
 
       // scroll al final
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-
+      setTimeout(
+        () => flatListRef.current?.scrollToEnd({ animated: true }),
+        100,
+      );
     } catch (e) {
       console.error("[chat] excepción cargarMensajes:", e);
       setLoadingMsg(false);
@@ -313,20 +367,14 @@ function ChatIndividual({ route }) {
     } finally {
       setLoadingOlderMessages(false);
     }
-  }, [
-    chatId,
-    hasOlderMessages,
-    loadingOlderMessages,
-    mensajes,
-    usuarioId,
-  ]);
+  }, [chatId, hasOlderMessages, loadingOlderMessages, mensajes, usuarioId]);
 
   // --- Marcar mensajes no leídos como leídos
   const marcarComoLeidos = async (mensajesData, userId) => {
     const mensajesNoLeidos = mensajesData.filter(
       (msg) =>
         msg.remitente_id?.toString().trim() !== userId?.toString().trim() &&
-        !msg.leido
+        !msg.leido,
     );
     if (mensajesNoLeidos.length > 0) {
       const ids = mensajesNoLeidos.map((msg) => msg.id);
@@ -357,8 +405,11 @@ function ChatIndividual({ route }) {
           if (nuevo.remitente_id !== userId) {
             marcarComoLeidos([nuevo], userId);
           }
-          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-        }
+          setTimeout(
+            () => flatListRef.current?.scrollToEnd({ animated: true }),
+            100,
+          );
+        },
       )
       .subscribe();
 
@@ -366,136 +417,184 @@ function ChatIndividual({ route }) {
   };
 
   // --- Enviar mensaje (la push la dispara el trigger SQL `trg_notify_on_new_message`)
-  const enviarMensaje = useCallback(async (mensaje) => {
-    if (!mensaje.trim() || !usuarioId) return;
+  const enviarMensaje = useCallback(
+    async (mensaje) => {
+      if (!mensaje.trim() || !usuarioId) return;
 
-    const { error } = await supabase.from("mensajes").insert({
-      chat_id: chatId,
-      remitente_id: usuarioId,
-      contenido: mensaje.trim(),
-    });
+      const cleanMessage = mensaje.trim();
+      const quote = parseQuoteMessage(cleanMessage);
+      if (quote && !canSendQuote) {
+        throw new Error("Solo el prestador puede crear un presupuesto.");
+      }
+      const policy = inspectChatContent(cleanMessage);
+      if (!chatUnlocked && !policy.allowed) throw new Error(policy.message);
 
-    if (error) {
-      console.error("Error al enviar mensaje:", error.message);
-      throw new Error(
-        error.message?.includes("CHAT_BLOCKED")
-          ? "La conversación está bloqueada y no admite mensajes nuevos."
-          : "No se pudo enviar el mensaje. Intentá nuevamente.",
-      );
-    }
-
-    if (parseQuoteMessage(mensaje.trim())) {
-      vexo.marketplace("quote_sent", {
-        categoria: servicioData?.categoria || servicioData?.titulo || "sin_categoria",
+      const { error } = await supabase.from("mensajes").insert({
+        chat_id: chatId,
+        remitente_id: usuarioId,
+        contenido: cleanMessage,
       });
-    }
 
-    await supabase
-      .from("chats")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", chatId);
-  }, [usuarioId, chatId, servicioData?.categoria, servicioData?.titulo]);
+      if (error) {
+        console.error("Error al enviar mensaje:", error.message);
+        throw new Error(
+          error.message?.includes("CHAT_CONTACT_BLOCKED")
+            ? "No se pueden compartir datos de contacto antes de confirmar el servicio."
+            : error.message?.includes("CHAT_PRICE_REQUIRES_QUOTE")
+              ? "Para hablar de montos, el prestador debe usar Crear presupuesto."
+              : error.message?.includes("CHAT_QUOTE_PROVIDER_ONLY")
+                ? "Solo el prestador puede crear un presupuesto."
+                : error.message?.includes("CHAT_BLOCKED")
+                  ? "La conversación está bloqueada y no admite mensajes nuevos."
+                  : "No se pudo enviar el mensaje. Intentá nuevamente.",
+        );
+      }
 
-  const enviarAudio = useCallback(async ({
-    uri,
-    durationMs,
-    mimeType,
-  }) => {
-    if (!usuarioId) throw new Error("Necesitás iniciar sesión para enviar audios.");
+      if (quote) {
+        vexo.marketplace("quote_sent", {
+          categoria:
+            servicioData?.categoria || servicioData?.titulo || "sin_categoria",
+        });
+      }
 
-    const { data: ticket, error: ticketError } = await supabase.functions.invoke(
-      "chat-audio",
-      {
-        body: {
-          action: "create-upload",
-          chatId,
-          durationMs,
-          mimeType,
+      await supabase
+        .from("chats")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", chatId);
+    },
+    [
+      usuarioId,
+      chatId,
+      canSendQuote,
+      chatUnlocked,
+      servicioData?.categoria,
+      servicioData?.titulo,
+    ],
+  );
+
+  const enviarAudio = useCallback(
+    async ({ uri, durationMs, mimeType }) => {
+      if (!usuarioId)
+        throw new Error("Necesitás iniciar sesión para enviar audios.");
+
+      const { data: ticket, error: ticketError } =
+        await supabase.functions.invoke("chat-audio", {
+          body: {
+            action: "create-upload",
+            chatId,
+            durationMs,
+            mimeType,
+          },
+        });
+
+      if (ticketError || !ticket?.path || !ticket?.token) {
+        throw new Error(
+          ticket?.error ||
+            ticketError?.message ||
+            "No se pudo preparar el audio.",
+        );
+      }
+
+      const base64Audio = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const file = Uint8Array.from(atob(base64Audio), (character) =>
+        character.charCodeAt(0),
+      );
+      if (ticket.maxFileBytes && file.byteLength > ticket.maxFileBytes) {
+        throw new Error("El audio supera el tamaño máximo permitido.");
+      }
+
+      const { error: uploadError } = await supabase.storage
+        .from(CHAT_AUDIO_BUCKET)
+        .uploadToSignedUrl(ticket.path, ticket.token, file, {
+          contentType: mimeType,
+        });
+
+      if (uploadError) {
+        throw new Error(`No se pudo subir el audio: ${uploadError.message}`);
+      }
+
+      let transcript;
+      const { data: transcriptionData } = await supabase.functions.invoke(
+        "chat-audio",
+        {
+          body: {
+            action: "transcribe",
+            chatId,
+            path: ticket.path,
+          },
         },
-      },
-    );
-
-    if (ticketError || !ticket?.path || !ticket?.token) {
-      throw new Error(
-        ticket?.error || ticketError?.message || "No se pudo preparar el audio.",
       );
-    }
+      if (typeof transcriptionData?.transcript === "string") {
+        transcript = transcriptionData.transcript;
+      }
 
-    const base64Audio = await FileSystem.readAsStringAsync(uri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-    const file = Uint8Array.from(atob(base64Audio), (character) =>
-      character.charCodeAt(0),
-    );
-    if (ticket.maxFileBytes && file.byteLength > ticket.maxFileBytes) {
-      throw new Error("El audio supera el tamaño máximo permitido.");
-    }
+      const descartarAudio = () =>
+        supabase.functions.invoke("chat-audio", {
+          body: { action: "discard", chatId, path: ticket.path },
+        });
 
-    const { error: uploadError } = await supabase.storage
-      .from(CHAT_AUDIO_BUCKET)
-      .uploadToSignedUrl(ticket.path, ticket.token, file, {
-        contentType: mimeType,
+      const isConfirmed =
+        jobStatus?.status === "approved" &&
+        ["confirmed", "completed", "disputed"].includes(jobStatus?.job_status);
+      if (!isConfirmed) {
+        if (!transcript?.trim()) {
+          await descartarAudio();
+          throw new Error(
+            "Antes de aceptar el presupuesto, los audios necesitan transcripción para mantener protegido el chat.",
+          );
+        }
+        const policy = inspectChatText(transcript);
+        if (!policy.allowed) {
+          await descartarAudio();
+          throw new Error(policy.message);
+        }
+      }
+
+      const contenido = createAudioMessageContent({
+        path: ticket.path,
+        durationMs,
+        mimeType,
+        transcript,
       });
 
-    if (uploadError) {
-      throw new Error(`No se pudo subir el audio: ${uploadError.message}`);
-    }
+      const { error: messageError } = await supabase.from("mensajes").insert({
+        chat_id: chatId,
+        remitente_id: usuarioId,
+        contenido,
+      });
 
-    let transcript;
-    const { data: transcriptionData } = await supabase.functions.invoke(
-      "chat-audio",
-      {
-        body: {
-          action: "transcribe",
-          chatId,
-          path: ticket.path,
-        },
-      },
-    );
-    if (typeof transcriptionData?.transcript === "string") {
-      transcript = transcriptionData.transcript;
-    }
+      if (messageError) {
+        await descartarAudio();
+        throw new Error(
+          messageError.message?.includes("CHAT_BLOCKED")
+            ? "El audio se guardó, pero la conversación está bloqueada."
+            : `El audio se subió, pero no se pudo enviar: ${messageError.message}`,
+        );
+      }
 
-    const contenido = createAudioMessageContent({
-      path: ticket.path,
-      durationMs,
-      mimeType,
-      transcript,
-    });
-
-    const { error: messageError } = await supabase.from("mensajes").insert({
-      chat_id: chatId,
-      remitente_id: usuarioId,
-      contenido,
-    });
-
-    if (messageError) {
-      throw new Error(
-        messageError.message?.includes("CHAT_BLOCKED")
-          ? "El audio se guardó, pero la conversación está bloqueada."
-          : `El audio se subió, pero no se pudo enviar: ${messageError.message}`,
-      );
-    }
-
-    vexo.marketplace("audio_sent", {
-      duracion_segundos: Math.round(durationMs / 1000),
-      transcripto: Boolean(transcript),
-    });
-    if (transcript) {
-      vexo.marketplace("audio_transcribed", {
+      vexo.marketplace("audio_sent", {
         duracion_segundos: Math.round(durationMs / 1000),
+        transcripto: Boolean(transcript),
       });
-    } else {
-      vexo.marketplace("audio_transcription_failed", {
-        duracion_segundos: Math.round(durationMs / 1000),
-      });
-    }
+      if (transcript) {
+        vexo.marketplace("audio_transcribed", {
+          duracion_segundos: Math.round(durationMs / 1000),
+        });
+      } else {
+        vexo.marketplace("audio_transcription_failed", {
+          duracion_segundos: Math.round(durationMs / 1000),
+        });
+      }
 
-    await supabase
-      .from("chats")
-      .update({ updated_at: new Date().toISOString() })
-      .eq("id", chatId);
-  }, [chatId, usuarioId]);
+      await supabase
+        .from("chats")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", chatId);
+    },
+    [chatId, usuarioId, jobStatus?.status, jobStatus?.job_status],
+  );
 
   const sanitizeMicaContext = (value) =>
     String(value ?? "")
@@ -560,64 +659,61 @@ function ChatIndividual({ route }) {
     );
   }, [chatId, mensajes, usuarioId]);
 
-  const pedirAyudaAMica = useCallback(async (question) => {
-    if (!usuarioId || askingMica) return;
-    setAskingMica(true);
+  const pedirAyudaAMica = useCallback(
+    async (question) => {
+      if (!usuarioId || askingMica) return;
+      setAskingMica(true);
 
-    try {
-      const history = await buildMicaChatHistory();
-      const { data, error } = await supabase.functions.invoke("mica-chat", {
-        body: {
-          mode: "intermediar-chat",
-          message: question,
-          history,
-          insight: { chatId },
-        },
-      });
+      try {
+        const history = await buildMicaChatHistory();
+        const { data, error } = await supabase.functions.invoke("mica-chat", {
+          body: {
+            mode: "intermediar-chat",
+            message: question,
+            history,
+            insight: { chatId },
+          },
+        });
 
-      if (error || !data?.reply) {
-        throw new Error(
-          data?.error || error?.message || "MICA no pudo responder.",
+        if (error || !data?.reply) {
+          throw new Error(
+            data?.error || error?.message || "MICA no pudo responder.",
+          );
+        }
+
+        const contenido = createMicaAssistantContent(data.reply, usuarioId);
+        const { error: messageError } = await supabase.from("mensajes").insert({
+          chat_id: chatId,
+          remitente_id: usuarioId,
+          contenido,
+        });
+        if (messageError) throw messageError;
+
+        await supabase
+          .from("chats")
+          .update({ updated_at: new Date().toISOString() })
+          .eq("id", chatId);
+        setMicaAssistantVisible(false);
+        vexo.marketplace("mica_intervention", {
+          audios_sin_transcribir: mensajes.some((message) => {
+            const audio = parseAudioMessageContent(message.contenido);
+            return Boolean(audio && !audio.transcript);
+          }),
+        });
+      } catch (error) {
+        vexo.marketplace("mica_response_failed", {
+          audios_sin_transcribir: hasUntranscribedAudio,
+        });
+        Alert.alert(
+          "MICA no pudo intervenir",
+          error instanceof Error ? error.message : "Intentá nuevamente.",
         );
+      } finally {
+        setAskingMica(false);
       }
-
-      const contenido = createMicaAssistantContent(data.reply, usuarioId);
-      const { error: messageError } = await supabase.from("mensajes").insert({
-        chat_id: chatId,
-        remitente_id: usuarioId,
-        contenido,
-      });
-      if (messageError) throw messageError;
-
-      await supabase
-        .from("chats")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", chatId);
-      setMicaAssistantVisible(false);
-      vexo.marketplace("mica_intervention", {
-        audios_sin_transcribir: mensajes.some((message) => {
-          const audio = parseAudioMessageContent(message.contenido);
-          return Boolean(audio && !audio.transcript);
-        }),
-      });
-    } catch (error) {
-      vexo.marketplace("mica_response_failed", {
-        audios_sin_transcribir: hasUntranscribedAudio,
-      });
-      Alert.alert(
-        "MICA no pudo intervenir",
-        error instanceof Error ? error.message : "Intentá nuevamente.",
-      );
-    } finally {
-      setAskingMica(false);
-    }
-  }, [
-    askingMica,
-    buildMicaChatHistory,
-    chatId,
-    mensajes,
-    usuarioId,
-  ]);
+    },
+    [askingMica, buildMicaChatHistory, chatId, mensajes, usuarioId],
+  );
 
   const hasUntranscribedAudio = mensajes.some((message) => {
     const audio = parseAudioMessageContent(message.contenido);
@@ -640,8 +736,8 @@ function ChatIndividual({ route }) {
     if (mismaFecha(fecha, ayer)) return "Ayer";
 
     // Formato DD/MM/YYYY
-    const dia = String(fecha.getDate()).padStart(2, '0');
-    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getDate()).padStart(2, "0");
+    const mes = String(fecha.getMonth() + 1).padStart(2, "0");
     const anio = fecha.getFullYear();
     return `${dia}/${mes}/${anio}`;
   };
@@ -655,10 +751,14 @@ function ChatIndividual({ route }) {
       const fechaMsg = formatearFecha(msg.created_at);
       if (fechaMsg !== ultimaFecha) {
         // Insertar chip de fecha
-        resultado.push({ tipo: 'fecha', fecha: fechaMsg, id: `fecha-${fechaMsg}` });
+        resultado.push({
+          tipo: "fecha",
+          fecha: fechaMsg,
+          id: `fecha-${fechaMsg}`,
+        });
         ultimaFecha = fechaMsg;
       }
-      resultado.push({ ...msg, tipo: 'mensaje' });
+      resultado.push({ ...msg, tipo: "mensaje" });
     }
 
     return resultado;
@@ -711,7 +811,7 @@ function ChatIndividual({ route }) {
   };
 
   const renderItem = ({ item }) => {
-    if (item.tipo === 'fecha') {
+    if (item.tipo === "fecha") {
       return (
         <View style={styles.fechaChipContainer}>
           <Text style={styles.fechaChipText}>{item.fecha}</Text>
@@ -727,9 +827,16 @@ function ChatIndividual({ route }) {
 
     const audioMessage = parseAudioMessageContent(item.contenido);
     const quote = audioMessage ? null : parseQuoteMessage(item.contenido);
-    const esPresupuestoTexto = typeof item.contenido === 'string' && item.contenido.startsWith('💰 Presupuesto:');
-    const montoMatch = esPresupuestoTexto && item.contenido.match(/\$([\d.,]+)/);
-    const montoNumerico = quote?.amount ?? (montoMatch ? Number.parseFloat(montoMatch[1].replace(/\./g, '').replace(',', '.')) : 0);
+    const esPresupuestoTexto =
+      typeof item.contenido === "string" &&
+      item.contenido.startsWith("💰 Presupuesto:");
+    const montoMatch =
+      esPresupuestoTexto && item.contenido.match(/\$([\d.,]+)/);
+    const montoNumerico =
+      quote?.amount ??
+      (montoMatch
+        ? Number.parseFloat(montoMatch[1].replace(/\./g, "").replace(",", "."))
+        : 0);
     const esPresupuesto = Boolean(quote) || esPresupuestoTexto;
 
     return (
@@ -763,29 +870,68 @@ function ChatIndividual({ route }) {
               </View>
             </View>
 
-            <Text style={styles.quoteAmount}>{formatQuoteAmount(quote.amount)}</Text>
+            <Text style={styles.quoteAmount}>
+              {formatQuoteAmount(quote.amount)}
+            </Text>
+            <Text style={styles.quotePricingMode}>
+              {pricingModeLabel(getQuotePricing(quote).pricingMode)} ·{" "}
+              {quotePricingSummary(getQuotePricing(quote))}
+            </Text>
 
             <View style={styles.quoteDivider} />
-            <QuoteRow icon="construct-outline" label="Incluye" value={quote.scope} />
-            <QuoteRow icon="cube-outline" label="Materiales" value={quote.materials} />
-            <QuoteRow icon="time-outline" label="Tiempo" value={quote.timeframe} />
-            <QuoteRow icon="ribbon-outline" label="Garantia" value={quote.warranty} />
-            <QuoteRow icon="calendar-outline" label="Validez" value={quote.validUntil} />
-            {quote.notes ? <QuoteRow icon="document-text-outline" label="Notas" value={quote.notes} /> : null}
+            <QuoteRow
+              icon="construct-outline"
+              label="Incluye"
+              value={quote.scope}
+            />
+            <QuoteRow
+              icon="cube-outline"
+              label="Materiales"
+              value={quote.materials}
+            />
+            <QuoteRow
+              icon="time-outline"
+              label="Tiempo"
+              value={quote.timeframe}
+            />
+            <QuoteRow
+              icon="ribbon-outline"
+              label="Garantia"
+              value={quote.warranty}
+            />
+            <QuoteRow
+              icon="calendar-outline"
+              label="Validez"
+              value={quote.validUntil}
+            />
+            {quote.notes ? (
+              <QuoteRow
+                icon="document-text-outline"
+                label="Notas"
+                value={quote.notes}
+              />
+            ) : null}
           </View>
         ) : (
           <Text style={styles.textoMensaje}>{item.contenido}</Text>
         )}
-        {esPresupuesto && !esMio && (
+        {esPresupuesto && !esMio && jobStatus?.status !== "approved" && (
           <TouchableOpacity
             style={styles.pagarBtn}
-            onPress={() => pagarPresupuesto(item.id)}
+            onPress={() =>
+              setPendingPaymentQuote({
+                messageId: item.id,
+                amount: montoNumerico,
+              })
+            }
             disabled={pagando}
             activeOpacity={0.8}
           >
             <Ionicons name="card-outline" size={15} color="#fff" />
             <Text style={styles.pagarBtnText}>
-              {pagando ? 'Procesando...' : `Confirmar presupuesto en la app ($${Math.round(calculateServiceConfirmationFee(montoNumerico)).toLocaleString('es-AR')})`}
+              {pagando
+                ? "Procesando..."
+                : `Aceptar y pagar 10% ($${Math.round(calculateServiceConfirmationFee(montoNumerico)).toLocaleString("es-AR")})`}
             </Text>
           </TouchableOpacity>
         )}
@@ -826,7 +972,9 @@ function ChatIndividual({ route }) {
     setEnviandoCalificacion(true);
     try {
       const { data, error } = await supabase.rpc(
-        "submit_service_job_review",
+        reviewTarget === "client"
+          ? "submit_client_job_review"
+          : "submit_service_job_review",
         {
           p_payment_record_id: jobStatus.payment_record_id,
           p_rating: estrellas,
@@ -839,9 +987,12 @@ function ChatIndividual({ route }) {
         );
       }
 
-      vexo.marketplace("job_completed", {
-        categoria: servicioData?.categoria || servicioData?.titulo || "sin_categoria",
-      });
+      if (reviewTarget === "provider") {
+        vexo.marketplace("job_completed", {
+          categoria:
+            servicioData?.categoria || servicioData?.titulo || "sin_categoria",
+        });
+      }
       vexo.marketplace("rating_submitted", {
         estrellas,
       });
@@ -849,7 +1000,9 @@ function ChatIndividual({ route }) {
       setComentarioCalificacion("");
       await cargarEstadoTrabajo();
       Alert.alert(
-        "Trabajo terminado",
+        reviewTarget === "provider"
+          ? "Trabajo terminado"
+          : "Cliente calificado",
         "La calificación quedó vinculada a un servicio confirmado.",
       );
     } catch (error) {
@@ -874,6 +1027,10 @@ function ChatIndividual({ route }) {
           body: {
             chatId,
             messageId,
+            operationalNotice: {
+              version: QUOTE_OPERATIONAL_NOTICE_VERSION,
+              acceptedAt: new Date().toISOString(),
+            },
           },
         },
       );
@@ -910,8 +1067,53 @@ function ChatIndividual({ route }) {
     }
   };
 
+  const reportarIncidente = useCallback(
+    async (category, intake) => {
+      if (!jobStatus?.payment_record_id || reportandoIncidente) return;
+      setReportandoIncidente(true);
+      try {
+        const { data, error } = await supabase.rpc(
+          "submit_service_incident_intake",
+          {
+            p_payment_record_id: jobStatus.payment_record_id,
+            p_category: category,
+            p_intake: intake,
+          },
+        );
+        if (error || !data?.ok) {
+          throw new Error(error?.message || "No se pudo registrar el reclamo.");
+        }
+        setIncidentIntakeVisible(false);
+        await cargarEstadoTrabajo();
+        Alert.alert(
+          "Reclamo registrado",
+          `MICA abrió el caso ${data.case_number}. El resumen quedó derivado a la bandeja operativa de Agustín.`,
+        );
+      } catch (error) {
+        Alert.alert(
+          "No se pudo abrir el reclamo",
+          error instanceof Error ? error.message : "Intentá nuevamente.",
+        );
+        throw error;
+      } finally {
+        setReportandoIncidente(false);
+      }
+    },
+    [cargarEstadoTrabajo, jobStatus?.payment_record_id, reportandoIncidente],
+  );
+
+  const elegirTipoIncidente = useCallback(() => {
+    setIncidentIntakeVisible(true);
+  }, []);
+
   return (
     <>
+      <MicaIncidentIntakeModal
+        visible={incidentIntakeVisible}
+        submitting={reportandoIncidente}
+        onClose={() => setIncidentIntakeVisible(false)}
+        onSubmit={reportarIncidente}
+      />
       <BotonVolver />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -955,18 +1157,36 @@ function ChatIndividual({ route }) {
           <FlatList
             ref={flatListRef}
             data={mensajesConFechas()}
-            keyExtractor={(item, index) => item.id?.toString() ?? `fecha-${index}`}
+            keyExtractor={(item, index) =>
+              item.id?.toString() ?? `fecha-${index}`
+            }
             renderItem={renderItem}
             ListHeaderComponent={
               <View>
                 {jobStatus ? (
                   <JobStatusBanner
                     status={jobStatus}
+                    reporting={reportandoIncidente}
+                    onReportIssue={elegirTipoIncidente}
                     onReview={() => {
+                      setReviewTarget("provider");
                       setEstrellas(0);
                       setComentarioCalificacion("");
                       setModalVisible(true);
                     }}
+                    onReviewClient={() => {
+                      setReviewTarget("client");
+                      setEstrellas(0);
+                      setComentarioCalificacion("");
+                      setModalVisible(true);
+                    }}
+                  />
+                ) : null}
+                {jobStatus?.status === "approved" &&
+                jobStatus?.job_status === "confirmed" ? (
+                  <ServiceSchedulePanel
+                    chatId={chatId}
+                    onChanged={cargarEstadoTrabajo}
                   />
                 ) : null}
                 {hasOlderMessages ? (
@@ -992,7 +1212,10 @@ function ChatIndividual({ route }) {
               </View>
             }
             maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
-            contentContainerStyle={{ paddingVertical: 10, paddingHorizontal: 10 }}
+            contentContainerStyle={{
+              paddingVertical: 10,
+              paddingHorizontal: 10,
+            }}
             //onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
             //onLayout={() => flatListRef.current?.scrollToEnd({ animated: true })}
           />
@@ -1003,16 +1226,28 @@ function ChatIndividual({ route }) {
             serviceId={servicioId}
             onSend={enviarMensaje}
             onSendAudio={enviarAudio}
+            canSendQuote={canSendQuote}
+            contentProtectionActive={!chatUnlocked}
           />
         )}
 
-        <Modal visible={modalVisible} animationType="slide" transparent onRequestClose={() => setModalVisible(false)}>
+        <Modal
+          visible={modalVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setModalVisible(false)}
+        >
           <View style={styles.modalFondo}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitulo}>Finalizar y calificar</Text>
+              <Text style={styles.modalTitulo}>
+                {reviewTarget === "client"
+                  ? "Calificar al cliente"
+                  : "Finalizar y calificar"}
+              </Text>
               <Text style={styles.modalHint}>
-                Confirmá que el trabajo terminó. Tu opinión quedará vinculada a
-                este servicio verificado.
+                {reviewTarget === "client"
+                  ? "Contá cómo fue la coordinación con el cliente. Una reseña aislada no genera sanciones automáticas."
+                  : "Confirmá que el trabajo terminó. Tu opinión quedará vinculada a este servicio verificado."}
               </Text>
               {renderEstrellas()}
               <TextInput
@@ -1020,7 +1255,11 @@ function ChatIndividual({ route }) {
                 multiline
                 maxLength={800}
                 onChangeText={setComentarioCalificacion}
-                placeholder="Contá brevemente cómo fue el trabajo (opcional)"
+                placeholder={
+                  reviewTarget === "client"
+                    ? "Contá brevemente cómo fue la coordinación (opcional)"
+                    : "Contá brevemente cómo fue el trabajo (opcional)"
+                }
                 placeholderTextColor="#87979a"
                 style={styles.ratingCommentInput}
                 textAlignVertical="top"
@@ -1040,7 +1279,9 @@ function ChatIndividual({ route }) {
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Text style={styles.textoBotonModal}>
-                    Confirmar trabajo terminado
+                    {reviewTarget === "client"
+                      ? "Enviar calificación"
+                      : "Confirmar trabajo terminado"}
                   </Text>
                 )}
               </TouchableOpacity>
@@ -1123,6 +1364,19 @@ function ChatIndividual({ route }) {
           onAsk={pedirAyudaAMica}
         />
 
+        <QuoteOperationalNoticeModal
+          visible={Boolean(pendingPaymentQuote)}
+          mode="accept"
+          amount={pendingPaymentQuote?.amount ?? 0}
+          busy={pagando}
+          onClose={() => setPendingPaymentQuote(null)}
+          onConfirm={async () => {
+            if (!pendingPaymentQuote?.messageId || pagando) return;
+            await pagarPresupuesto(pendingPaymentQuote.messageId);
+            setPendingPaymentQuote(null);
+          }}
+        />
+
         {partnerId ? (
           <TrustSafetyModal
             visible={trustSafetyVisible}
@@ -1140,7 +1394,6 @@ function ChatIndividual({ route }) {
             }}
           />
         ) : null}
-
       </KeyboardAvoidingView>
     </>
   );
@@ -1162,48 +1415,76 @@ function QuoteRow({ icon, label, value }) {
   );
 }
 
-function JobStatusBanner({ status, onReview }) {
+function JobStatusBanner({
+  status,
+  onReview,
+  onReviewClient,
+  onReportIssue,
+  reporting,
+}) {
   const completed = status.job_status === "completed";
+  const disputed = status.job_status === "disputed";
+  const incidentClosed = ["resolved", "dismissed"].includes(
+    status.incident_status,
+  );
   const amount = Number(status.amount_total ?? 0);
   return (
     <View
       style={[
         jobStyles.container,
         completed && jobStyles.containerCompleted,
+        disputed && jobStyles.containerDisputed,
       ]}
     >
-      <View
-        style={[
-          jobStyles.icon,
-          completed && jobStyles.iconCompleted,
-        ]}
-      >
+      <View style={[jobStyles.icon, completed && jobStyles.iconCompleted]}>
         <Ionicons
-          name={completed ? "checkmark-done" : "shield-checkmark"}
+          name={
+            completed
+              ? "checkmark-done"
+              : disputed
+                ? "alert-circle"
+                : "shield-checkmark"
+          }
           size={19}
           color="#fff"
         />
       </View>
       <View style={jobStyles.copy}>
         <Text style={jobStyles.eyebrow}>
-          {completed ? "TRABAJO VERIFICADO" : "SERVICIO CONFIRMADO"}
+          {completed
+            ? "TRABAJO VERIFICADO"
+            : disputed
+              ? incidentClosed
+                ? "RECLAMO REVISADO"
+                : "RECLAMO EN REVISIÓN"
+              : "SERVICIO CONFIRMADO"}
         </Text>
         <Text style={jobStyles.title}>
           {completed
             ? "Trabajo terminado dentro de la app"
-            : "El presupuesto quedó confirmado"}
+            : disputed
+              ? `Caso ${status.incident_case_number ?? "abierto"} ${incidentClosed ? "cerrado por soporte" : "derivado a soporte"}`
+              : "El presupuesto quedó confirmado"}
         </Text>
         <Text style={jobStyles.text}>
-          {amount > 0
-            ? `Presupuesto de ${formatQuoteAmount(amount)}. `
-            : ""}
+          {amount > 0 ? `Presupuesto de ${formatQuoteAmount(amount)}. ` : ""}
           {completed
-            ? status.rating
-              ? `Calificación registrada: ${status.rating}/5.`
-              : "El cierre quedó registrado."
-            : status.is_payer
-              ? "Cuando finalice, cerralo y calificá al prestador."
-              : "El cliente podrá cerrarlo y calificar al finalizar."}
+            ? status.is_payer
+              ? status.rating
+                ? `Calificación registrada: ${status.rating}/5.`
+                : "El cierre quedó registrado."
+              : status.client_rating
+                ? `Tu calificación al cliente: ${status.client_rating}/5.`
+                : status.client_review_count > 0
+                  ? `Reputación del cliente: ${Number(status.client_average_rating).toFixed(1)}/5 en ${status.client_review_count} trabajo${status.client_review_count === 1 ? "" : "s"}.`
+                  : "El cierre quedó registrado. Podés calificar la coordinación con el cliente."
+            : disputed
+              ? incidentClosed
+                ? "La revisión humana finalizó. El pago conserva su historial y no se reembolsa automáticamente."
+                : "MICA reunió el contexto y el equipo operativo puede tomar el caso desde su bandeja."
+              : status.is_payer
+                ? "Cuando finalice, cerralo y calificá al prestador."
+                : "El cliente podrá cerrarlo y calificar al finalizar."}
         </Text>
         {status.can_review ? (
           <TouchableOpacity
@@ -1214,6 +1495,31 @@ function JobStatusBanner({ status, onReview }) {
             <Ionicons name="star-outline" size={16} color="#fff" />
             <Text style={jobStyles.reviewButtonText}>
               Finalizar y calificar
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+        {status.can_review_client ? (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={onReviewClient}
+            style={jobStyles.reviewButton}
+          >
+            <Ionicons name="star-outline" size={16} color="#fff" />
+            <Text style={jobStyles.reviewButtonText}>Calificar al cliente</Text>
+          </TouchableOpacity>
+        ) : null}
+        {status.is_payer && status.job_status === "confirmed" ? (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            disabled={reporting}
+            onPress={onReportIssue}
+            style={jobStyles.issueButton}
+          >
+            <Ionicons name="help-circle-outline" size={15} color="#8a4b08" />
+            <Text style={jobStyles.issueButtonText}>
+              {reporting
+                ? "Abriendo reclamo..."
+                : "¿No se presentó o hubo un problema?"}
             </Text>
           </TouchableOpacity>
         ) : null}
@@ -1237,6 +1543,10 @@ const jobStyles = StyleSheet.create({
   containerCompleted: {
     borderColor: "#bde4d5",
     backgroundColor: "#edf9f4",
+  },
+  containerDisputed: {
+    borderColor: "#f0c78a",
+    backgroundColor: "#fff8e8",
   },
   icon: {
     width: 36,
@@ -1286,15 +1596,47 @@ const jobStyles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "800",
   },
+  issueButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 8,
+    paddingVertical: 5,
+  },
+  issueButtonText: {
+    color: "#8a4b08",
+    fontSize: 10.5,
+    fontWeight: "700",
+  },
 });
 
 function ChatRules() {
   const rules = [
-    { icon: "🔢", text: "No compartas teléfonos ni datos de contacto externos. Coordiná todo dentro del chat seguro." },
-    { icon: "💰", text: "Para acordar un precio, usá el botón \"Enviar presupuesto\". El pago se gestiona dentro de la app." },
-    { icon: "🤝", text: "Tratá con respeto a todos los usuarios. El lenguaje ofensivo puede resultar en una suspensión." },
-    { icon: "🔒", text: "No compartas contraseñas, datos bancarios ni información personal sensible." },
-    { icon: "⚠️", text: "Los acuerdos fuera de la plataforma no tienen cobertura ni garantía de Servicios Ya." },
+    {
+      icon: "🔢",
+      text: "No compartas teléfonos ni datos de contacto externos. Coordiná todo dentro del chat seguro.",
+    },
+    {
+      icon: "💬",
+      text: "Podés conversar y pedir aclaraciones antes de aceptar. Mantené toda la coordinación dentro de este chat.",
+    },
+    {
+      icon: "💰",
+      text: 'El prestador envía el monto con "Crear presupuesto". Al aceptar, el cliente paga la comisión del 10% dentro de la app.',
+    },
+    {
+      icon: "🤝",
+      text: "Tratá con respeto a todos los usuarios. El lenguaje ofensivo puede resultar en una suspensión.",
+    },
+    {
+      icon: "🔒",
+      text: "No compartas contraseñas, datos bancarios ni información personal sensible.",
+    },
+    {
+      icon: "⚠️",
+      text: "Los acuerdos fuera de la plataforma no tienen cobertura ni garantía de Servicios Ya.",
+    },
   ];
   return (
     <View style={rulesStyles.container}>
@@ -1439,8 +1781,8 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   botonInfo: {
-    flexDirection: 'row', 
-    alignItems: 'center', 
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#FFA13C",
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -1448,9 +1790,9 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     elevation: 2,
   },
-  textoBotonInfo:{
-    color:"#fff",
-    fontWeight:'bold'
+  textoBotonInfo: {
+    color: "#fff",
+    fontWeight: "bold",
   },
   // Burbujas de chat
   mensajeContainer: {
@@ -1536,6 +1878,12 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: "900",
     marginTop: 12,
+  },
+  quotePricingMode: {
+    color: "#53747c",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 3,
   },
   quoteDivider: {
     height: 1,
@@ -1732,30 +2080,30 @@ const styles = StyleSheet.create({
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
     padding: 20,
   },
   fechaChipContainer: {
-    alignSelf: 'center',
+    alignSelf: "center",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 20,
     marginVertical: 8,
-    backgroundColor: '#E0F7FA', // color base del chip
-    shadowColor: '#000',
+    backgroundColor: "#E0F7FA", // color base del chip
+    shadowColor: "#000",
     shadowOpacity: 0.1,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 3, // para Android
     borderWidth: 1,
-    borderColor: '#B2EBF2', // borde sutil
+    borderColor: "#B2EBF2", // borde sutil
   },
   fechaChipText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#00796B',
-    textAlign: 'center',
+    fontWeight: "600",
+    color: "#00796B",
+    textAlign: "center",
   },
 });

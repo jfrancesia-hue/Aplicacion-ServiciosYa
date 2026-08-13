@@ -8,7 +8,7 @@
       "android",
       "web"
     ],
-    "version": "94.0.0",
+    "version": "95.0.0",
     "orientation": "portrait",
     "icon": "./assets/serviciosya-logo-2026.png",
     "userInterfaceStyle": "light",
@@ -50,7 +50,7 @@
       "appleTeamId": "HHY5MJ22J3"
     },
     "android": {
-      "versionCode": 94,
+      "versionCode": 95,
       "adaptiveIcon": {
         "foregroundImage": "./assets/serviciosya-logo-2026.png",
         "backgroundColor": "#20231f"
@@ -153,7 +153,8 @@
         }
       ],
       "expo-web-browser",
-      "expo-asset"
+      "expo-asset",
+      "@react-native-community/datetimepicker"
     ],
     "extra": {
       "tooriSyncBaseUrl": "https://tooriserviciosya.com",

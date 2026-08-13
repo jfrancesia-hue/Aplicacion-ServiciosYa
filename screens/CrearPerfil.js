@@ -20,6 +20,8 @@ import { Picker } from '@react-native-picker/picker';
 import { useQueryClient } from '@tanstack/react-query';
 import { perfilQueryKey } from '../lib/queryOptions';
 import { useGrantAchievement } from "../lib/services/achievements.services";
+import { recordCurrentLegalAcceptance } from "../lib/legal/acceptance";
+import { VERIFICATION_DOCUMENTS_BUCKET } from "../lib/legal/verificationDocuments";
 
 export default function FormularioRegistroDNI() {
 const queryClient = useQueryClient();
@@ -96,9 +98,12 @@ console.log('Error seleccionando imagen:', error);
 }
 };
 
-const subirImagen = async (uri, nombreBase) => {
+const subirImagen = async (uri, nombreBase, privada = false) => {
 const user = (await supabase.auth.getUser()).data.user;
-const nombreArchivo = `${user.id}-${nombreBase}-${Date.now()}.jpg`;
+const nombreArchivo = privada
+  ? `${user.id}/${nombreBase}-${Date.now()}.jpg`
+  : `${user.id}-${nombreBase}-${Date.now()}.jpg`;
+const bucket = privada ? VERIFICATION_DOCUMENTS_BUCKET : 'imagenes';
 
 const fileData = await FileSystem.readAsStringAsync(uri, {
   encoding: FileSystem.EncodingType.Base64,
@@ -106,13 +111,15 @@ const fileData = await FileSystem.readAsStringAsync(uri, {
 const buffer = Uint8Array.from(atob(fileData), (c) => c.charCodeAt(0));
 
 const { error } = await supabase.storage
-  .from('imagenes')
+  .from(bucket)
   .upload(nombreArchivo, buffer, {
     contentType: 'image/jpeg',
     upsert: true,
   });
 
 if (error) throw error;
+
+if (privada) return nombreArchivo;
 
 const { data: publicUrlData } = supabase.storage
   .from('imagenes')
@@ -140,8 +147,8 @@ try {
   const user = (await supabase.auth.getUser()).data.user;
 
   const urlPerfil = await subirImagen(fotoPerfil, 'perfil');
-  const urlFrente = await subirImagen(fotoFrente, 'dni-frente');
-  const urlDorso = await subirImagen(fotoDorso, 'dni-dorso');
+  const urlFrente = await subirImagen(fotoFrente, 'dni-frente', true);
+  const urlDorso = await subirImagen(fotoDorso, 'dni-dorso', true);
 
   await supabase
     .from('usuarios')
@@ -159,6 +166,8 @@ try {
       calle,
     })
     .eq('id', user.id);
+
+  await recordCurrentLegalAcceptance('profile_completion');
 
     
   // Invalidar la caché del perfil, necesario cada vez que se hagan cambios al perfil del usuario
@@ -233,7 +242,7 @@ return (
       setEdad(text);
       setValidaciones((prev) => ({ 
   ...prev, 
-  edad: /^[0-9]+$/.test(text) && parseInt(text) > 18 
+  edad: /^[0-9]+$/.test(text) && parseInt(text) >= 18
 }));
 
     }}
@@ -326,8 +335,19 @@ return (
         setValidaciones((prev) => ({ ...prev, terminos: value }));
       }}
     />
-    <Text style={styles.switchLabel}>Acepto los términos y condiciones</Text>
+    <Text
+      style={[styles.switchLabel, { textDecorationLine: 'underline' }]}
+      onPress={() => navigation.navigate('LegalDocument', { document: 'terms' })}
+    >
+      Acepto los términos y condiciones
+    </Text>
   </View>
+  <Text
+    style={[styles.switchLabel, { textDecorationLine: 'underline', marginBottom: 12 }]}
+    onPress={() => navigation.navigate('LegalDocument', { document: 'privacy' })}
+  >
+    Leer política de privacidad
+  </Text>
 
   <TouchableOpacity
     style={[

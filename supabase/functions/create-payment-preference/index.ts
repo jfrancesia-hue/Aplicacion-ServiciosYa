@@ -1,9 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const QUOTE_PREFIX = "__TOORI_QUOTE__";
-const COMMISSION_RATE = 0.15;
+const COMMISSION_RATE = 0.1;
 const MIN_QUOTE_ARS = 100;
 const MAX_QUOTE_ARS = 100_000_000;
+const OPERATIONAL_NOTICE_VERSION = "quote-operation-v1-2026-08-12";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,26 +36,70 @@ function isUuid(value: unknown): value is string {
   );
 }
 
-function quoteAmount(content: unknown) {
-  if (typeof content !== "string") return 0;
+function quotePricing(content: unknown) {
+  const invalid = {
+    amount: 0,
+    pricingMode: "project",
+    unitRate: 0,
+    estimatedUnits: 1,
+    referenceType: "fixed",
+  };
+  if (typeof content !== "string") return invalid;
 
   if (content.startsWith(QUOTE_PREFIX)) {
     try {
       const parsed = JSON.parse(content.slice(QUOTE_PREFIX.length));
-      return Number(parsed?.amount ?? 0);
+      const pricingMode = ["project", "hour", "day"].includes(
+        String(parsed?.pricingMode),
+      )
+        ? String(parsed.pricingMode)
+        : "project";
+      const unitRate = Number(parsed?.unitRate ?? parsed?.amount ?? 0);
+      const estimatedUnits =
+        pricingMode === "project" ? 1 : Number(parsed?.estimatedUnits ?? 0);
+      const referenceType =
+        pricingMode === "project"
+          ? "fixed"
+          : String(parsed?.referenceType) === "cap"
+            ? "cap"
+            : "estimate";
+      const amount = Math.round(unitRate * estimatedUnits * 100) / 100;
+      const submittedAmount = Number(parsed?.amount ?? 0);
+      if (
+        !Number.isFinite(amount) ||
+        !Number.isFinite(unitRate) ||
+        !Number.isFinite(estimatedUnits) ||
+        unitRate <= 0 ||
+        estimatedUnits <= 0 ||
+        Math.abs(amount - submittedAmount) >= 0.01
+      ) {
+        return invalid;
+      }
+      return { amount, pricingMode, unitRate, estimatedUnits, referenceType };
     } catch {
-      return 0;
+      return invalid;
     }
   }
 
   if (content.startsWith("💰 Presupuesto:")) {
     const match = content.match(/\$([\d.,]+)/);
-    return match
+    const amount = match
       ? Number.parseFloat(match[1].replace(/\./g, "").replace(",", "."))
       : 0;
+    return {
+      amount,
+      pricingMode: "project",
+      unitRate: amount,
+      estimatedUnits: 1,
+      referenceType: "fixed",
+    };
   }
 
-  return 0;
+  return invalid;
+}
+
+function quoteAmount(content: unknown) {
+  return quotePricing(content).amount;
 }
 
 function commissionFor(amount: number) {
@@ -89,25 +134,38 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const chatId = body?.chatId;
     const messageId = body?.messageId;
+    const noticeVersion = body?.operationalNotice?.version;
+    const noticeAcceptedAt = body?.operationalNotice?.acceptedAt;
     if (!isUuid(chatId) || !isUuid(messageId)) {
       return json({ error: "No se pudo identificar el presupuesto." }, 400);
+    }
+    const noticeProvided = noticeVersion != null || noticeAcceptedAt != null;
+    const noticeDate = noticeProvided
+      ? new Date(String(noticeAcceptedAt ?? ""))
+      : null;
+    if (
+      noticeProvided &&
+      (noticeVersion !== OPERATIONAL_NOTICE_VERSION ||
+        !noticeDate ||
+        !Number.isFinite(noticeDate.getTime()) ||
+        Math.abs(Date.now() - noticeDate.getTime()) > 30 * 60 * 1000)
+    ) {
+      return json(
+        { error: "Revisá y confirmá el resumen operativo antes de continuar." },
+        400,
+      );
     }
 
     const { data: chat, error: chatError } = await admin
       .from("chats")
-      .select("id,participant_a,participant_b,usuario_1,usuario_2")
+      .select("id,participant_a,participant_b")
       .eq("id", chatId)
       .maybeSingle();
     if (chatError) throw chatError;
     if (!chat) return json({ error: "Chat no encontrado." }, 404);
 
     const participants = new Set(
-      [
-        chat.participant_a,
-        chat.participant_b,
-        chat.usuario_1,
-        chat.usuario_2,
-      ].filter(Boolean),
+      [chat.participant_a, chat.participant_b].filter(Boolean),
     );
     if (!participants.has(user.id)) {
       return json({ error: "No pertenecés a este chat." }, 403);
@@ -131,6 +189,7 @@ Deno.serve(async (req) => {
       return json({ error: "El presupuesto no pertenece a este chat." }, 409);
     }
 
+    const pricing = quotePricing(message.contenido);
     const amountTotal = quoteAmount(message.contenido);
     if (
       !Number.isFinite(amountTotal) ||
@@ -148,6 +207,16 @@ Deno.serve(async (req) => {
       .eq("quote_message_id", messageId)
       .maybeSingle();
     if (existingError) throw existingError;
+    if (existing && noticeDate) {
+      const { error: noticeError } = await admin
+        .from("service_confirmation_payments")
+        .update({
+          operational_notice_version: OPERATIONAL_NOTICE_VERSION,
+          operational_notice_accepted_at: noticeDate.toISOString(),
+        })
+        .eq("id", existing.id);
+      if (noticeError) throw noticeError;
+    }
     if (existing?.status === "approved") {
       return json({ ok: true, approved: true, paymentRecordId: existing.id });
     }
@@ -173,6 +242,14 @@ Deno.serve(async (req) => {
             provider_id: message.remitente_id,
             amount_total: amountTotal,
             commission_amount: commissionAmount,
+            pricing_mode: pricing.pricingMode,
+            unit_rate: pricing.unitRate,
+            estimated_units: pricing.estimatedUnits,
+            reference_total_type: pricing.referenceType,
+            operational_notice_version: noticeDate
+              ? OPERATIONAL_NOTICE_VERSION
+              : null,
+            operational_notice_accepted_at: noticeDate?.toISOString() ?? null,
             status: "creating",
           })
           .select("id,status,checkout_url,preference_id")
@@ -197,7 +274,7 @@ Deno.serve(async (req) => {
             {
               id: `service-confirmation-${messageId}`,
               title: "Confirmación de presupuesto - ServiciosYa",
-              description: "Comisión del 15% por confirmación dentro de la app",
+              description: "Comisión del 10% por confirmación dentro de la app",
               quantity: 1,
               unit_price: commissionAmount,
               currency_id: "ARS",

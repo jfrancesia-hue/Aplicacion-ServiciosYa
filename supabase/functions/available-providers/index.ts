@@ -24,7 +24,6 @@ type UserRow = {
   horarios: string | null;
   celular: string | number | null;
   matricula: unknown;
-  antecedentes: unknown;
   verificado: boolean | null;
   suscriptor: boolean | null;
   antiguedad: number | null;
@@ -62,8 +61,6 @@ type CampaignProfileRow = {
   rol: string | null;
   foto_url: string | null;
   matricula_url: string | null;
-  antecedentes: unknown;
-  antecedentes_url: string | null;
   verificado: boolean | null;
   antiguedad: number | null;
   edad: number | null;
@@ -138,6 +135,13 @@ function json(body: unknown, status = 200) {
       "Cache-Control": "private, max-age=30",
     },
   });
+}
+
+function bearerToken(req: Request) {
+  const authorization = req.headers.get("Authorization") ?? "";
+  return authorization.startsWith("Bearer ")
+    ? authorization.slice("Bearer ".length)
+    : "";
 }
 
 function normalizeText(value?: string | null) {
@@ -303,8 +307,7 @@ function resolveProvince(value?: string | null) {
     if (
       aliases.some(
         (alias) =>
-          normalized === alias ||
-          ` ${normalized} `.includes(` ${alias} `),
+          normalized === alias || ` ${normalized} `.includes(` ${alias} `),
       )
     ) {
       return province.name;
@@ -359,9 +362,7 @@ async function fetchAll<T>(
   return rows;
 }
 
-async function fetchArgentinaCities(
-  admin: ReturnType<typeof createClient>,
-) {
+async function fetchArgentinaCities(admin: ReturnType<typeof createClient>) {
   const rows: CityRow[] = [];
 
   for (let from = 0; ; from += 1000) {
@@ -394,7 +395,7 @@ async function loadData(admin: ReturnType<typeof createClient>) {
     fetchAll<UserRow>(
       admin,
       "usuarios",
-      "id,nombre,apellido,edad,foto_perfil,ciudad,provincia,barrio,rol,categoria,horarios,celular,matricula,antecedentes,verificado,suscriptor,antiguedad,perfilPublico",
+      "id,nombre,apellido,edad,foto_perfil,ciudad,provincia,barrio,rol,categoria,horarios,celular,matricula,verificado,suscriptor,antiguedad,perfilPublico",
     ),
     fetchAll<ServiceRow>(
       admin,
@@ -409,7 +410,7 @@ async function loadData(admin: ReturnType<typeof createClient>) {
     fetchAll<CampaignProfileRow>(
       admin,
       "sy_perfiles",
-      "id,nombre,telefono,zona_frecuente,oficios,rol,foto_url,matricula_url,antecedentes,antecedentes_url,verificado,antiguedad,edad",
+      "id,nombre,telefono,zona_frecuente,oficios,rol,foto_url,matricula_url,verificado,antiguedad,edad",
     ),
     fetchArgentinaCities(admin),
     fetchAll<ProviderTrustRow>(
@@ -431,18 +432,12 @@ async function loadData(admin: ReturnType<typeof createClient>) {
   return cachedData;
 }
 
-function nearestArgentineCity(
-  service: ServiceRow,
-  cities: CityRow[],
-) {
+function nearestArgentineCity(service: ServiceRow, cities: CityRow[]) {
   const latitude = Number(service.latitude);
   const longitude = Number(service.longitude);
   const country = normalizeText(service.country).toUpperCase();
   const isInsideArgentina =
-    latitude >= -56 &&
-    latitude <= -21 &&
-    longitude >= -74 &&
-    longitude <= -53;
+    latitude >= -56 && latitude <= -21 && longitude >= -74 && longitude <= -53;
   if (
     !Number.isFinite(latitude) ||
     !Number.isFinite(longitude) ||
@@ -457,8 +452,7 @@ function nearestArgentineCity(
   let nearestDistance = Number.POSITIVE_INFINITY;
   for (const city of cities) {
     const latitudeDifference = city.latitude - latitude;
-    const longitudeDifference =
-      (city.longitude - longitude) * longitudeScale;
+    const longitudeDifference = (city.longitude - longitude) * longitudeScale;
     const distance =
       latitudeDifference * latitudeDifference +
       longitudeDifference * longitudeDifference;
@@ -471,9 +465,7 @@ function nearestArgentineCity(
   if (!nearest) return null;
   const province =
     ARGENTINE_PROVINCE_BY_STATE_CODE[nearest.state_code.toUpperCase()];
-  return province
-    ? { city: cleanText(nearest.name), province }
-    : null;
+  return province ? { city: cleanText(nearest.name), province } : null;
 }
 
 function availabilityFor(
@@ -557,14 +549,13 @@ function buildProviders(data: CachedData) {
   const campaignByUser = new Map<string, CampaignProfileRow[]>();
   let unlinkedCampaignProfiles = 0;
   for (const profile of data.campaignProfiles) {
-    if (
-      ["admin", "administrador"].includes(normalizeText(profile.rol))
-    ) {
+    if (["admin", "administrador"].includes(normalizeText(profile.rol))) {
       continue;
     }
     const byId = usersById.get(profile.id);
     const phoneMatches = phoneUsers.get(normalizePhone(profile.telefono)) ?? [];
-    const linkedUser = byId ?? (phoneMatches.length === 1 ? phoneMatches[0] : null);
+    const linkedUser =
+      byId ?? (phoneMatches.length === 1 ? phoneMatches[0] : null);
     if (!linkedUser) {
       unlinkedCampaignProfiles += 1;
       continue;
@@ -668,8 +659,7 @@ function buildProviders(data: CachedData) {
       serviceCity ||
       coordinateLocation?.city ||
       null;
-    const barrio =
-      cleanText(draft.user.barrio) || serviceDistrict || null;
+    const barrio = cleanText(draft.user.barrio) || serviceDistrict || null;
     const availability = availabilityFor(
       draft.user,
       draft.services,
@@ -702,12 +692,9 @@ function buildProviders(data: CachedData) {
       // Los documentos de perfiles históricos no se exponen desde una
       // función con permisos administrativos. Solo conservamos los que el
       // propio usuario marcó como parte de un perfil público actual.
-      matricula: draft.sources.has("current_profile")
-        ? draft.user.matricula
-        : null,
-      antecedentes: draft.sources.has("current_profile")
-        ? draft.user.antecedentes
-        : null,
+      credentialSubmitted: Boolean(
+        draft.sources.has("current_profile") && draft.user.matricula,
+      ),
       verificado: Boolean(draft.user.verificado || campaign?.verificado),
       suscriptor: Boolean(draft.user.suscriptor),
       antiguedad: draft.user.antiguedad ?? campaign?.antiguedad ?? null,
@@ -723,9 +710,7 @@ function buildProviders(data: CachedData) {
       locationText: [barrio, city, province].filter(Boolean).join(", "),
       completedJobs: Number(trust?.completed_jobs ?? 0),
       averageRating:
-        trust?.average_rating == null
-          ? null
-          : Number(trust.average_rating),
+        trust?.average_rating == null ? null : Number(trust.average_rating),
       reviewCount: Number(trust?.review_count ?? 0),
       averageResponseMinutes:
         trust?.average_response_minutes == null
@@ -795,6 +780,12 @@ Deno.serve(async (req) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
+    const token = bearerToken(req);
+    const {
+      data: { user },
+    } = await admin.auth.getUser(token);
+    if (!user) return json({ error: "Sesión requerida" }, 401);
+
     const data = await loadData(admin);
     const providerIndex =
       cachedProviderIndex?.source === data
@@ -820,10 +811,7 @@ Deno.serve(async (req) => {
       return json({
         ok: true,
         counts: Object.fromEntries(
-          Array.from(countSets.entries()).map(([key, ids]) => [
-            key,
-            ids.size,
-          ]),
+          Array.from(countSets.entries()).map(([key, ids]) => [key, ids.size]),
         ),
         meta: {
           providersInScope: scopedProviders.length,

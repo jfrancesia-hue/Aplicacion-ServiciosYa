@@ -30,7 +30,12 @@ import {
   type MicaOrderStatus,
 } from "../lib/micaOrder";
 import { supabase } from "../lib/supabase";
+import { calculateServiceConfirmationFee } from "../lib/constants/billing";
 import { resolveArgentineProvince } from "../lib/utils/geoSegmentation";
+import {
+  pricingModeLabel,
+  quotePricingSummary,
+} from "../lib/utils/quotePricing";
 import { useLocationStore } from "../store/locationStore";
 import type { MainStackParamList, MicaChatMode } from "../types/navigation";
 
@@ -55,6 +60,16 @@ type AgentInsight = {
   units?: string;
   contactIntent?: string;
 };
+
+function micaQuotePricingSummary(quote: MicaOrderQuote) {
+  return `${pricingModeLabel(quote.pricingMode ?? "project")} · ${quotePricingSummary({
+    pricingMode: quote.pricingMode ?? "project",
+    unitRate: quote.unitRate ?? quote.amount,
+    estimatedUnits: quote.estimatedUnits ?? 1,
+    referenceType: quote.referenceType ?? "fixed",
+    amount: quote.amount,
+  })}`;
+}
 type MicaProfileFallback = {
   nombre?: string | null;
   celular?: string | number | null;
@@ -815,8 +830,8 @@ export default function MicaChat({ navigation, route }: Props) {
 
   useEffect(() => {
     if (mode !== "buscar-servicio") return;
-    refreshOrderStatus(null);
-  }, [mode, refreshOrderStatus]);
+    refreshOrderStatus(route.params.offerId ?? null);
+  }, [mode, refreshOrderStatus, route.params.offerId]);
 
   useEffect(() => {
     if (
@@ -893,7 +908,7 @@ export default function MicaChat({ navigation, route }: Props) {
 
     if (searchStage === "quotes") {
       addMicaMessage(
-        "Compará monto, disponibilidad, experiencia y detalle. Elegí una opción para crear el chat interno con el profesional.",
+        "Compará monto, disponibilidad, experiencia y detalle. Podés abrir el chat protegido para conversar la propuesta antes de aceptarla.",
       );
     }
   };
@@ -902,7 +917,7 @@ export default function MicaChat({ navigation, route }: Props) {
     setSelectedQuoteId(quote.id);
     setSearchStage("selected");
     addMicaMessage(
-      `Elegiste la propuesta de ${quote.name}. Revisá los datos y confirmá para que MICA abra el chat seguro con el resumen del pedido.`,
+      `Elegiste la propuesta de ${quote.name}. Abrí el chat seguro para pedir aclaraciones. Aceptar el presupuesto y pagar el 10% será un paso separado dentro del chat.`,
     );
   };
 
@@ -935,7 +950,7 @@ export default function MicaChat({ navigation, route }: Props) {
           : current,
       );
       addMicaMessage(
-        `Listo. Ya conecté a ambas partes y dejé el resumen del pedido en el chat interno con ${selection.chat.providerName}.`,
+        `Listo. Dejé el presupuesto y el resumen en el chat con ${selection.chat.providerName}. Podés conversar antes de aceptar; el botón de pago cobra la comisión del 10%.`,
       );
       navigation.navigate("ChatIndividual", {
         chatId: selection.chat.id,
@@ -966,7 +981,7 @@ export default function MicaChat({ navigation, route }: Props) {
             ? "Abriendo chat seguro..."
             : activeOrder?.chatId
               ? "Abrir chat seguro"
-              : "Confirmar y abrir chat",
+              : "Revisar en chat seguro",
           icon: "chatbubbles" as const,
           onPress: handleConfirmProvider,
         };
@@ -1346,6 +1361,9 @@ export default function MicaChat({ navigation, route }: Props) {
                         </>
                       ) : null}
                     </View>
+                    <Text style={styles.quotePricing} numberOfLines={1}>
+                      {micaQuotePricingSummary(quote)}
+                    </Text>
                     <Text style={styles.quoteNote} numberOfLines={1}>
                       {quote.availability}
                     </Text>
@@ -1377,8 +1395,8 @@ export default function MicaChat({ navigation, route }: Props) {
                   Chat seguro con {selectedQuote.name}
                 </Text>
                 <Text style={styles.paymentText}>
-                  MICA enviará el resumen del pedido y ambos podrán coordinar
-                  fecha, materiales y confirmación sin salir de Servicios Ya.
+                  MICA enviará el presupuesto al chat. Podés pedir cambios o
+                  aclaraciones antes de aceptarlo, siempre dentro de Servicios Ya.
                 </Text>
               </View>
             </View>
@@ -1393,14 +1411,15 @@ export default function MicaChat({ navigation, route }: Props) {
                 >
                   {formatMicaOrderAmount(selectedQuote.amount)}
                 </Text>
+                <Text style={styles.selectionPricing}>
+                  {micaQuotePricingSummary(selectedQuote)}
+                </Text>
               </View>
               <View style={styles.selectionSummaryDivider} />
               <View style={styles.selectionSummaryCopy}>
-                <Text style={styles.selectionSummaryLabel}>
-                  Disponibilidad
-                </Text>
+                <Text style={styles.selectionSummaryLabel}>Comisión al aceptar</Text>
                 <Text style={styles.selectionSummaryText}>
-                  {selectedQuote.availability}
+                  {formatMicaOrderAmount(calculateServiceConfirmationFee(selectedQuote.amount))} (10%)
                 </Text>
               </View>
             </View>
@@ -1904,6 +1923,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     marginTop: 4,
   },
+  quotePricing: {
+    color: "#46727a",
+    fontSize: 11,
+    fontWeight: "800",
+    marginTop: 5,
+  },
   quoteIncluded: {
     color: "#0f8f58",
     fontSize: 11,
@@ -1964,6 +1989,13 @@ const styles = StyleSheet.create({
     marginTop: 3,
     fontSize: 16,
     fontWeight: "900",
+  },
+  selectionPricing: {
+    color: "#607d82",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 2,
+    maxWidth: 170,
   },
   selectionSummaryDivider: {
     width: 1,

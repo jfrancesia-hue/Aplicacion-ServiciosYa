@@ -1,10 +1,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
+type SupabaseAdmin = ReturnType<typeof createClient>;
+
 type UrgentWorkAlert = {
   id: string;
   created_at: string;
   source: "service_request" | "direct_contact" | "chat_message";
-  status: "pending" | "accepted" | "cancelled" | "escalation_ready";
+  status: "pending" | "declined" | "expired";
   worker_id: string;
   cliente_id: string | null;
   servicio_id: string | null;
@@ -14,288 +16,410 @@ type UrgentWorkAlert = {
   title: string;
   body: string;
   attempts_sent: number;
+  response_deadline: string;
+  root_alert_id: string | null;
+  assignment_round: number;
   metadata: Record<string, unknown>;
+};
+
+type UrgentPolicy = {
+  sla_minutes: number;
+  reminder_minutes: number;
+  max_reassignments: number;
 };
 
 const EXPO_API_URL = "https://exp.host/--/api/v2/push/send";
 const URGENT_WORK_CHANNEL_ID = "urgent-work";
 const URGENT_WORK_SOUND = "urgent_work.wav";
-const RETRY_MINUTES = [2, 10, 30, 60];
 
-function nextAttemptAt(createdAt: string, attemptsSentAfterCurrent: number) {
-  const nextMinute = RETRY_MINUTES[attemptsSentAfterCurrent];
-  if (nextMinute == null) return null;
-
-  const next = new Date(createdAt);
-  next.setMinutes(next.getMinutes() + nextMinute);
-  return next.toISOString();
+function addMinutes(iso: string, minutes: number) {
+  return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString();
 }
 
-function reminderCopy(alert: UrgentWorkAlert) {
-  const attempt = alert.attempts_sent + 1;
+function normalize(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+}
 
-  if (attempt >= 4) {
-    return {
-      title: "Ultimo aviso: trabajo urgente",
-      body: "Respondelo ahora. Si no hay respuesta, el pedido puede pasar a otro prestador.",
-    };
-  }
+async function isAuthorizedProcessorRequest(
+  req: Request,
+  supabase: SupabaseAdmin,
+  serviceRoleKey: string,
+) {
+  const authorization = req.headers.get("Authorization") ?? "";
+  if (authorization === `Bearer ${serviceRoleKey}`) return true;
 
-  if (attempt === 3) {
-    return {
-      title: "Trabajo urgente pendiente",
-      body: "El cliente sigue esperando respuesta. Revisalo cuanto antes.",
-    };
-  }
+  const cronSecret = req.headers.get("x-marketplace-cron-secret");
+  if (!cronSecret) return false;
+  const { data, error } = await supabase.rpc("verify_marketplace_cron_secret", {
+    p_secret: cronSecret,
+  });
+  return !error && data === true;
+}
 
-  return {
-    title: alert.title || "Tenes trabajo urgente",
-    body: alert.body,
-  };
+function matchesCategory(raw: unknown, category: string | null) {
+  if (!category) return true;
+  const expected = normalize(category);
+  const values = Array.isArray(raw) ? raw : [raw];
+  return values.some((item) => {
+    const current = normalize(item);
+    return (
+      current === expected ||
+      current.includes(expected) ||
+      expected.includes(current)
+    );
+  });
 }
 
 async function sendExpoPush(token: string, alert: UrgentWorkAlert) {
-  const { title, body } = reminderCopy(alert);
-
-  const res = await fetch(EXPO_API_URL, {
+  const firstAttempt = alert.attempts_sent === 0;
+  const response = await fetch(EXPO_API_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${Deno.env.get("EXPO_ACCESS_TOKEN")}`,
+      ...(Deno.env.get("EXPO_ACCESS_TOKEN")
+        ? { Authorization: `Bearer ${Deno.env.get("EXPO_ACCESS_TOKEN")}` }
+        : {}),
     },
     body: JSON.stringify({
       to: token,
       priority: "high",
       channelId: URGENT_WORK_CHANNEL_ID,
       sound: URGENT_WORK_SOUND,
-      title,
-      body,
+      title: firstAttempt
+        ? "Solicitud urgente · respondé en 20 min"
+        : "Recordatorio urgente · quedan 10 min",
+      body: firstAttempt
+        ? alert.body
+        : "Aceptá o rechazá explícitamente la solicitud desde Notificaciones.",
       data: {
-        type: "urgent_work_retry",
+        type: "urgent_work_request",
         alertId: alert.id,
-        source: alert.source,
-        screen: alert.chat_id ? "ChatIndividual" : "MisServicios",
-        params: alert.chat_id
-          ? {
-              chatId: alert.chat_id,
-              usuarioId1: alert.cliente_id,
-              usuarioId2: alert.worker_id,
-            }
-          : { screen: "Solicitudes" },
+        screen: "Notificaciones",
       },
     }),
   });
-
-  return res.json();
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || payload?.data?.status === "error") {
+    throw new Error(payload?.data?.message || `Expo push ${response.status}`);
+  }
 }
 
-async function escalateToAlternativeWorker(supabase: any, alert: UrgentWorkAlert) {
-  if (!alert.category || !alert.cliente_id) return null;
+async function enqueueClientUpdate(
+  supabase: SupabaseAdmin,
+  alert: UrgentWorkAlert,
+  event: string,
+  title: string,
+  body: string,
+) {
+  if (!alert.cliente_id) return;
+  await supabase.rpc("enqueue_transactional_notification", {
+    p_event_key: `${event}:${alert.id}`,
+    p_user_id: alert.cliente_id,
+    p_event_type: event,
+    p_title: title,
+    p_body: body,
+    p_action_screen: alert.chat_id ? "ChatIndividual" : "Notificaciones",
+    p_action_params: alert.chat_id ? { chatId: alert.chat_id } : {},
+    p_scheduled_for: new Date().toISOString(),
+    p_metadata: { urgent_alert_id: alert.id },
+  });
+}
 
-  const { data: candidates } = await supabase
-    .from("usuarios")
-    .select("id, expo_token, nombre, categoria")
-    .eq("rol", "worker")
-    .eq("perfilPublico", true)
-    .neq("id", alert.worker_id)
-    .ilike("categoria", `%${alert.category}%`)
-    .limit(10);
+async function createReplacement(
+  supabase: SupabaseAdmin,
+  alert: UrgentWorkAlert,
+  policy: UrgentPolicy,
+) {
+  const nextRound = alert.assignment_round + 1;
+  if (nextRound - 1 > policy.max_reassignments || !alert.cliente_id)
+    return null;
 
-  const candidate = (candidates || []).find((user: any) => user.expo_token);
-  if (!candidate?.id) return null;
+  const rootId = alert.root_alert_id || alert.id;
+  const [
+    { data: previous },
+    { data: suspended },
+    { data: originalWorker },
+    { data: workers },
+  ] = await Promise.all([
+    supabase
+      .from("urgent_work_alerts")
+      .select("worker_id")
+      .eq("root_alert_id", rootId),
+    supabase
+      .from("worker_urgent_discipline")
+      .select("worker_id")
+      .gt("priority_suspended_until", new Date().toISOString()),
+    supabase
+      .from("usuarios")
+      .select("ciudad,provincia")
+      .eq("id", alert.worker_id)
+      .maybeSingle(),
+    supabase
+      .from("usuarios")
+      .select("id,nombre,categoria,expo_token,ciudad,provincia")
+      .eq("rol", "worker")
+      .eq("perfilPublico", true)
+      .limit(100),
+  ]);
+  const excluded = new Set([
+    alert.worker_id,
+    ...(previous ?? []).map((item: { worker_id: string }) => item.worker_id),
+    ...(suspended ?? []).map((item: { worker_id: string }) => item.worker_id),
+  ]);
+  const candidate = (workers ?? []).find(
+    (worker: {
+      id: string;
+      categoria: unknown;
+      ciudad: string | null;
+      provincia: string | null;
+    }) =>
+      !excluded.has(worker.id) &&
+      matchesCategory(worker.categoria, alert.category) &&
+      (!originalWorker?.provincia ||
+        normalize(worker.provincia) === normalize(originalWorker.provincia)) &&
+      (!originalWorker?.ciudad ||
+        normalize(worker.ciudad) === normalize(originalWorker.ciudad)),
+  );
+  if (!candidate) return null;
 
-  const title = "Nuevo trabajo disponible";
-  const body = `Un cliente necesita ${alert.category}. Respondelo cuanto antes.`;
+  const now = new Date().toISOString();
+  const deadline = addMinutes(now, policy.sla_minutes);
+  const body = `Un cliente necesita ${alert.category || "un servicio"}. Confirmá en 20 minutos si podés atenderlo.`;
+  const { data: replacement, error } = await supabase
+    .from("urgent_work_alerts")
+    .insert({
+      source: alert.source === "chat_message" ? "direct_contact" : alert.source,
+      status: "pending",
+      worker_id: candidate.id,
+      cliente_id: alert.cliente_id,
+      servicio_id: null,
+      chat_id: null,
+      category: alert.category,
+      title: "Trabajo urgente",
+      body,
+      attempts_sent: 0,
+      next_attempt_at: now,
+      response_deadline: deadline,
+      root_alert_id: rootId,
+      reassigned_from_id: alert.id,
+      assignment_round: nextRound,
+      metadata: {
+        ...(alert.metadata || {}),
+        reassigned_from_worker_id: alert.worker_id,
+      },
+    })
+    .select("*")
+    .single();
+  if (error || !replacement) throw error || new Error("URGENT_REASSIGN_FAILED");
 
-  const { data: notificacion } = await supabase
+  const { data: notification, error: notificationError } = await supabase
     .from("notificaciones")
     .insert({
       receptor_id: candidate.id,
       emisor_id: alert.cliente_id,
       mensaje: body,
-      servicio_id: alert.servicio_id,
+      estado: "urgente_pendiente",
+      leido: false,
+      urgent_work_alert_id: replacement.id,
+      urgent_response_deadline: deadline,
     })
     .select("id")
     .single();
+  if (notificationError) throw notificationError;
 
-  const { data: newAlert } = await supabase
-    .from("urgent_work_alerts")
-    .insert({
-      source: alert.source,
-      worker_id: candidate.id,
-      cliente_id: alert.cliente_id,
-      servicio_id: alert.servicio_id,
-      notificacion_id: notificacion?.id ?? null,
-      category: alert.category,
-      title,
-      body,
-      metadata: {
-        parent_alert_id: alert.id,
-        escalated_from_worker_id: alert.worker_id,
-      },
-    })
-    .select("*")
-    .single();
+  await Promise.all([
+    supabase
+      .from("urgent_work_alerts")
+      .update({ notificacion_id: notification.id })
+      .eq("id", replacement.id),
+    supabase
+      .from("urgent_work_alerts")
+      .update({
+        status: alert.status === "expired" ? "expired" : "reassigned",
+        reassigned_alert_id: replacement.id,
+        reassignment_processed_at: new Date().toISOString(),
+        processing_at: null,
+      })
+      .eq("id", alert.id),
+  ]);
 
-  if (candidate.expo_token && newAlert) {
-    await sendExpoPush(candidate.expo_token, newAlert);
+  if (candidate.expo_token) {
+    await sendExpoPush(candidate.expo_token, replacement as UrgentWorkAlert);
     await supabase
       .from("urgent_work_alerts")
       .update({
         attempts_sent: 1,
         last_sent_at: new Date().toISOString(),
-        next_attempt_at: nextAttemptAt(newAlert.created_at, 1),
-        updated_at: new Date().toISOString(),
+        next_attempt_at: addMinutes(
+          replacement.created_at,
+          policy.reminder_minutes,
+        ),
       })
-      .eq("id", newAlert.id);
+      .eq("id", replacement.id);
   }
-
-  return candidate.id;
+  return replacement.id as string;
 }
 
-Deno.serve(async () => {
-  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-  const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+Deno.serve(async (req) => {
+  if (req.method !== "POST")
+    return Response.json({ error: "Method not allowed" }, { status: 405 });
+  const url = Deno.env.get("SUPABASE_URL");
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key)
+    return Response.json(
+      { ok: false, error: "Missing Supabase env vars" },
+      { status: 500 },
+    );
 
-  if (!SUPABASE_URL || !SUPABASE_KEY) {
-    return Response.json({ ok: false, error: "Missing Supabase env vars" }, { status: 500 });
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  if (!(await isAuthorizedProcessorRequest(req, supabase, key))) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const [{ data: policyData, error: policyError }, { data, error }] =
+    await Promise.all([
+      supabase
+        .from("urgent_work_policy")
+        .select("sla_minutes,reminder_minutes,max_reassignments")
+        .eq("singleton", true)
+        .single(),
+      supabase.rpc("claim_due_urgent_work_alerts", { p_limit: 100 }),
+    ]);
+  if (policyError || error)
+    return Response.json(
+      { ok: false, error: policyError?.message || error?.message },
+      { status: 500 },
+    );
+  const policy = policyData as UrgentPolicy;
+  const alerts = (data ?? []) as UrgentWorkAlert[];
+  const results: Array<Record<string, unknown>> = [];
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: false },
-  });
-
-  const now = new Date().toISOString();
-
-  const { data: alerts, error } = await supabase
-    .from("urgent_work_alerts")
-    .select("*")
-    .eq("status", "pending")
-    .lte("next_attempt_at", now)
-    .lt("attempts_sent", RETRY_MINUTES.length)
-    .order("next_attempt_at", { ascending: true })
-    .limit(100);
-
-  if (error) {
-    return Response.json({ ok: false, error: error.message }, { status: 500 });
-  }
-
-  let sent = 0;
-  let skipped = 0;
-  let failed = 0;
-
-  for (const alert of (alerts || []) as UrgentWorkAlert[]) {
-    if (alert.notificacion_id) {
-      const { data: notification } = await supabase
-        .from("notificaciones")
-        .select("estado, leido")
-        .eq("id", alert.notificacion_id)
-        .maybeSingle();
-
-      if (notification?.estado === "aceptado" || notification?.leido === true) {
-        await supabase
-          .from("urgent_work_alerts")
-          .update({ status: "accepted", updated_at: new Date().toISOString() })
-          .eq("id", alert.id);
-        skipped++;
-        continue;
-      }
-    }
-
-    if (alert.chat_id && alert.cliente_id) {
-      const { data: reply } = await supabase
-        .from("mensajes")
-        .select("id")
-        .eq("chat_id", alert.chat_id)
-        .eq("remitente_id", alert.worker_id)
-        .gt("created_at", alert.created_at)
-        .limit(1)
-        .maybeSingle();
-
-      if (reply) {
-        await supabase
-          .from("urgent_work_alerts")
-          .update({ status: "accepted", updated_at: new Date().toISOString() })
-          .eq("id", alert.id);
-        skipped++;
-        continue;
-      }
-    }
-
-    const { data: worker } = await supabase
-      .from("usuarios")
-      .select("expo_token")
-      .eq("id", alert.worker_id)
-      .maybeSingle();
-
-    if (!worker?.expo_token) {
-      await supabase
-        .from("urgent_work_alerts")
-        .update({
-          attempts_sent: alert.attempts_sent + 1,
-          next_attempt_at: nextAttemptAt(alert.created_at, alert.attempts_sent + 1),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", alert.id);
-      skipped++;
-      continue;
-    }
-
+  for (const alert of alerts) {
     try {
-      await sendExpoPush(worker.expo_token, alert);
-      const attemptsAfterCurrent = alert.attempts_sent + 1;
-      const nextAt = nextAttemptAt(alert.created_at, attemptsAfterCurrent);
-      const isLastAttempt = attemptsAfterCurrent >= RETRY_MINUTES.length;
-
-      await supabase
-        .from("urgent_work_alerts")
-        .update({
-          attempts_sent: attemptsAfterCurrent,
-          last_sent_at: new Date().toISOString(),
-          next_attempt_at: nextAt,
-          status: isLastAttempt ? "escalation_ready" : "pending",
-          escalation_ready_at: isLastAttempt ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", alert.id);
-
-      if (isLastAttempt) {
-        const escalatedToWorkerId = await escalateToAlternativeWorker(supabase, alert);
-        if (escalatedToWorkerId) {
+      if (alert.status === "declined") {
+        const replacementId = await createReplacement(supabase, alert, policy);
+        if (!replacementId) {
           await supabase
             .from("urgent_work_alerts")
             .update({
-              metadata: {
-                ...(alert.metadata || {}),
-                escalated_to_worker_id: escalatedToWorkerId,
-              },
-              updated_at: new Date().toISOString(),
+              reassignment_processed_at: new Date().toISOString(),
+              processing_at: null,
             })
             .eq("id", alert.id);
         }
+        await enqueueClientUpdate(
+          supabase,
+          alert,
+          "urgent_declined",
+          "El prestador no está disponible",
+          replacementId
+            ? "La solicitud urgente fue reasignada a otro prestador."
+            : "No encontramos otro prestador disponible por ahora.",
+        );
+        results.push({ id: alert.id, action: "declined", replacementId });
+        continue;
       }
 
-      sent++;
-    } catch (e) {
-      failed++;
+      if (
+        alert.status === "expired" ||
+        new Date(alert.response_deadline).getTime() <= Date.now()
+      ) {
+        const now = new Date().toISOString();
+        await supabase
+          .from("urgent_work_alerts")
+          .update({
+            status: "expired",
+            missed_at: now,
+            processing_at: null,
+            updated_at: now,
+          })
+          .eq("id", alert.id);
+        await supabase.from("urgent_work_misses").upsert(
+          {
+            alert_id: alert.id,
+            worker_id: alert.worker_id,
+            occurred_at: now,
+            response_deadline: alert.response_deadline,
+            assignment_round: alert.assignment_round,
+          },
+          { onConflict: "alert_id", ignoreDuplicates: true },
+        );
+        await supabase
+          .from("notificaciones")
+          .update({ estado: "urgente_vencida", leido: true })
+          .eq("urgent_work_alert_id", alert.id);
+        const replacementId = await createReplacement(
+          supabase,
+          { ...alert, status: "expired" },
+          policy,
+        );
+        if (!replacementId) {
+          await supabase
+            .from("urgent_work_alerts")
+            .update({
+              reassignment_processed_at: new Date().toISOString(),
+              processing_at: null,
+            })
+            .eq("id", alert.id);
+        }
+        await enqueueClientUpdate(
+          supabase,
+          alert,
+          "urgent_expired",
+          "Venció la solicitud urgente",
+          replacementId
+            ? "No hubo respuesta en 20 minutos y reasignamos la solicitud."
+            : "No hubo respuesta en 20 minutos y no encontramos reemplazo disponible.",
+        );
+        results.push({ id: alert.id, action: "expired", replacementId });
+        continue;
+      }
+
+      const { data: worker } = await supabase
+        .from("usuarios")
+        .select("expo_token")
+        .eq("id", alert.worker_id)
+        .maybeSingle();
+      if (worker?.expo_token) await sendExpoPush(worker.expo_token, alert);
+      const attempts = alert.attempts_sent + 1;
+      const reminderAt = addMinutes(alert.created_at, policy.reminder_minutes);
       await supabase
         .from("urgent_work_alerts")
         .update({
+          attempts_sent: attempts,
+          last_sent_at: new Date().toISOString(),
+          next_attempt_at: attempts >= 2 ? alert.response_deadline : reminderAt,
+          processing_at: null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", alert.id);
+      results.push({
+        id: alert.id,
+        action: attempts === 1 ? "initial" : "reminder",
+      });
+    } catch (caught) {
+      await supabase
+        .from("urgent_work_alerts")
+        .update({
+          processing_at: null,
           updated_at: new Date().toISOString(),
           metadata: {
             ...(alert.metadata || {}),
-            last_error: e instanceof Error ? e.message : String(e),
+            last_error:
+              caught instanceof Error ? caught.message : String(caught),
           },
         })
         .eq("id", alert.id);
+      results.push({
+        id: alert.id,
+        action: "failed",
+        error: caught instanceof Error ? caught.message : String(caught),
+      });
     }
   }
 
-  return Response.json({
-    ok: true,
-    due: alerts?.length || 0,
-    sent,
-    skipped,
-    failed,
-  });
+  return Response.json({ ok: true, processed: alerts.length, results });
 });

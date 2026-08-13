@@ -192,6 +192,7 @@ Deno.serve(async (req) => {
       .update({
         status: "approved",
         job_status: "confirmed",
+        schedule_status: "awaiting_provider_options",
         payment_id: paymentId,
         provider_status: providerStatus,
         approved_at: now,

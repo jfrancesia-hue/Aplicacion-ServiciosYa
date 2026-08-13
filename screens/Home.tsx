@@ -171,6 +171,9 @@ function Home({ navigation }: Props) {
           )}
 
           <SideQuickAccessMenu
+            onPublicarNecesidadPress={
+              !isWorker ? () => navigation.navigate("PublicarNecesidad") : undefined
+            }
             onBuscarServicioPress={() => handleMicaModePress("buscar-servicio")}
             onOfrecerServicioPress={() => handleMicaModePress("ofrecer-servicio")}
           />

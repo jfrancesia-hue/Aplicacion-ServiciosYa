@@ -37,8 +37,8 @@ La app puede seguir usando tablas propias para experiencia móvil (`usuarios`, `
 - Busca prestadores.
 - Consulta presupuestos reales mediante la Edge Function autenticada
   `mica-order`.
-- Al elegir un prestador, crea o reutiliza el chat interno y publica un resumen
-  de traspaso visible para ambas partes.
+- Al elegir un prestador, crea o reutiliza el chat interno y publica el
+  presupuesto estructurado junto con un resumen visible para ambas partes.
 - Puede intervenir a pedido dentro del chat para resumir acuerdos, interpretar
   transcripciones y proponer el siguiente paso.
 - Debe quedar sincronizada con las respuestas que entren desde la app.
@@ -73,12 +73,16 @@ EXPO_PUBLIC_TOORI_APP_SYNC_TOKEN=<mismo token que TOORI_APP_SYNC_TOKEN en webhoo
 5. Prestador ve pedidos compatibles en app → `pedidos-disponibles.php`.
 6. Prestador responde presupuesto/NO desde app mediante `mica-order`; el
    endpoint `responder-pedido.php` queda como compatibilidad del flujo web.
-7. Cliente recibe propuestas reales en MICA y selecciona una mediante
-   `mica-order`.
-8. MICA abre el chat interno, deja el resumen del pedido y acompaña la
-   coordinación.
-9. Web/Mica mantiene pagos, seguimiento y escalamiento.
-10. Panel web/admin ve el estado real.
+7. Cliente recibe propuestas reales en MICA y elige cuál revisar mediante
+   `mica-order`; esta elección todavía no acepta ni cobra el presupuesto.
+8. MICA abre el chat interno y deja el presupuesto estructurado. Cliente y
+   prestador pueden conversar o pedir cambios dentro del chat protegido.
+9. El cliente acepta desde el presupuesto y paga la comisión vigente del 10%.
+   Recién con el pago aprobado se confirma el trabajo y se libera el contacto.
+10. Al terminar, el cliente confirma el resultado y califica. Si el prestador
+    no se presenta o el trabajo no se realiza, MICA abre un reclamo y lo escala
+    a la bandeja operativa del administrador sin reembolsar automáticamente.
+11. El panel operativo muestra pagos, trabajos, moderación y reclamos reales.
 
 ## Regla de desarrollo
 
@@ -97,5 +101,6 @@ Antes de publicar Android/iOS/Web:
 - Sustituir token compartido por JWT/Supabase Auth.
 - Unificar nomenclatura visual: Toori ServiciosYa / TOORI Servicios Ya.
 - Crear migraciones/versionado formal del esquema operativo.
-- Hacer panel admin de estado más claro para `nuevaOferta`, `presupuestos`, outreach y pagos.
+- Definir la política de resolución y reembolso de reclamos; hasta entonces los
+  pagos quedan en estado `disputed` para revisión humana.
 - Definir si `servicios` de app queda como catálogo del prestador o si se reemplaza progresivamente por `sy_perfiles.oficios`.

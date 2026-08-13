@@ -1,15 +1,40 @@
 import React, { useCallback, useRef, useEffect, memo } from "react";
 import CustomTextInput from "../inputs/CustomTextInput";
-import { TouchableOpacity, View, StyleSheet, Text, Modal, TextInput, KeyboardAvoidingView, Platform, Animated, ScrollView, ActivityIndicator, Alert } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import {
+  TouchableOpacity,
+  View,
+  StyleSheet,
+  Text,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  ActivityIndicator,
+  Alert,
+} from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Audio } from "expo-av";
-import { createQuoteMessage } from "../../lib/utils/quoteMessage";
+import {
+  acknowledgeQuoteOperationalNotice,
+  createQuoteMessage,
+} from "../../lib/utils/quoteMessage";
 import {
   CHAT_AUDIO_MAX_SECONDS,
   formatAudioDuration,
 } from "../../lib/utils/audioMessage";
+import {
+  inspectChatContent,
+  inspectChatText,
+} from "../../lib/utils/chatPolicy";
+import {
+  buildQuotePricing,
+  pricingModeLabel,
+  type QuotePricingMode,
+  type QuoteReferenceType,
+} from "../../lib/utils/quotePricing";
+import QuoteOperationalNoticeModal from "../quotes/QuoteOperationalNoticeModal";
 
 interface ChatInputBarProps {
   onSend: (message: string) => void | Promise<void>;
@@ -19,16 +44,27 @@ interface ChatInputBarProps {
     mimeType: string;
   }) => void | Promise<void>;
   serviceId?: string;
+  canSendQuote?: boolean;
+  contentProtectionActive?: boolean;
 }
 
-function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
+function ChatInputBar({
+  onSend,
+  onSendAudio,
+  canSendQuote = false,
+  contentProtectionActive = true,
+}: ChatInputBarProps) {
   const [message, setMessage] = React.useState("");
   const [sending, setSending] = React.useState(false);
   const [sendingAudio, setSendingAudio] = React.useState(false);
   const [isRecording, setIsRecording] = React.useState(false);
   const [recordingSeconds, setRecordingSeconds] = React.useState(0);
   const [presupuestoVisible, setPresupuestoVisible] = React.useState(false);
+  const [modalidad, setModalidad] = React.useState<QuotePricingMode>("project");
   const [monto, setMonto] = React.useState("");
+  const [unidades, setUnidades] = React.useState("1");
+  const [tipoReferencia, setTipoReferencia] =
+    React.useState<QuoteReferenceType>("estimate");
   const [alcance, setAlcance] = React.useState("");
   const [materiales, setMateriales] = React.useState("Materiales incluidos");
   const [tiempo, setTiempo] = React.useState("A coordinar");
@@ -36,58 +72,73 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
   const [validez, setValidez] = React.useState("24 horas");
   const [notas, setNotas] = React.useState("");
   const [enviandoPresupuesto, setEnviandoPresupuesto] = React.useState(false);
+  const [quoteNoticeVisible, setQuoteNoticeVisible] = React.useState(false);
+  const [pendingQuoteContent, setPendingQuoteContent] = React.useState<
+    string | null
+  >(null);
+  const pricing = React.useMemo(
+    () =>
+      buildQuotePricing({
+        pricingMode: modalidad,
+        unitRate: Number(monto),
+        estimatedUnits: Number(unidades),
+        referenceType: tipoReferencia,
+      }),
+    [modalidad, monto, tipoReferencia, unidades],
+  );
 
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const shimmerAnim = useRef(new Animated.Value(-1)).current;
   const recordingRef = useRef<Audio.Recording | null>(null);
   const recordingStartedAtRef = useRef(0);
 
-  const stopRecording = useCallback(async (cancelled = false) => {
-    const activeRecording = recordingRef.current;
-    if (!activeRecording) return;
+  const stopRecording = useCallback(
+    async (cancelled = false) => {
+      const activeRecording = recordingRef.current;
+      if (!activeRecording) return;
 
-    recordingRef.current = null;
-    setIsRecording(false);
+      recordingRef.current = null;
+      setIsRecording(false);
 
-    try {
-      const status = await activeRecording.stopAndUnloadAsync();
-      const uri = activeRecording.getURI();
-      const durationMs =
-        status.durationMillis ?? Date.now() - recordingStartedAtRef.current;
+      try {
+        const status = await activeRecording.stopAndUnloadAsync();
+        const uri = activeRecording.getURI();
+        const durationMs =
+          status.durationMillis ?? Date.now() - recordingStartedAtRef.current;
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-      });
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+        });
 
-      if (cancelled) return;
-      if (!uri || durationMs < 700) {
-        Alert.alert(
-          "Audio muy corto",
-          "Mantené la grabación al menos un segundo antes de enviarla.",
-        );
-        return;
+        if (cancelled) return;
+        if (!uri || durationMs < 700) {
+          Alert.alert(
+            "Audio muy corto",
+            "Mantené la grabación al menos un segundo antes de enviarla.",
+          );
+          return;
+        }
+
+        setSendingAudio(true);
+        await onSendAudio({
+          uri,
+          durationMs,
+          mimeType: "audio/mp4",
+        });
+      } catch (error) {
+        if (!cancelled) {
+          Alert.alert(
+            "No se pudo enviar el audio",
+            error instanceof Error ? error.message : "Intentá nuevamente.",
+          );
+        }
+      } finally {
+        setSendingAudio(false);
+        setRecordingSeconds(0);
       }
-
-      setSendingAudio(true);
-      await onSendAudio({
-        uri,
-        durationMs,
-        mimeType: "audio/mp4",
-      });
-    } catch (error) {
-      if (!cancelled) {
-        Alert.alert(
-          "No se pudo enviar el audio",
-          error instanceof Error ? error.message : "Intentá nuevamente.",
-        );
-      }
-    } finally {
-      setSendingAudio(false);
-      setRecordingSeconds(0);
-    }
-  }, [onSendAudio]);
+    },
+    [onSendAudio],
+  );
 
   const startRecording = useCallback(async () => {
     if (sendingAudio || recordingRef.current) return;
@@ -118,24 +169,12 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
     } catch (error) {
       Alert.alert(
         "No se pudo grabar",
-        error instanceof Error ? error.message : "Revisá el permiso del micrófono.",
+        error instanceof Error
+          ? error.message
+          : "Revisá el permiso del micrófono.",
       );
     }
   }, [sendingAudio]);
-
-  useEffect(() => {
-    // Pulso suave de escala
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.025, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-      ])
-    ).start();
-    // Efecto shimmer de izquierda a derecha
-    Animated.loop(
-      Animated.timing(shimmerAnim, { toValue: 2, duration: 2000, delay: 600, useNativeDriver: true })
-    ).start();
-  }, []);
 
   useEffect(() => {
     if (!isRecording) return;
@@ -165,8 +204,14 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
 
   const handleSend = async () => {
     if (!message.trim() || sending) return;
-    if (/\d/.test(message)) {
-      alert("No podés enviar números en el chat. Usá el botón \"Enviar presupuesto\" para eso.");
+    const policy = inspectChatText(message);
+    if (contentProtectionActive && !policy.allowed) {
+      Alert.alert(
+        policy.reason === "price"
+          ? "Usá Crear presupuesto"
+          : "Cuidemos el contacto",
+        policy.message,
+      );
       return;
     }
 
@@ -181,7 +226,10 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
   };
 
   const resetQuoteForm = () => {
+    setModalidad("project");
     setMonto("");
+    setUnidades("1");
+    setTipoReferencia("estimate");
     setAlcance("");
     setMateriales("Materiales incluidos");
     setTiempo("A coordinar");
@@ -192,45 +240,25 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
 
   return (
     <>
-      {/* Botón enviar presupuesto */}
-      <Animated.View style={[styles.presupuestoBtnWrapper, { transform: [{ scale: pulseAnim }] }]}>
-        <TouchableOpacity onPress={() => setPresupuestoVisible(true)} activeOpacity={0.82}>
-          <LinearGradient
-            colors={["#00c2d4", "#007fa8"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.presupuestoBtn}
-          >
-            <MaterialIcons name="attach-money" size={22} color="#fff" />
-            <Text style={styles.presupuestoBtnText}>Enviar presupuesto</Text>
-            <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.7)" style={{ marginLeft: "auto" }} />
-            {/* Shimmer sweep */}
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                StyleSheet.absoluteFillObject,
-                {
-                  borderRadius: 16,
-                  overflow: "hidden",
-                  transform: [{
-                    translateX: shimmerAnim.interpolate({
-                      inputRange: [-1, 2],
-                      outputRange: [-220, 440],
-                    }),
-                  }],
-                },
-              ]}
-            >
-              <LinearGradient
-                colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.22)", "rgba(255,255,255,0)"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ width: 80, height: "100%" }}
-              />
-            </Animated.View>
-          </LinearGradient>
+      {canSendQuote ? (
+        <TouchableOpacity
+          accessibilityLabel="Crear presupuesto"
+          activeOpacity={0.8}
+          onPress={() => setPresupuestoVisible(true)}
+          style={styles.presupuestoBtn}
+        >
+          <View style={styles.presupuestoIcon}>
+            <MaterialIcons name="receipt-long" size={18} color="#047a8f" />
+          </View>
+          <View style={styles.presupuestoCopy}>
+            <Text style={styles.presupuestoBtnText}>Crear presupuesto</Text>
+            <Text style={styles.presupuestoHint}>
+              Monto, alcance y garantía
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={20} color="#047a8f" />
         </TouchableOpacity>
-      </Animated.View>
+      ) : null}
 
       <View style={styles.inputBarContainer}>
         {isRecording ? (
@@ -294,27 +322,75 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
             {sendingAudio ? (
               <ActivityIndicator size="small" color="#fff" />
             ) : (
-              <Ionicons name={isRecording ? "send" : "mic"} size={23} color="#fff" />
+              <Ionicons
+                name={isRecording ? "send" : "mic"}
+                size={23}
+                color="#fff"
+              />
             )}
           </TouchableOpacity>
         )}
       </View>
       {/* Modal presupuesto */}
-      <Modal visible={presupuestoVisible} transparent animationType="fade" onRequestClose={() => setPresupuestoVisible(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalOverlay}>
+      <Modal
+        visible={presupuestoVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPresupuestoVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
           <View style={styles.modalBox}>
-            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               <View style={styles.modalHeader}>
                 <View style={styles.modalIconBox}>
                   <MaterialIcons name="receipt-long" size={22} color="#fff" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalTitle}>Presupuesto profesional</Text>
-                  <Text style={styles.modalSubtitle}>Completo, claro y listo para aceptar.</Text>
+                  <Text style={styles.modalSubtitle}>
+                    Completo, claro y listo para aceptar.
+                  </Text>
                 </View>
               </View>
 
-              <Text style={styles.fieldLabel}>Monto final</Text>
+              <Text style={styles.fieldLabel}>Modalidad</Text>
+              <View style={styles.modeRow}>
+                {(["project", "hour", "day"] as QuotePricingMode[]).map(
+                  (mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.modeChip,
+                        modalidad === mode && styles.modeChipActive,
+                      ]}
+                      onPress={() => setModalidad(mode)}
+                    >
+                      <Text
+                        style={[
+                          styles.modeChipText,
+                          modalidad === mode && styles.modeChipTextActive,
+                        ]}
+                      >
+                        {pricingModeLabel(mode)}
+                      </Text>
+                    </TouchableOpacity>
+                  ),
+                )}
+              </View>
+
+              <Text style={styles.fieldLabel}>
+                {modalidad === "project"
+                  ? "Importe cerrado"
+                  : modalidad === "hour"
+                    ? "Tarifa por hora"
+                    : "Tarifa por día"}
+              </Text>
               <View style={styles.montoRow}>
                 <Text style={styles.montoPrefix}>$</Text>
                 <TextInput
@@ -326,6 +402,69 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
                   onChangeText={(t) => setMonto(t.replace(/[^0-9]/g, ""))}
                   autoFocus
                 />
+              </View>
+
+              {modalidad !== "project" ? (
+                <>
+                  <Text style={styles.fieldLabel}>
+                    {modalidad === "hour"
+                      ? "Horas estimadas"
+                      : "Días estimados"}
+                  </Text>
+                  <TextInput
+                    style={styles.quoteInput}
+                    keyboardType="decimal-pad"
+                    placeholder={modalidad === "hour" ? "Ej: 3" : "Ej: 2"}
+                    placeholderTextColor="#94a3b8"
+                    value={unidades}
+                    onChangeText={(value) =>
+                      setUnidades(
+                        value.replace(/[^0-9.,]/g, "").replace(",", "."),
+                      )
+                    }
+                  />
+                  <View style={styles.referenceRow}>
+                    {(["estimate", "cap"] as QuoteReferenceType[]).map(
+                      (kind) => (
+                        <TouchableOpacity
+                          key={kind}
+                          style={[
+                            styles.referenceChip,
+                            tipoReferencia === kind &&
+                              styles.referenceChipActive,
+                          ]}
+                          onPress={() => setTipoReferencia(kind)}
+                        >
+                          <Text
+                            style={[
+                              styles.referenceChipText,
+                              tipoReferencia === kind &&
+                                styles.referenceChipTextActive,
+                            ]}
+                          >
+                            {kind === "estimate"
+                              ? "Total estimado"
+                              : "Tope máximo"}
+                          </Text>
+                        </TouchableOpacity>
+                      ),
+                    )}
+                  </View>
+                </>
+              ) : null}
+
+              <View style={styles.referenceTotalBox}>
+                <View>
+                  <Text style={styles.referenceTotalLabel}>
+                    Total de referencia
+                  </Text>
+                  <Text style={styles.referenceTotalHint}>
+                    Base para calcular la comisión del 10%
+                  </Text>
+                </View>
+                <Text style={styles.referenceTotalValue}>
+                  ${Math.round(pricing.amount).toLocaleString("es-AR")}
+                </Text>
               </View>
 
               <Text style={styles.fieldLabel}>Que incluye el trabajo</Text>
@@ -395,30 +534,49 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
               />
             </ScrollView>
             <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { setPresupuestoVisible(false); resetQuoteForm(); }}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setPresupuestoVisible(false);
+                  resetQuoteForm();
+                }}
+              >
                 <Text style={styles.modalCancelText}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalSendBtn, (!monto || !alcance.trim() || enviandoPresupuesto) && { opacity: 0.5 }]}
-                disabled={!monto || !alcance.trim() || enviandoPresupuesto}
-                onPress={async () => {
-                  if (!monto || !alcance.trim()) return;
-                  setEnviandoPresupuesto(true);
-                  try {
-                    await onSend(createQuoteMessage({
-                      amount: Number(monto),
-                      scope: alcance.trim(),
-                      materials: materiales.trim() || "A confirmar",
-                      timeframe: tiempo.trim() || "A coordinar",
-                      warranty: garantia.trim() || "Sin garantia especificada",
-                      validUntil: validez.trim() || "24 horas",
-                      notes: notas.trim() || undefined,
-                    }));
-                    setPresupuestoVisible(false);
-                    resetQuoteForm();
-                  } finally {
-                    setEnviandoPresupuesto(false);
+                style={[
+                  styles.modalSendBtn,
+                  (pricing.amount <= 0 ||
+                    !alcance.trim() ||
+                    enviandoPresupuesto) && { opacity: 0.5 },
+                ]}
+                disabled={
+                  pricing.amount <= 0 || !alcance.trim() || enviandoPresupuesto
+                }
+                onPress={() => {
+                  if (pricing.amount <= 0 || !alcance.trim()) return;
+                  const quoteContent = createQuoteMessage({
+                    amount: pricing.amount,
+                    pricingMode: pricing.pricingMode,
+                    unitRate: pricing.unitRate,
+                    estimatedUnits: pricing.estimatedUnits,
+                    referenceType: pricing.referenceType,
+                    scope: alcance.trim(),
+                    materials: materiales.trim() || "A confirmar",
+                    timeframe: tiempo.trim() || "A coordinar",
+                    warranty: garantia.trim() || "Sin garantia especificada",
+                    validUntil: validez.trim() || "24 horas",
+                    notes: notas.trim() || undefined,
+                    source: "chat",
+                  });
+                  const policy = inspectChatContent(quoteContent);
+                  if (contentProtectionActive && !policy.allowed) {
+                    Alert.alert("Revisá el presupuesto", policy.message);
+                    return;
                   }
+                  setPendingQuoteContent(quoteContent);
+                  setPresupuestoVisible(false);
+                  setQuoteNoticeVisible(true);
                 }}
               >
                 <Ionicons name="send" size={16} color="#fff" />
@@ -428,6 +586,30 @@ function ChatInputBar({ onSend, onSendAudio }: ChatInputBarProps) {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+      <QuoteOperationalNoticeModal
+        visible={quoteNoticeVisible}
+        mode="send"
+        amount={pricing.amount}
+        busy={enviandoPresupuesto}
+        onClose={() => {
+          setQuoteNoticeVisible(false);
+          setPresupuestoVisible(true);
+        }}
+        onConfirm={async () => {
+          if (!pendingQuoteContent || enviandoPresupuesto) return;
+          setEnviandoPresupuesto(true);
+          try {
+            await onSend(
+              acknowledgeQuoteOperationalNotice(pendingQuoteContent),
+            );
+            setQuoteNoticeVisible(false);
+            setPendingQuoteContent(null);
+            resetQuoteForm();
+          } finally {
+            setEnviandoPresupuesto(false);
+          }
+        }}
+      />
     </>
   );
 }
@@ -511,44 +693,183 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#fff1f0",
   },
-  presupuestoBtnWrapper: {
-    marginHorizontal: 12,
-    marginTop: 8,
-    marginBottom: 2,
-    borderRadius: 16,
-    overflow: "hidden",
-    elevation: 4,
-    shadowColor: "#007fa8",
-    shadowOpacity: 0.35,
-    shadowOffset: { width: 0, height: 3 },
-    shadowRadius: 8,
-  },
   presupuestoBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 3,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#a9dce3",
+    backgroundColor: "#f4fcfd",
   },
-  presupuestoBtnText: { fontSize: 15, fontWeight: "800", color: "#fff", letterSpacing: 0.2 },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(7,18,28,0.58)", justifyContent: "center", alignItems: "center", padding: 18 },
-  modalBox: { backgroundColor: "#fff", borderRadius: 8, padding: 16, width: "100%", maxWidth: 440, maxHeight: "88%", shadowColor: "#000", shadowOpacity: 0.16, shadowOffset: { width: 0, height: 8 }, shadowRadius: 18, elevation: 8 },
-  modalHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14 },
-  modalIconBox: { width: 44, height: 44, borderRadius: 8, alignItems: "center", justifyContent: "center", backgroundColor: "#047a8f" },
-  modalTitle: { fontSize: 18, fontWeight: "900", color: "#102a35", marginBottom: 3 },
+  presupuestoIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#dff5f7",
+  },
+  presupuestoCopy: { flex: 1, marginLeft: 10 },
+  presupuestoBtnText: { fontSize: 14, fontWeight: "800", color: "#075f6f" },
+  presupuestoHint: { fontSize: 11, color: "#638087", marginTop: 1 },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(7,18,28,0.58)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 18,
+  },
+  modalBox: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    padding: 16,
+    width: "100%",
+    maxWidth: 440,
+    maxHeight: "88%",
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  modalIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#047a8f",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#102a35",
+    marginBottom: 3,
+  },
   modalSubtitle: { fontSize: 13, color: "#64748b" },
-  fieldLabel: { fontSize: 12, fontWeight: "800", color: "#38515d", marginBottom: 6, marginTop: 8 },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#38515d",
+    marginBottom: 6,
+    marginTop: 8,
+  },
   fieldGrid: { flexDirection: "row", gap: 10 },
   fieldGridItem: { flex: 1 },
-  montoRow: { flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: "#8dd4df", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 9, marginBottom: 4, backgroundColor: "#f1fbfd" },
-  montoPrefix: { fontSize: 22, fontWeight: "900", color: "#047a8f", marginRight: 4 },
-  montoInput: { flex: 1, fontSize: 23, fontWeight: "900", color: "#102a35", paddingVertical: 0 },
-  quoteInput: { minHeight: 44, borderWidth: 1, borderColor: "#d6e6ea", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, color: "#102a35", backgroundColor: "#fbfdfe", fontSize: 14, fontWeight: "600" },
+  modeRow: { flexDirection: "row", gap: 7, marginBottom: 4 },
+  modeChip: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#cfdde1",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 5,
+  },
+  modeChipActive: { backgroundColor: "#e6f7f9", borderColor: "#069eb3" },
+  modeChipText: {
+    color: "#5d7379",
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  modeChipTextActive: { color: "#057f91" },
+  referenceRow: { flexDirection: "row", gap: 8, marginTop: 8 },
+  referenceChip: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#d6e1e4",
+    paddingVertical: 9,
+    alignItems: "center",
+  },
+  referenceChipActive: { borderColor: "#069eb3", backgroundColor: "#effafb" },
+  referenceChipText: { color: "#667d83", fontSize: 11, fontWeight: "700" },
+  referenceChipTextActive: { color: "#057f91" },
+  referenceTotalBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    borderRadius: 10,
+    backgroundColor: "#f0fafb",
+    borderWidth: 1,
+    borderColor: "#bfe6ea",
+    padding: 12,
+    marginTop: 12,
+  },
+  referenceTotalLabel: { color: "#284b53", fontSize: 12, fontWeight: "900" },
+  referenceTotalHint: { color: "#71878c", fontSize: 10, marginTop: 2 },
+  referenceTotalValue: { color: "#047a8f", fontSize: 19, fontWeight: "900" },
+  montoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "#8dd4df",
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    marginBottom: 4,
+    backgroundColor: "#f1fbfd",
+  },
+  montoPrefix: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#047a8f",
+    marginRight: 4,
+  },
+  montoInput: {
+    flex: 1,
+    fontSize: 23,
+    fontWeight: "900",
+    color: "#102a35",
+    paddingVertical: 0,
+  },
+  quoteInput: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: "#d6e6ea",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: "#102a35",
+    backgroundColor: "#fbfdfe",
+    fontSize: 14,
+    fontWeight: "600",
+  },
   quoteInputLarge: { minHeight: 78, textAlignVertical: "top" },
   modalActions: { flexDirection: "row", gap: 10, marginTop: 14 },
-  modalCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 8, borderWidth: 1.5, borderColor: "#d7e2e5", alignItems: "center", backgroundColor: "#fff" },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: "#d7e2e5",
+    alignItems: "center",
+    backgroundColor: "#fff",
+  },
   modalCancelText: { fontSize: 15, fontWeight: "800", color: "#667085" },
-  modalSendBtn: { flex: 1, flexDirection: "row", gap: 6, paddingVertical: 12, borderRadius: 8, backgroundColor: "#069eb3", alignItems: "center", justifyContent: "center" },
+  modalSendBtn: {
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: "#069eb3",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   modalSendText: { fontSize: 15, fontWeight: "700", color: "#fff" },
 });

@@ -16,8 +16,16 @@ import {
   isTooriBridgeConfigured,
 } from "../../lib/tooriBridge";
 import { respondToMicaOrder } from "../../lib/micaOrder";
+import {
+  buildQuotePricing,
+  pricingModeLabel,
+  type QuotePricingMode,
+  type QuoteReferenceType,
+} from "../../lib/utils/quotePricing";
 import { getUserID } from "../../store/authStore";
+import { QUOTE_OPERATIONAL_NOTICE_VERSION } from "../../lib/constants/billing";
 import type { TooriBridgePedido } from "../../types/tooriBridge";
+import QuoteOperationalNoticeModal from "../quotes/QuoteOperationalNoticeModal";
 
 const colors = {
   primary: "#0e7b78",
@@ -106,9 +114,28 @@ export default function PedidosMicaSection() {
   const queryClient = useQueryClient();
   const [selectedPedido, setSelectedPedido] =
     useState<TooriBridgePedido | null>(null);
+  const [modalidad, setModalidad] = useState<QuotePricingMode>("project");
   const [monto, setMonto] = useState("");
+  const [unidades, setUnidades] = useState("1");
+  const [tipoReferencia, setTipoReferencia] =
+    useState<QuoteReferenceType>("estimate");
   const [horario, setHorario] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [materiales, setMateriales] = useState("A confirmar");
+  const [garantia, setGarantia] = useState("7 días");
+  const [validez, setValidez] = useState("24 horas");
+  const [notas, setNotas] = useState("");
+  const [quoteNoticeVisible, setQuoteNoticeVisible] = useState(false);
+  const pricing = useMemo(
+    () =>
+      buildQuotePricing({
+        pricingMode: modalidad,
+        unitRate: Number(monto.replace(",", ".")),
+        estimatedUnits: Number(unidades.replace(",", ".")),
+        referenceType: tipoReferencia,
+      }),
+    [modalidad, monto, tipoReferencia, unidades],
+  );
 
   const enabled = isTooriBridgeConfigured();
 
@@ -169,15 +196,25 @@ export default function PedidosMicaSection() {
       if (!ctx || !pedido) throw new Error("Pedido no seleccionado");
 
       if (accion === "presupuesto") {
-        const montoNumero = Number(String(monto).replace(/[^0-9.]/g, ""));
-        if (!montoNumero || montoNumero <= 0) {
+        if (pricing.amount <= 0) {
           throw new Error("Ingresá un monto válido");
         }
         return respondToMicaOrder(String(pedido.id), {
           type: "budget",
-          amount: montoNumero,
+          amount: pricing.amount,
+          pricingMode: pricing.pricingMode,
+          unitRate: pricing.unitRate,
+          estimatedUnits: pricing.estimatedUnits,
+          referenceType: pricing.referenceType,
           availability: horario,
-          description: descripcion || "Presupuesto enviado desde la app Servicios Ya",
+          description:
+            descripcion || "Presupuesto enviado desde la app Servicios Ya",
+          materials: materiales,
+          warranty: garantia,
+          validUntil: validez,
+          notes: notas,
+          operationalNoticeVersion: QUOTE_OPERATIONAL_NOTICE_VERSION,
+          operationalNoticeAcceptedAt: new Date().toISOString(),
         });
       }
 
@@ -186,11 +223,19 @@ export default function PedidosMicaSection() {
       });
     },
     onSuccess: () => {
+      setQuoteNoticeVisible(false);
       showToast.success("Listo", "Respuesta enviada al flujo Web/Mica.");
       setSelectedPedido(null);
+      setModalidad("project");
       setMonto("");
+      setUnidades("1");
+      setTipoReferencia("estimate");
       setHorario("");
       setDescripcion("");
+      setMateriales("A confirmar");
+      setGarantia("7 días");
+      setValidez("24 horas");
+      setNotas("");
       queryClient.invalidateQueries({
         queryKey: ["tooriBridge", "pedidosDisponibles"],
       });
@@ -282,13 +327,88 @@ export default function PedidosMicaSection() {
               <Text style={styles.replyTitle}>
                 Responder pedido #{selectedPedido.id}
               </Text>
+              <View style={styles.modeRow}>
+                {(["project", "hour", "day"] as QuotePricingMode[]).map(
+                  (mode) => (
+                    <TouchableOpacity
+                      key={mode}
+                      style={[
+                        styles.modeChip,
+                        modalidad === mode && styles.modeChipActive,
+                      ]}
+                      onPress={() => setModalidad(mode)}
+                    >
+                      <Text
+                        style={[
+                          styles.modeText,
+                          modalidad === mode && styles.modeTextActive,
+                        ]}
+                      >
+                        {pricingModeLabel(mode)}
+                      </Text>
+                    </TouchableOpacity>
+                  ),
+                )}
+              </View>
               <TextInput
                 value={monto}
                 onChangeText={setMonto}
                 keyboardType="numeric"
-                placeholder="Monto: ej. 25000"
+                placeholder={
+                  modalidad === "project"
+                    ? "Importe cerrado: ej. 25000"
+                    : modalidad === "hour"
+                      ? "Tarifa por hora"
+                      : "Tarifa por día"
+                }
                 style={styles.input}
               />
+              {modalidad !== "project" ? (
+                <>
+                  <TextInput
+                    value={unidades}
+                    onChangeText={setUnidades}
+                    keyboardType="decimal-pad"
+                    placeholder={
+                      modalidad === "hour"
+                        ? "Horas estimadas"
+                        : "Días estimados"
+                    }
+                    style={styles.input}
+                  />
+                  <View style={styles.modeRow}>
+                    {(["estimate", "cap"] as QuoteReferenceType[]).map(
+                      (kind) => (
+                        <TouchableOpacity
+                          key={kind}
+                          style={[
+                            styles.modeChip,
+                            tipoReferencia === kind && styles.modeChipActive,
+                          ]}
+                          onPress={() => setTipoReferencia(kind)}
+                        >
+                          <Text
+                            style={[
+                              styles.modeText,
+                              tipoReferencia === kind && styles.modeTextActive,
+                            ]}
+                          >
+                            {kind === "estimate"
+                              ? "Total estimado"
+                              : "Tope máximo"}
+                          </Text>
+                        </TouchableOpacity>
+                      ),
+                    )}
+                  </View>
+                </>
+              ) : null}
+              <View style={styles.totalBox}>
+                <Text style={styles.totalLabel}>Total de referencia</Text>
+                <Text style={styles.totalValue}>
+                  ${Math.round(pricing.amount).toLocaleString("es-AR")}
+                </Text>
+              </View>
               <TextInput
                 value={horario}
                 onChangeText={setHorario}
@@ -298,9 +418,35 @@ export default function PedidosMicaSection() {
               <TextInput
                 value={descripcion}
                 onChangeText={setDescripcion}
-                placeholder="Mensaje breve para el cliente"
+                placeholder="Alcance: qué incluye el trabajo"
                 style={[styles.input, styles.textArea]}
                 multiline
+              />
+              <TextInput
+                value={materiales}
+                onChangeText={setMateriales}
+                placeholder="Materiales incluidos o aparte"
+                style={styles.input}
+              />
+              <View style={styles.compactFields}>
+                <TextInput
+                  value={garantia}
+                  onChangeText={setGarantia}
+                  placeholder="Garantía"
+                  style={[styles.input, styles.compactInput]}
+                />
+                <TextInput
+                  value={validez}
+                  onChangeText={setValidez}
+                  placeholder="Validez"
+                  style={[styles.input, styles.compactInput]}
+                />
+              </View>
+              <TextInput
+                value={notas}
+                onChangeText={setNotas}
+                placeholder="Notas opcionales (sin datos de contacto)"
+                style={styles.input}
               />
               <View style={styles.actionsRow}>
                 <TouchableOpacity
@@ -313,7 +459,16 @@ export default function PedidosMicaSection() {
                 <TouchableOpacity
                   style={[styles.actionButton, styles.sendButton]}
                   disabled={responderMutation.isPending}
-                  onPress={() => responderMutation.mutate("presupuesto")}
+                  onPress={() => {
+                    if (pricing.amount <= 0) {
+                      showToast.error(
+                        "Monto inválido",
+                        "Ingresá un monto válido.",
+                      );
+                      return;
+                    }
+                    setQuoteNoticeVisible(true);
+                  }}
                 >
                   <Text style={styles.sendButtonText}>
                     {responderMutation.isPending
@@ -326,6 +481,14 @@ export default function PedidosMicaSection() {
           ) : null}
         </View>
       ))}
+      <QuoteOperationalNoticeModal
+        visible={quoteNoticeVisible}
+        mode="send"
+        amount={pricing.amount}
+        busy={responderMutation.isPending}
+        onClose={() => setQuoteNoticeVisible(false)}
+        onConfirm={() => responderMutation.mutate("presupuesto")}
+      />
     </View>
   );
 }
@@ -408,6 +571,36 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   replyTitle: { fontWeight: "800", color: colors.primary, marginBottom: 8 },
+  modeRow: { flexDirection: "row", gap: 6, marginBottom: 8 },
+  modeChip: {
+    flex: 1,
+    minHeight: 38,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  modeChipActive: { borderColor: colors.primary, backgroundColor: "#DDF7F4" },
+  modeText: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "700",
+    textAlign: "center",
+  },
+  modeTextActive: { color: colors.primary },
+  totalBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: "#DDF7F4",
+    marginBottom: 8,
+  },
+  totalLabel: { color: "#315e67", fontSize: 11, fontWeight: "800" },
+  totalValue: { color: colors.primary, fontSize: 17, fontWeight: "900" },
   input: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
@@ -418,6 +611,8 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   textArea: { minHeight: 70, textAlignVertical: "top" },
+  compactFields: { flexDirection: "row", gap: 8 },
+  compactInput: { flex: 1 },
   actionsRow: { flexDirection: "row", gap: 8 },
   actionButton: {
     flex: 1,

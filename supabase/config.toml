@@ -49,3 +49,8 @@ entrypoint = "./functions/verify-payment/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/operational-dashboard/index.ts"
+
+[functions.process-transactional-notifications]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/process-transactional-notifications/index.ts"

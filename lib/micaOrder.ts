@@ -1,14 +1,26 @@
 import { supabase } from "./supabase";
+import type {
+  QuotePricingMode,
+  QuoteReferenceType,
+} from "./utils/quotePricing";
 
 export type MicaOrderQuote = {
   id: string;
   workerId: string;
   name: string;
   amount: number;
+  pricingMode: QuotePricingMode;
+  unitRate: number;
+  estimatedUnits: number;
+  referenceType: QuoteReferenceType;
   rating: number | null;
   jobs: number;
   availability: string;
   description: string;
+  materials: string;
+  warranty: string;
+  validUntil: string;
+  notes?: string;
   verified: boolean;
   avatar?: string | null;
   selected: boolean;
@@ -38,6 +50,7 @@ export type MicaOrderSelection = {
     providerName: string;
   };
   quote: MicaOrderQuote;
+  quoteMessageId: string;
 };
 
 async function invokeMicaOrder<T>(body: Record<string, unknown>) {
@@ -71,8 +84,18 @@ export function respondToMicaOrder(
     | {
         type: "budget";
         amount: number;
+        pricingMode: QuotePricingMode;
+        unitRate: number;
+        estimatedUnits: number;
+        referenceType: QuoteReferenceType;
         availability?: string;
         description?: string;
+        materials?: string;
+        warranty?: string;
+        validUntil?: string;
+        notes?: string;
+        operationalNoticeVersion?: string;
+        operationalNoticeAcceptedAt?: string;
       }
     | { type: "decline" },
 ) {

@@ -22,11 +22,13 @@ interface QuickAccessItem {
 }
 
 interface SideQuickAccessMenuProps {
+  onPublicarNecesidadPress?: () => void;
   onBuscarServicioPress?: () => void;
   onOfrecerServicioPress?: () => void;
 }
 
 const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
+  onPublicarNecesidadPress,
   onBuscarServicioPress,
   onOfrecerServicioPress,
 }) => {
@@ -109,6 +111,16 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
   }, []);
 
   const items: QuickAccessItem[] = [
+    ...(onPublicarNecesidadPress
+      ? [{
+          label: "Publicar necesidad",
+          subtitle: "Recibí propuestas de prestadores",
+          icon: "megaphone-outline" as const,
+          gradient: ["#25b5c5", "#07899d", "#056374"] as [string, string, string],
+          badge: "CLIENTE",
+          onPress: onPublicarNecesidadPress,
+        }]
+      : []),
     {
       label: "Buscar servicio",
       subtitle: "Contale a MICA qué necesitás",

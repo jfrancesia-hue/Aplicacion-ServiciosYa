@@ -16,8 +16,6 @@ interface WebhookPayload {
   old_record: null | MensajeRecord;
 }
 
-const URGENT_WORK_CHANNEL_ID = "urgent-work";
-const URGENT_WORK_SOUND = "urgent_work.wav";
 const AUDIO_MESSAGE_PREFIX = "__TOORI_AUDIO_V1__:";
 const MICA_MESSAGE_PREFIXES = [
   "__TOORI_MICA_HANDOFF_V1__:",
@@ -59,10 +57,11 @@ function getNotificationBody(content: string) {
   }
 }
 
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-);
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+if (!supabaseUrl || !serviceRoleKey)
+  throw new Error("Missing Supabase env vars");
+const supabase = createClient(supabaseUrl, serviceRoleKey);
 
 Deno.serve(async (req) => {
   try {
@@ -86,21 +85,26 @@ Deno.serve(async (req) => {
 
     if (chatErr || !chat) {
       return new Response(
-        JSON.stringify({ ok: false, reason: "chat_not_found", err: chatErr?.message }),
+        JSON.stringify({
+          ok: false,
+          reason: "chat_not_found",
+          err: chatErr?.message,
+        }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     }
 
     // El receptor es el participante distinto del remitente
-    const receptorId = chat.participant_a === msg.remitente_id
-      ? chat.participant_b
-      : chat.participant_a;
+    const receptorId =
+      chat.participant_a === msg.remitente_id
+        ? chat.participant_b
+        : chat.participant_a;
 
     // expo_token del receptor + nombre del remitente en paralelo
     const [{ data: receptor }, { data: remitente }] = await Promise.all([
       supabase
         .from("usuarios")
-        .select("expo_token, rol")
+        .select("expo_token")
         .eq("id", receptorId)
         .maybeSingle(),
       supabase
@@ -131,8 +135,8 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         to: receptor.expo_token,
         priority: "high",
-        channelId: URGENT_WORK_CHANNEL_ID,
-        sound: URGENT_WORK_SOUND,
+        channelId: "default",
+        sound: "default",
         title,
         body: notificationBody,
         data: {
@@ -146,26 +150,15 @@ Deno.serve(async (req) => {
       }),
     }).then((r) => r.json());
 
-    if (receptor.rol === "worker") {
-      await supabase.from("urgent_work_alerts").insert({
-        source: "chat_message",
-        worker_id: receptorId,
-        cliente_id: msg.remitente_id,
-        chat_id: msg.chat_id,
-        title,
-        body: notificationBody,
-        metadata: {
-          mensaje_id: msg.id,
-        },
-      });
-    }
-
     return new Response(JSON.stringify({ ok: true, expo: expoRes }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {
     return new Response(
-      JSON.stringify({ ok: false, error: e instanceof Error ? e.message : String(e) }),
+      JSON.stringify({
+        ok: false,
+        error: e instanceof Error ? e.message : String(e),
+      }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
   }

@@ -42,6 +42,15 @@ type NuevaOfertaRow = {
   video_urls: string | null;
   media_descripcion: string | null;
   historial_conversacion: string | null;
+  app_cliente_id: string | null;
+  app_chat_id: string | null;
+  ciudad: string | null;
+  provincia: string | null;
+  modo_agente: boolean | null;
+  source: string;
+  metadata: Json;
+  updated_at: string | null;
+  presupuesto_seleccionado_id: number | null;
 };
 
 type PresupuestoRow = {
@@ -54,6 +63,11 @@ type PresupuestoRow = {
   descripcion: string | null;
   horarios_disponibles: string | null;
   estado: string | null;
+  metadata: Json;
+  pricing_mode: "project" | "hour" | "day";
+  unit_rate: number | null;
+  estimated_units: number | null;
+  reference_total_type: "fixed" | "estimate" | "cap";
 };
 
 type UsuarioRowOverride = Omit<
@@ -84,20 +98,36 @@ type UsuarioInsertOverride = Omit<
   perfilPublico?: boolean | null;
 };
 
-type MensajeRowOverride = DatabaseGenerated["public"]["Tables"]["mensajes"]["Row"] & {
-  created_at: string | null;
-};
+type MensajeRowOverride =
+  DatabaseGenerated["public"]["Tables"]["mensajes"]["Row"] & {
+    created_at: string | null;
+  };
 
-type MensajeInsertOverride = DatabaseGenerated["public"]["Tables"]["mensajes"]["Insert"] & {
-  created_at?: string | null;
-};
+type MensajeInsertOverride =
+  DatabaseGenerated["public"]["Tables"]["mensajes"]["Insert"] & {
+    created_at?: string | null;
+  };
+
+type NotificacionRowOverride =
+  DatabaseGenerated["public"]["Tables"]["notificaciones"]["Row"] & {
+    transactional_outbox_id: string | null;
+    urgent_work_alert_id: string | null;
+    urgent_response_deadline: string | null;
+  };
 
 type UrgentWorkAlertRow = {
   id: string;
   created_at: string;
   updated_at: string;
   source: "service_request" | "direct_contact" | "chat_message";
-  status: "pending" | "accepted" | "cancelled" | "escalation_ready";
+  status:
+    | "pending"
+    | "accepted"
+    | "declined"
+    | "expired"
+    | "cancelled"
+    | "reassigned"
+    | "escalation_ready";
   worker_id: string;
   cliente_id: string | null;
   servicio_id: string | null;
@@ -110,6 +140,16 @@ type UrgentWorkAlertRow = {
   next_attempt_at: string;
   last_sent_at: string | null;
   escalation_ready_at: string | null;
+  response_deadline: string;
+  responded_at: string | null;
+  response_action: "accepted" | "declined" | null;
+  missed_at: string | null;
+  processing_at: string | null;
+  root_alert_id: string | null;
+  reassigned_from_id: string | null;
+  reassigned_alert_id: string | null;
+  reassignment_processed_at: string | null;
+  assignment_round: number;
   metadata: Json;
 };
 
@@ -158,6 +198,24 @@ type ServiceJobReviewRow = {
   comment: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type ServiceJobIncidentRow = {
+  id: string;
+  case_number: string;
+  payment_record_id: string;
+  chat_id: string;
+  reporter_id: string;
+  provider_id: string;
+  category: "provider_no_show" | "work_not_completed" | "other";
+  details: string | null;
+  mica_summary: string | null;
+  status: "mica_intake" | "escalated" | "reviewing" | "resolved" | "dismissed";
+  assigned_to: string | null;
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
 };
 
 export type Database = MergeDeep<
@@ -248,8 +306,47 @@ export type Database = MergeDeep<
           Update: Partial<ServiceJobReviewRow>;
           Relationships: [];
         };
+        notificaciones: {
+          Row: NotificacionRowOverride;
+          Insert: Partial<NotificacionRowOverride> & { receptor_id: string };
+          Update: Partial<NotificacionRowOverride>;
+          Relationships: [];
+        };
+        service_job_incidents: {
+          Row: ServiceJobIncidentRow;
+          Insert: Partial<ServiceJobIncidentRow> & {
+            case_number: string;
+            payment_record_id: string;
+            chat_id: string;
+            reporter_id: string;
+            provider_id: string;
+            category: ServiceJobIncidentRow["category"];
+          };
+          Update: Partial<ServiceJobIncidentRow>;
+          Relationships: [];
+        };
       };
       Functions: {
+        create_urgent_work_alert: {
+          Args: {
+            p_worker_id: string;
+            p_source: "service_request" | "direct_contact";
+            p_category?: string | null;
+            p_chat_id?: string | null;
+            p_servicio_id?: string | null;
+            p_title?: string;
+            p_body?: string;
+            p_metadata?: Json;
+          };
+          Returns: Json;
+        };
+        respond_to_urgent_work_alert: {
+          Args: {
+            p_alert_id: string;
+            p_response: "accepted" | "declined";
+          };
+          Returns: Json;
+        };
         track_marketplace_event: {
           Args: {
             p_event_name: string;
@@ -264,6 +361,14 @@ export type Database = MergeDeep<
           Returns: Json;
         };
         submit_service_job_review: {
+          Args: {
+            p_payment_record_id: string;
+            p_rating: number;
+            p_comment?: string | null;
+          };
+          Returns: Json;
+        };
+        submit_client_job_review: {
           Args: {
             p_payment_record_id: string;
             p_rating: number;
@@ -287,6 +392,105 @@ export type Database = MergeDeep<
             ok: boolean;
             oferta_id: string;
           }[];
+        };
+        create_manual_service_request: {
+          Args: {
+            p_categoria: string;
+            p_descripcion: string;
+            p_zona: string;
+            p_ciudad?: string | null;
+            p_provincia?: string | null;
+            p_urgencia?: "normal" | "pronto" | "urgente";
+            p_responsable_herramientas?:
+              | "cliente"
+              | "prestador"
+              | "a_coordinar";
+            p_cantidad_personas?: number;
+            p_modalidad_preferida?: "a_coordinar" | "proyecto" | "hora" | "dia";
+          };
+          Returns: {
+            ok: boolean;
+            oferta_id: string;
+          }[];
+        };
+        get_my_service_requests: {
+          Args: { p_limit?: number };
+          Returns: {
+            id: string;
+            categoria: string;
+            zona: string;
+            descripcion: string;
+            estado: string;
+            paso: number;
+            source: string;
+            metadata: Json;
+            created_at: string;
+            response_count: number;
+            selected_budget_id: string | null;
+            chat_id: string | null;
+          }[];
+        };
+        cancel_service_request: {
+          Args: { p_oferta_id: string };
+          Returns: Json;
+        };
+        get_chat_schedule: {
+          Args: { p_chat_id: string };
+          Returns: Json;
+        };
+        get_my_service_jobs: {
+          Args: { p_limit?: number };
+          Returns: {
+            payment_record_id: string;
+            chat_id: string;
+            payer_id: string;
+            provider_id: string;
+            is_payer: boolean;
+            is_provider: boolean;
+            counterpart_id: string;
+            counterpart_name: string;
+            counterpart_avatar: string | null;
+            title: string;
+            description: string;
+            amount_total: number;
+            pricing_mode: string;
+            job_status: string;
+            schedule_status: string;
+            schedule_round: number;
+            schedule_proposed_by: string | null;
+            scheduled_start: string | null;
+            scheduled_end: string | null;
+            incident_id: string | null;
+            incident_case_number: string | null;
+            incident_status: string | null;
+            review_rating: number | null;
+            requires_action: boolean;
+            can_close: boolean;
+            created_at: string;
+          }[];
+        };
+        propose_service_schedule: {
+          Args: {
+            p_payment_record_id: string;
+            p_slots: Json;
+            p_reason?: "initial" | "reschedule";
+          };
+          Returns: Json;
+        };
+        select_service_schedule_slot: {
+          Args: {
+            p_proposal_id: string;
+            p_slot_id: string;
+          };
+          Returns: Json;
+        };
+        submit_service_incident_intake: {
+          Args: {
+            p_payment_record_id: string;
+            p_category: "provider_no_show" | "work_not_completed" | "other";
+            p_intake: Json;
+          };
+          Returns: Json;
         };
         get_provider_contact_access: {
           Args: {
@@ -324,6 +528,8 @@ export type Database = MergeDeep<
             video_urls: string | null;
             presupuesto_estimado: number | null;
             ya_respondio: boolean;
+            source: string;
+            metadata: Json;
           }[];
         };
         get_servicios_with_online_workers: {
@@ -344,7 +550,8 @@ export type Database = MergeDeep<
 >;
 
 export type UserUpdate = Database["public"]["Tables"]["usuarios"]["Update"];
-export type NotificacionRow = Database["public"]["Tables"]["notificaciones"]["Row"];
+export type NotificacionRow =
+  Database["public"]["Tables"]["notificaciones"]["Row"];
 export type ChatRow = Database["public"]["Tables"]["chats"]["Row"];
 export type MensajeRow = Database["public"]["Tables"]["mensajes"]["Row"];
 export type ServicioRow = Database["public"]["Tables"]["servicios"]["Row"];

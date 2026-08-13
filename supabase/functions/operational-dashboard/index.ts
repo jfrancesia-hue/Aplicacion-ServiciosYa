@@ -85,6 +85,19 @@ type LegacyReportRow = {
   created_at: string | null;
 };
 
+type IncidentRow = {
+  id: string;
+  case_number: string;
+  payment_record_id: string;
+  chat_id: string;
+  provider_id: string;
+  category: string;
+  details: string | null;
+  mica_summary: string | null;
+  status: string;
+  created_at: string;
+};
+
 type ServiceOwnerRow = {
   id: number;
   user_id: string | null;
@@ -173,6 +186,7 @@ async function buildSummary(
     messagesResult,
     profileReportsResult,
     legacyReportsResult,
+    incidentsResult,
     paymentsResult,
     eventsResult,
     reviewsResult,
@@ -204,6 +218,10 @@ async function buildSummary(
       .select("id", { count: "exact", head: true })
       .in("status", ["pending", "reviewing"]),
     admin
+      .from("service_job_incidents")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["mica_intake", "escalated", "reviewing"]),
+    admin
       .from("service_confirmation_payments")
       .select("status,job_status,created_at")
       .gte("created_at", periodStart)
@@ -234,6 +252,7 @@ async function buildSummary(
     messagesResult.error,
     profileReportsResult.error,
     legacyReportsResult.error,
+    incidentsResult.error,
     paymentsResult.error,
     eventsResult.error,
     reviewsResult.error,
@@ -340,7 +359,9 @@ async function buildSummary(
       chatsInPeriod: chatsResult.count ?? 0,
       messagesLast24Hours: messagesResult.count ?? 0,
       openReports:
-        (profileReportsResult.count ?? 0) + (legacyReportsResult.count ?? 0),
+        (profileReportsResult.count ?? 0) +
+        (legacyReportsResult.count ?? 0) +
+        (incidentsResult.count ?? 0),
       reviewsInPeriod: reviewsResult.count ?? 0,
       measuredResponseProviders: measuredResponseProviders.length,
       averageResponseMinutes,
@@ -353,7 +374,7 @@ async function buildSummary(
 }
 
 async function getReports(admin: ReturnType<typeof createClient>) {
-  const [profileResult, legacyResult] = await Promise.all([
+  const [profileResult, legacyResult, incidentResult] = await Promise.all([
     admin
       .from("profile_reports")
       .select(
@@ -368,12 +389,22 @@ async function getReports(admin: ReturnType<typeof createClient>) {
       .in("status", ["pending", "reviewing"])
       .order("created_at", { ascending: false })
       .limit(50),
+    admin
+      .from("service_job_incidents")
+      .select(
+        "id,case_number,payment_record_id,chat_id,provider_id,category,details,mica_summary,status,created_at",
+      )
+      .in("status", ["mica_intake", "escalated", "reviewing"])
+      .order("created_at", { ascending: false })
+      .limit(50),
   ]);
   if (profileResult.error) throw profileResult.error;
   if (legacyResult.error) throw legacyResult.error;
+  if (incidentResult.error) throw incidentResult.error;
 
   const profileReports = (profileResult.data ?? []) as ReportRow[];
   const legacyReports = (legacyResult.data ?? []) as LegacyReportRow[];
+  const incidents = (incidentResult.data ?? []) as IncidentRow[];
   const serviceIds = Array.from(
     new Set(legacyReports.map((report) => report.service_id)),
   );
@@ -403,6 +434,21 @@ async function getReports(admin: ReturnType<typeof createClient>) {
         source: "service" as const,
       };
     }),
+    ...incidents.map((incident) => ({
+      id: incident.id,
+      source: "incident" as const,
+      provider_id: incident.provider_id,
+      reason_category: incident.category,
+      details: [incident.mica_summary, incident.details]
+        .filter(Boolean)
+        .join("\n"),
+      status: incident.status,
+      service_id: null,
+      created_at: incident.created_at,
+      case_number: incident.case_number,
+      chat_id: incident.chat_id,
+      payment_record_id: incident.payment_record_id,
+    })),
   ]
     .sort(
       (a, b) =>
@@ -448,10 +494,16 @@ async function updateReport(
   reportId: unknown,
   status: unknown,
   source: unknown,
+  adminUserId?: string,
 ) {
   const cleanId = String(reportId ?? "").trim();
   const cleanStatus = String(status ?? "").trim();
-  const table = source === "service" ? "reports" : "profile_reports";
+  const table =
+    source === "service"
+      ? "reports"
+      : source === "incident"
+        ? "service_job_incidents"
+        : "profile_reports";
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       cleanId,
@@ -461,9 +513,20 @@ async function updateReport(
     return json({ error: "Datos de moderación inválidos." }, 400);
   }
 
+  const updatePayload =
+    source === "incident"
+      ? {
+          status: cleanStatus,
+          assigned_to: cleanStatus === "reviewing" ? adminUserId : undefined,
+          resolved_at: ["resolved", "dismissed"].includes(cleanStatus)
+            ? new Date().toISOString()
+            : null,
+          updated_at: new Date().toISOString(),
+        }
+      : { status: cleanStatus };
   const { data, error } = await admin
     .from(table)
-    .update({ status: cleanStatus })
+    .update(updatePayload)
     .eq("id", cleanId)
     .select("id,status")
     .maybeSingle();
@@ -471,6 +534,223 @@ async function updateReport(
   if (!data) return json({ error: "Reporte no encontrado." }, 404);
 
   return json({ ok: true, report: data });
+}
+
+async function getConsumerRightRequests(
+  admin: ReturnType<typeof createClient>,
+) {
+  const { data, error } = await admin
+    .from("consumer_right_requests")
+    .select(
+      "id,request_code,request_type,email,operation_reference,details,status,created_at",
+    )
+    .in("status", ["received", "reviewing"])
+    .order("created_at", { ascending: false })
+    .limit(100);
+  if (error) throw error;
+  return { ok: true, requests: data ?? [] };
+}
+
+async function updateConsumerRightRequest(
+  admin: ReturnType<typeof createClient>,
+  requestId: unknown,
+  status: unknown,
+) {
+  const cleanId = String(requestId ?? "").trim();
+  const cleanStatus = String(status ?? "").trim();
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      cleanId,
+    ) ||
+    !["reviewing", "completed", "rejected"].includes(cleanStatus)
+  ) {
+    return json({ error: "Solicitud de consumidor inválida." }, 400);
+  }
+
+  const { data, error } = await admin
+    .from("consumer_right_requests")
+    .update({
+      status: cleanStatus,
+      updated_at: new Date().toISOString(),
+      resolved_at: ["completed", "rejected"].includes(cleanStatus)
+        ? new Date().toISOString()
+        : null,
+    })
+    .eq("id", cleanId)
+    .select("id,status")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return json({ error: "Solicitud no encontrada." }, 404);
+  return json({ ok: true, request: data });
+}
+
+type UrgentPolicyRow = {
+  sla_minutes: number;
+  reminder_minutes: number;
+  max_reassignments: number;
+  enforcement_enabled: boolean;
+  missed_threshold: number;
+  window_days: number;
+  priority_suspension_days: number;
+  recurrence_window_days: number;
+  second_suspension_days: number;
+  subsequent_suspension_days: number;
+  enforcement_started_at: string | null;
+  updated_at: string;
+};
+
+function urgentPolicyPayload(policy: UrgentPolicyRow) {
+  return {
+    slaMinutes: policy.sla_minutes,
+    reminderMinutes: policy.reminder_minutes,
+    maxReassignments: policy.max_reassignments,
+    enforcementEnabled: policy.enforcement_enabled,
+    missedThreshold: policy.missed_threshold,
+    windowDays: policy.window_days,
+    prioritySuspensionDays: policy.priority_suspension_days,
+    recurrenceWindowDays: policy.recurrence_window_days,
+    secondSuspensionDays: policy.second_suspension_days,
+    subsequentSuspensionDays: policy.subsequent_suspension_days,
+    enforcementStartedAt: policy.enforcement_started_at,
+    updatedAt: policy.updated_at,
+  };
+}
+
+async function getUrgencyPolicy(admin: ReturnType<typeof createClient>) {
+  const { data: policyData, error: policyError } = await admin
+    .from("urgent_work_policy")
+    .select(
+      "sla_minutes,reminder_minutes,max_reassignments,enforcement_enabled,missed_threshold,window_days,priority_suspension_days,recurrence_window_days,second_suspension_days,subsequent_suspension_days,enforcement_started_at,updated_at",
+    )
+    .eq("singleton", true)
+    .single();
+  if (policyError) throw policyError;
+
+  const policy = policyData as UrgentPolicyRow;
+  const windowStart = new Date(
+    Date.now() - policy.window_days * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const [missesResult, suspensionsResult] = await Promise.all([
+    admin
+      .from("urgent_work_misses")
+      .select("id", { count: "exact", head: true })
+      .gte("occurred_at", windowStart),
+    admin
+      .from("worker_urgent_discipline")
+      .select("worker_id", { count: "exact", head: true })
+      .gt("priority_suspended_until", new Date().toISOString()),
+  ]);
+  if (missesResult.error) throw missesResult.error;
+  if (suspensionsResult.error) throw suspensionsResult.error;
+
+  return {
+    ok: true,
+    policy: urgentPolicyPayload(policy),
+    metrics: {
+      missesInWindow: missesResult.count ?? 0,
+      activeSuspensions: suspensionsResult.count ?? 0,
+    },
+  };
+}
+
+function integerInRange(value: unknown, minimum: number, maximum: number) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum
+    ? parsed
+    : null;
+}
+
+async function updateUrgencyPolicy(
+  admin: ReturnType<typeof createClient>,
+  body: Record<string, unknown>,
+  adminUserId: string,
+) {
+  const enforcementEnabled = body?.enforcementEnabled;
+  const missedThreshold = integerInRange(body?.missedThreshold, 1, 20);
+  const windowDays = integerInRange(body?.windowDays, 1, 365);
+  const prioritySuspensionDays = integerInRange(
+    body?.prioritySuspensionDays,
+    1,
+    90,
+  );
+  const maxReassignments = integerInRange(body?.maxReassignments, 0, 10);
+  if (
+    typeof enforcementEnabled !== "boolean" ||
+    missedThreshold == null ||
+    windowDays == null ||
+    prioritySuspensionDays == null ||
+    maxReassignments == null
+  ) {
+    return json({ error: "Configuración de urgencias inválida." }, 400);
+  }
+
+  const { error } = await admin.rpc("set_urgent_work_policy", {
+    p_enforcement_enabled: enforcementEnabled,
+    p_missed_threshold: missedThreshold,
+    p_window_days: windowDays,
+    p_priority_suspension_days: prioritySuspensionDays,
+    p_max_reassignments: maxReassignments,
+    p_updated_by: adminUserId,
+  });
+  if (error) throw error;
+  return json(await getUrgencyPolicy(admin));
+}
+
+async function getNotificationHealth(admin: ReturnType<typeof createClient>) {
+  const [
+    waitingEmailResult,
+    pendingEmailResult,
+    failedEmailResult,
+    sentEmailResult,
+    failedPushResult,
+  ] = await Promise.all([
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("email_status", "waiting_configuration"),
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("email_status", "pending"),
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("email_status", "failed"),
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("email_status", "sent"),
+    admin
+      .from("transactional_notification_outbox")
+      .select("id", { count: "exact", head: true })
+      .eq("push_status", "failed"),
+  ]);
+  const failure = [
+    waitingEmailResult.error,
+    pendingEmailResult.error,
+    failedEmailResult.error,
+    sentEmailResult.error,
+    failedPushResult.error,
+  ].find(Boolean);
+  if (failure) throw failure;
+
+  return {
+    ok: true,
+    providers: {
+      emailConfigured: Boolean(
+        Deno.env.get("RESEND_API_KEY") &&
+          Deno.env.get("TRANSACTIONAL_EMAIL_FROM"),
+      ),
+      pushAccessTokenConfigured: Boolean(Deno.env.get("EXPO_ACCESS_TOKEN")),
+    },
+    outbox: {
+      waitingEmail: waitingEmailResult.count ?? 0,
+      pendingEmail: pendingEmailResult.count ?? 0,
+      failedEmail: failedEmailResult.count ?? 0,
+      sentEmail: sentEmailResult.count ?? 0,
+      failedPush: failedPushResult.count ?? 0,
+    },
+  };
 }
 
 Deno.serve(async (req) => {
@@ -505,7 +785,28 @@ Deno.serve(async (req) => {
       return json(await getReports(admin));
     }
     if (action === "update-report") {
-      return updateReport(admin, body?.reportId, body?.status, body?.source);
+      return updateReport(
+        admin,
+        body?.reportId,
+        body?.status,
+        body?.source,
+        currentAdmin.id,
+      );
+    }
+    if (action === "consumer-right-requests") {
+      return json(await getConsumerRightRequests(admin));
+    }
+    if (action === "update-consumer-right-request") {
+      return updateConsumerRightRequest(admin, body?.requestId, body?.status);
+    }
+    if (action === "urgency-policy") {
+      return json(await getUrgencyPolicy(admin));
+    }
+    if (action === "update-urgency-policy") {
+      return updateUrgencyPolicy(admin, body, currentAdmin.id);
+    }
+    if (action === "notification-health") {
+      return json(await getNotificationHealth(admin));
     }
 
     return json({ error: "Acción no permitida." }, 400);

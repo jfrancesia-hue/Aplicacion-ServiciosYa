@@ -1,32 +1,28 @@
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useState, useEffect } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
   Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
-  ScrollView,
+  View,
 } from "react-native";
-import { supabase } from "../lib/supabase";
-import { removeCredentials } from "../lib/storage";
-import { useUserSettings } from "../lib/hooks/useUserSettings";
 import BotonVolver from "../components/BotonVolver";
-import { withModalProvider } from "../components/sheet/withModalProvider";
-import { LinearGradient } from "expo-linear-gradient";
-import { useBottomSheetModal } from "../lib/hooks/useBottomSheetModal";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { MainStackParamList } from "../types/navigation";
-import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import InviteSheetView from "../components/InvitarSheet";
-import { useSuspenseProfile } from "../lib/hooks/useUser";
+import { withModalProvider } from "../components/sheet/withModalProvider";
 import BlockedUsersSection from "../components/trust/BlockedUsersSection";
+import { useBottomSheetModal } from "../lib/hooks/useBottomSheetModal";
+import { useSuspenseProfile } from "../lib/hooks/useUser";
+import { useUserSettings } from "../lib/hooks/useUserSettings";
+import { removeCredentials } from "../lib/storage";
+import { supabase } from "../lib/supabase";
+import type { MainStackParamList } from "../types/navigation";
 
-
-type Props = NativeStackScreenProps<
-  MainStackParamList,
-  "Configuracion"
->;
+type Props = NativeStackScreenProps<MainStackParamList, "Configuracion">;
 
 function Configuracion({ navigation }: Props) {
   const [password, setPassword] = useState("");
@@ -126,12 +122,9 @@ function Configuracion({ navigation }: Props) {
               return;
             }
 
-            const { error: deleteError } = await supabase.rpc(
-              "delete_user",
-              {
-                uid: user.user.id,
-              },
-            );
+            const { error: deleteError } = await supabase.rpc("delete_user", {
+              uid: user.user.id,
+            });
 
             if (deleteError) {
               Alert.alert("Error", "No se pudo eliminar la cuenta.");
@@ -154,166 +147,221 @@ function Configuracion({ navigation }: Props) {
     <>
       <BotonVolver />
       <LinearGradient colors={["#e8f8fb", "#f0f2f5"]} style={{ flex: 1 }}>
-      <ScrollView style={styles.background}>
-        <View style={styles.container}>
-          <Text style={styles.title}>Configuración</Text>
+        <ScrollView style={styles.background}>
+          <View style={styles.container}>
+            <Text style={styles.title}>Configuración</Text>
 
-          {/* Mostrar el rol */}
-          {rol && (
-            <View style={{ marginBottom: 20 }}>
-              <Text style={{ fontWeight: "700", fontSize: 16, color: "#555" }}>
-                Rol: <Text style={{ color: "#19D4C6" }}>{rol}</Text>
-              </Text>
-            </View>
-          )}
-
-          {/* CAMBIAR CONTRASEÑA */}
-          <View style={styles.section}>
-            <Text style={styles.optionText}>Cambiar Contraseña</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nueva contraseña"
-              secureTextEntry
-              value={password}
-              onChangeText={handlePasswordChange}
-              placeholderTextColor="#999"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Repetir nueva contraseña"
-              secureTextEntry
-              value={confirmPassword}
-              onChangeText={handleConfirmPasswordChange}
-              placeholderTextColor="#999"
-            />
-
-            <View style={styles.requisitosContainer}>
-              <Text
-                style={[
-                  styles.requisito,
-                  password.length >= 8 ? styles.valid : styles.invalid,
-                ]}
-              >
-                {password.length >= 8 ? "✔" : "○"} Al menos 8 caracteres.
-              </Text>
-              <Text
-                style={[
-                  styles.requisito,
-                  /[A-Z]/.test(password) ? styles.valid : styles.invalid,
-                ]}
-              >
-                {/[A-Z]/.test(password) ? "✔" : "○"} Una letra mayúscula.
-              </Text>
-              <Text
-                style={[
-                  styles.requisito,
-                  /\d/.test(password) ? styles.valid : styles.invalid,
-                ]}
-              >
-                {/\d/.test(password) ? "✔" : "○"} Un número.
-              </Text>
-              <Text
-                style={[
-                  styles.requisito,
-                  /[!@#$%^&*(),.?":{}|<>]/.test(password)
-                    ? styles.valid
-                    : styles.invalid,
-                ]}
-              >
-                {/[!@#$%^&*(),.?":{}|<>]/.test(password) ? "✔" : "○"} Un
-                carácter especial.
-              </Text>
-              <Text
-                style={[
-                  styles.requisito,
-                  passwordMatch ? styles.valid : styles.invalid,
-                ]}
-              >
-                {passwordMatch ? "✔" : "○"} Las contraseñas coinciden.
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.buttonOrange}
-              onPress={cambiarContrasena}
-            >
-              <Text style={styles.buttonText}>Guardar Contraseña</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={{ borderTopWidth: 1, borderColor: "#ccc" }}>
-            {/* INVITAR */}
-            {rol !== "guest" && (<View style={[styles.section, { marginTop: 10 }]}>
-              <Text style={styles.optionText}>Invitar a un Amigo</Text>
-              <TouchableOpacity
-                style={styles.buttonTurquoise}
-                onPress={invitarAmigo}
-              >
-                <Text style={styles.buttonText}>Invitar</Text>
-              </TouchableOpacity>
-            </View>)}
-
-
-            {/* Soporte dentro de la app */}
-            <View style={styles.section}>
-              <Text style={styles.optionText}>¿Necesitás ayuda?</Text>
-              <TouchableOpacity
-                style={styles.buttonTurquoise}
-                onPress={() =>
-                  navigation.navigate("MicaChat", {
-                    mode: rol === "worker" ? "ofrecer-servicio" : "buscar-servicio",
-                  })
-                }
-              >
-                <Text style={styles.buttonText}>Abrir MICA</Text>
-              </TouchableOpacity>
-            </View>
-
-            {rol !== "guest" && <BlockedUsersSection />}
-
-            {rol === "admin" && (
-              <View style={styles.section}>
-                <Text style={styles.optionText}>Operación y seguridad</Text>
-                <Text style={styles.optionDescription}>
-                  Revisá prestadores, embudo, pagos, errores y reportes sin
-                  exponer conversaciones privadas.
-                </Text>
-                <TouchableOpacity
-                  style={styles.adminButton}
-                  onPress={() => navigation.navigate("OperationalDashboard")}
+            {/* Mostrar el rol */}
+            {rol && (
+              <View style={{ marginBottom: 20 }}>
+                <Text
+                  style={{ fontWeight: "700", fontSize: 16, color: "#555" }}
                 >
-                  <Text style={styles.buttonText}>Abrir panel operativo</Text>
-                </TouchableOpacity>
+                  Rol: <Text style={{ color: "#19D4C6" }}>{rol}</Text>
+                </Text>
               </View>
             )}
 
-            {/* CERRAR SESIÓN */}
+            {/* CAMBIAR CONTRASEÑA */}
             <View style={styles.section}>
-              <Text style={styles.optionText}>Cerrar Sesión</Text>
+              <Text style={styles.optionText}>Cambiar Contraseña</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nueva contraseña"
+                secureTextEntry
+                value={password}
+                onChangeText={handlePasswordChange}
+                placeholderTextColor="#999"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Repetir nueva contraseña"
+                secureTextEntry
+                value={confirmPassword}
+                onChangeText={handleConfirmPasswordChange}
+                placeholderTextColor="#999"
+              />
+
+              <View style={styles.requisitosContainer}>
+                <Text
+                  style={[
+                    styles.requisito,
+                    password.length >= 8 ? styles.valid : styles.invalid,
+                  ]}
+                >
+                  {password.length >= 8 ? "✔" : "○"} Al menos 8 caracteres.
+                </Text>
+                <Text
+                  style={[
+                    styles.requisito,
+                    /[A-Z]/.test(password) ? styles.valid : styles.invalid,
+                  ]}
+                >
+                  {/[A-Z]/.test(password) ? "✔" : "○"} Una letra mayúscula.
+                </Text>
+                <Text
+                  style={[
+                    styles.requisito,
+                    /\d/.test(password) ? styles.valid : styles.invalid,
+                  ]}
+                >
+                  {/\d/.test(password) ? "✔" : "○"} Un número.
+                </Text>
+                <Text
+                  style={[
+                    styles.requisito,
+                    /[!@#$%^&*(),.?":{}|<>]/.test(password)
+                      ? styles.valid
+                      : styles.invalid,
+                  ]}
+                >
+                  {/[!@#$%^&*(),.?":{}|<>]/.test(password) ? "✔" : "○"} Un
+                  carácter especial.
+                </Text>
+                <Text
+                  style={[
+                    styles.requisito,
+                    passwordMatch ? styles.valid : styles.invalid,
+                  ]}
+                >
+                  {passwordMatch ? "✔" : "○"} Las contraseñas coinciden.
+                </Text>
+              </View>
+
               <TouchableOpacity
                 style={styles.buttonOrange}
-                onPress={handleLogout}
+                onPress={cambiarContrasena}
               >
-                <Text style={styles.buttonText}>Cerrar Sesión</Text>
+                <Text style={styles.buttonText}>Guardar Contraseña</Text>
               </TouchableOpacity>
             </View>
 
-            {/* ELIMINAR CUENTA */}
-            <View style={styles.section}>
-              <Text style={styles.optionText}>Eliminar Cuenta</Text>
-              <TouchableOpacity
-                style={[styles.buttonOrange, { backgroundColor: "#D9534F" }]}
-                onPress={eliminarCuenta}
-              >
-                <Text style={styles.buttonText}>Eliminar Cuenta</Text>
-              </TouchableOpacity>
+            <View style={{ borderTopWidth: 1, borderColor: "#ccc" }}>
+              {/* INVITAR */}
+              {rol !== "guest" && (
+                <View style={[styles.section, { marginTop: 10 }]}>
+                  <Text style={styles.optionText}>Invitar a un Amigo</Text>
+                  <TouchableOpacity
+                    style={styles.buttonTurquoise}
+                    onPress={invitarAmigo}
+                  >
+                    <Text style={styles.buttonText}>Invitar</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Soporte dentro de la app */}
+              <View style={styles.section}>
+                <Text style={styles.optionText}>¿Necesitás ayuda?</Text>
+                <TouchableOpacity
+                  style={styles.buttonTurquoise}
+                  onPress={() =>
+                    navigation.navigate("MicaChat", {
+                      mode:
+                        rol === "worker"
+                          ? "ofrecer-servicio"
+                          : "buscar-servicio",
+                    })
+                  }
+                >
+                  <Text style={styles.buttonText}>Abrir MICA</Text>
+                </TouchableOpacity>
+              </View>
+
+              {rol !== "guest" && <BlockedUsersSection />}
+
+              <View style={styles.section}>
+                <Text style={styles.optionText}>Información legal</Text>
+                <Text style={styles.optionDescription}>
+                  Consultá los documentos vigentes guardados dentro de la app.
+                </Text>
+                <TouchableOpacity
+                  style={styles.buttonTurquoise}
+                  onPress={() =>
+                    navigation.navigate("LegalDocument", { document: "terms" })
+                  }
+                >
+                  <Text style={styles.buttonText}>Términos y condiciones</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.buttonTurquoise, { marginTop: 10 }]}
+                  onPress={() =>
+                    navigation.navigate("LegalDocument", {
+                      document: "privacy",
+                    })
+                  }
+                >
+                  <Text style={styles.buttonText}>Política de privacidad</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.buttonTurquoise, { marginTop: 10 }]}
+                  onPress={() =>
+                    navigation.navigate("ConsumerRightRequest", {
+                      requestType: "withdrawal",
+                    })
+                  }
+                >
+                  <Text style={styles.buttonText}>
+                    Botón de arrepentimiento
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.buttonTurquoise, { marginTop: 10 }]}
+                  onPress={() =>
+                    navigation.navigate("ConsumerRightRequest", {
+                      requestType: "service_cancellation",
+                    })
+                  }
+                >
+                  <Text style={styles.buttonText}>
+                    Botón de baja de servicio
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {rol === "admin" && (
+                <View style={styles.section}>
+                  <Text style={styles.optionText}>Operación y seguridad</Text>
+                  <Text style={styles.optionDescription}>
+                    Revisá prestadores, embudo, pagos, errores y reportes sin
+                    exponer conversaciones privadas.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.adminButton}
+                    onPress={() => navigation.navigate("OperationalDashboard")}
+                  >
+                    <Text style={styles.buttonText}>Abrir panel operativo</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* CERRAR SESIÓN */}
+              <View style={styles.section}>
+                <Text style={styles.optionText}>Cerrar Sesión</Text>
+                <TouchableOpacity
+                  style={styles.buttonOrange}
+                  onPress={handleLogout}
+                >
+                  <Text style={styles.buttonText}>Cerrar Sesión</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* ELIMINAR CUENTA */}
+              <View style={styles.section}>
+                <Text style={styles.optionText}>Eliminar Cuenta</Text>
+                <TouchableOpacity
+                  style={[styles.buttonOrange, { backgroundColor: "#D9534F" }]}
+                  onPress={eliminarCuenta}
+                >
+                  <Text style={styles.buttonText}>Eliminar Cuenta</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-        <BottomSheetModal {...modalProps}>
-          <InviteSheetView />
-        </BottomSheetModal>
-      </ScrollView>
+          <BottomSheetModal {...modalProps}>
+            <InviteSheetView />
+          </BottomSheetModal>
+        </ScrollView>
       </LinearGradient>
     </>
   );

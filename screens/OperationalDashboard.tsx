@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -55,16 +56,83 @@ type DashboardSummary = {
 
 type ModerationReport = {
   id: string;
-  source: "profile" | "service";
+  source: "profile" | "service" | "incident";
   provider_id: string;
   reason_category: string;
   details: string | null;
-  status: "pending" | "reviewing" | "resolved" | "dismissed";
+  status:
+    | "pending"
+    | "mica_intake"
+    | "escalated"
+    | "reviewing"
+    | "resolved"
+    | "dismissed";
   service_id: number | null;
   created_at: string;
   providerName: string;
   providerLocation: string;
+  case_number?: string;
+  chat_id?: string;
+  payment_record_id?: string;
 };
+
+type ConsumerRightRequest = {
+  id: string;
+  request_code: string;
+  request_type: "withdrawal" | "service_cancellation";
+  email: string;
+  operation_reference: string | null;
+  details: string | null;
+  status: "received" | "reviewing" | "completed" | "rejected";
+  created_at: string;
+};
+
+type UrgencyPolicy = {
+  slaMinutes: number;
+  reminderMinutes: number;
+  maxReassignments: number;
+  enforcementEnabled: boolean;
+  missedThreshold: number;
+  windowDays: number;
+  prioritySuspensionDays: number;
+  recurrenceWindowDays: number;
+  secondSuspensionDays: number;
+  subsequentSuspensionDays: number;
+  enforcementStartedAt: string | null;
+  updatedAt: string;
+};
+
+type UrgencyPolicyResponse = {
+  policy: UrgencyPolicy;
+  metrics: {
+    missesInWindow: number;
+    activeSuspensions: number;
+  };
+};
+
+type NotificationHealth = {
+  providers: {
+    emailConfigured: boolean;
+    pushAccessTokenConfigured: boolean;
+  };
+  outbox: {
+    waitingEmail: number;
+    pendingEmail: number;
+    failedEmail: number;
+    sentEmail: number;
+    failedPush: number;
+  };
+};
+
+type UrgencyPolicyDraft = {
+  maxReassignments: string;
+};
+
+function policyToDraft(policy: UrgencyPolicy): UrgencyPolicyDraft {
+  return {
+    maxReassignments: String(policy.maxReassignments),
+  };
+}
 
 const REPORT_REASON_LABELS: Record<string, string> = {
   inappropriate_content: "Contenido inapropiado",
@@ -73,6 +141,8 @@ const REPORT_REASON_LABELS: Record<string, string> = {
   potential_scam: "Posible estafa",
   security_issue: "Problema de seguridad",
   other: "Otro motivo",
+  provider_no_show: "Prestador no se presentó",
+  work_not_completed: "Trabajo no realizado",
 };
 
 const PERIODS = [7, 30, 90] as const;
@@ -139,15 +209,55 @@ function SectionHeader({
   );
 }
 
+function PolicyNumberField({
+  label,
+  helper,
+  value,
+  onChangeText,
+}: {
+  label: string;
+  helper: string;
+  value: string;
+  onChangeText: (value: string) => void;
+}) {
+  return (
+    <View style={styles.policyField}>
+      <View style={styles.policyFieldCopy}>
+        <Text style={styles.policyFieldLabel}>{label}</Text>
+        <Text style={styles.policyFieldHelper}>{helper}</Text>
+      </View>
+      <TextInput
+        accessibilityLabel={label}
+        keyboardType="number-pad"
+        maxLength={3}
+        onChangeText={(value) => onChangeText(value.replace(/\D/g, ""))}
+        selectTextOnFocus
+        style={styles.policyInput}
+        value={value}
+      />
+    </View>
+  );
+}
+
 export default function OperationalDashboard() {
   const { rol } = useSuspenseProfile();
   const [periodDays, setPeriodDays] = useState<(typeof PERIODS)[number]>(30);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [reports, setReports] = useState<ModerationReport[]>([]);
+  const [consumerRequests, setConsumerRequests] = useState<
+    ConsumerRightRequest[]
+  >([]);
+  const [urgency, setUrgency] = useState<UrgencyPolicyResponse | null>(null);
+  const [notificationHealth, setNotificationHealth] =
+    useState<NotificationHealth | null>(null);
+  const [urgencyDraft, setUrgencyDraft] = useState<UrgencyPolicyDraft | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
+  const [savingUrgency, setSavingUrgency] = useState(false);
 
   const loadDashboard = useCallback(
     async (refresh = false) => {
@@ -160,12 +270,27 @@ export default function OperationalDashboard() {
       refresh ? setRefreshing(true) : setLoading(true);
       setErrorMessage(null);
       try {
-        const [summaryResult, reportsResult] = await Promise.all([
+        const [
+          summaryResult,
+          reportsResult,
+          urgencyResult,
+          notificationResult,
+          consumerRequestsResult,
+        ] = await Promise.all([
           supabase.functions.invoke("operational-dashboard", {
             body: { action: "summary", days: periodDays },
           }),
           supabase.functions.invoke("operational-dashboard", {
             body: { action: "reports" },
+          }),
+          supabase.functions.invoke("operational-dashboard", {
+            body: { action: "urgency-policy" },
+          }),
+          supabase.functions.invoke("operational-dashboard", {
+            body: { action: "notification-health" },
+          }),
+          supabase.functions.invoke("operational-dashboard", {
+            body: { action: "consumer-right-requests" },
           }),
         ]);
 
@@ -183,9 +308,41 @@ export default function OperationalDashboard() {
               "No se pudo cargar la moderación.",
           );
         }
+        if (urgencyResult.error || urgencyResult.data?.error) {
+          throw new Error(
+            urgencyResult.data?.error ||
+              urgencyResult.error?.message ||
+              "No se pudo cargar la política de urgencias.",
+          );
+        }
+        if (notificationResult.error || notificationResult.data?.error) {
+          throw new Error(
+            notificationResult.data?.error ||
+              notificationResult.error?.message ||
+              "No se pudo cargar el estado de notificaciones.",
+          );
+        }
+        if (
+          consumerRequestsResult.error ||
+          consumerRequestsResult.data?.error
+        ) {
+          throw new Error(
+            consumerRequestsResult.data?.error ||
+              consumerRequestsResult.error?.message ||
+              "No se pudieron cargar las solicitudes de consumidores.",
+          );
+        }
 
         setSummary(summaryResult.data as DashboardSummary);
         setReports((reportsResult.data?.reports ?? []) as ModerationReport[]);
+        const nextUrgency = urgencyResult.data as UrgencyPolicyResponse;
+        setUrgency(nextUrgency);
+        setUrgencyDraft(policyToDraft(nextUrgency.policy));
+        setNotificationHealth(notificationResult.data as NotificationHealth);
+        setConsumerRequests(
+          (consumerRequestsResult.data?.requests ??
+            []) as ConsumerRightRequest[],
+        );
       } catch (error) {
         setErrorMessage(
           error instanceof Error
@@ -282,6 +439,136 @@ export default function OperationalDashboard() {
     },
     [updateReport],
   );
+
+  const updateConsumerRequest = useCallback(
+    async (
+      request: ConsumerRightRequest,
+      status: "reviewing" | "completed" | "rejected",
+    ) => {
+      setUpdatingReportId(request.id);
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          "operational-dashboard",
+          {
+            body: {
+              action: "update-consumer-right-request",
+              requestId: request.id,
+              status,
+            },
+          },
+        );
+        if (error || data?.error) {
+          throw new Error(
+            data?.error ||
+              error?.message ||
+              "No se pudo actualizar la solicitud.",
+          );
+        }
+        if (status === "completed" || status === "rejected") {
+          setConsumerRequests((current) =>
+            current.filter((item) => item.id !== request.id),
+          );
+        } else {
+          setConsumerRequests((current) =>
+            current.map((item) =>
+              item.id === request.id ? { ...item, status } : item,
+            ),
+          );
+        }
+      } catch (error) {
+        Alert.alert(
+          "No se pudo actualizar",
+          error instanceof Error ? error.message : "Intentá nuevamente.",
+        );
+      } finally {
+        setUpdatingReportId(null);
+      }
+    },
+    [],
+  );
+
+  const updateUrgencyDraft = useCallback(
+    (field: keyof UrgencyPolicyDraft, value: string) => {
+      setUrgencyDraft((current) =>
+        current ? { ...current, [field]: value } : current,
+      );
+    },
+    [],
+  );
+
+  const persistUrgencyPolicy = useCallback(
+    async (draft: UrgencyPolicyDraft) => {
+      setSavingUrgency(true);
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          "operational-dashboard",
+          {
+            body: {
+              action: "update-urgency-policy",
+              enforcementEnabled: true,
+              maxReassignments: Number(draft.maxReassignments),
+              missedThreshold: 3,
+              windowDays: 30,
+              prioritySuspensionDays: 7,
+            },
+          },
+        );
+        if (error || data?.error) {
+          throw new Error(
+            data?.error ||
+              error?.message ||
+              "No se pudo guardar la política de urgencias.",
+          );
+        }
+
+        const nextUrgency = data as UrgencyPolicyResponse;
+        setUrgency(nextUrgency);
+        setUrgencyDraft(policyToDraft(nextUrgency.policy));
+        Alert.alert(
+          "Reasignaciones guardadas",
+          "La política A continúa activa y el cambio operativo fue auditado.",
+        );
+      } catch (error) {
+        Alert.alert(
+          "No se pudo guardar",
+          error instanceof Error ? error.message : "Intentá nuevamente.",
+        );
+      } finally {
+        setSavingUrgency(false);
+      }
+    },
+    [],
+  );
+
+  const confirmUrgencyPolicy = useCallback(() => {
+    if (!urgencyDraft) return;
+    const entries = [
+      ["reasignaciones", urgencyDraft.maxReassignments, 0, 10],
+    ] as const;
+    const invalid = entries.find(([, value, minimum, maximum]) => {
+      const parsed = Number(value);
+      return !Number.isInteger(parsed) || parsed < minimum || parsed > maximum;
+    });
+    if (invalid) {
+      Alert.alert(
+        "Revisá la configuración",
+        `El valor de ${invalid[0]} debe estar entre ${invalid[2]} y ${invalid[3]}.`,
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Guardar reasignaciones",
+      `El sistema podrá intentar hasta ${urgencyDraft.maxReassignments} prestadores alternativos. La política A continúa activa: 3 incumplimientos en 30 días y suspensiones progresivas de 7, 14 y 30 días.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Guardar política",
+          onPress: () => void persistUrgencyPolicy(urgencyDraft),
+        },
+      ],
+    );
+  }, [persistUrgencyPolicy, urgencyDraft]);
 
   return (
     <View style={styles.screen}>
@@ -578,17 +865,375 @@ export default function OperationalDashboard() {
               )}
             </View>
 
+            {urgency && urgencyDraft ? (
+              <View style={styles.section}>
+                <SectionHeader
+                  icon="timer-outline"
+                  title="Urgencias y disciplina"
+                  subtitle="SLA fijo de 20 minutos, reasignación y pérdida temporal de prioridad"
+                />
+                <View style={styles.policyStatusRow}>
+                  <View
+                    style={[
+                      styles.policyStatusIcon,
+                      styles.policyStatusIconEnabled,
+                    ]}
+                  >
+                    <Ionicons name="shield-checkmark" size={21} color="#fff" />
+                  </View>
+                  <View style={styles.policyStatusCopy}>
+                    <Text style={styles.policyStatusTitle}>
+                      Disciplina automática
+                    </Text>
+                    <Text style={styles.policyStatusText}>
+                      Activa desde la confirmación de la política A.
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.policyMetricsRow}>
+                  <View style={styles.policyMetric}>
+                    <Text style={styles.policyMetricValue}>
+                      {formatCount(urgency.metrics.missesInWindow)}
+                    </Text>
+                    <Text style={styles.policyMetricLabel}>
+                      Incumplimientos en {urgency.policy.windowDays} días
+                    </Text>
+                  </View>
+                  <View style={styles.policyMetric}>
+                    <Text style={styles.policyMetricValue}>
+                      {formatCount(urgency.metrics.activeSuspensions)}
+                    </Text>
+                    <Text style={styles.policyMetricLabel}>
+                      Suspensiones activas
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.policyFixedRow}>
+                  <Ionicons name="alarm-outline" size={18} color="#047a8f" />
+                  <Text style={styles.policyFixedText}>
+                    Recordatorio a los {urgency.policy.reminderMinutes} min ·
+                    vencimiento a los {urgency.policy.slaMinutes} min
+                  </Text>
+                </View>
+
+                <View style={styles.policyFixedRow}>
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={18}
+                    color="#047a8f"
+                  />
+                  <Text style={styles.policyFixedText}>
+                    3 incumplimientos en 30 días · suspensión inicial de 7 días
+                  </Text>
+                </View>
+
+                <View style={styles.policyFixedRow}>
+                  <Ionicons
+                    name="trending-up-outline"
+                    size={18}
+                    color="#047a8f"
+                  />
+                  <Text style={styles.policyFixedText}>
+                    Reincidencia dentro de 90 días: 14 días · siguientes: 30
+                    días
+                  </Text>
+                </View>
+
+                <PolicyNumberField
+                  label="Máximo de reasignaciones"
+                  helper="Cantidad de prestadores alternativos que puede intentar el sistema (0–10)."
+                  value={urgencyDraft.maxReassignments}
+                  onChangeText={(value) =>
+                    updateUrgencyDraft("maxReassignments", value)
+                  }
+                />
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={savingUrgency}
+                  onPress={confirmUrgencyPolicy}
+                  style={[
+                    styles.policySaveButton,
+                    savingUrgency && styles.policySaveButtonDisabled,
+                  ]}
+                >
+                  {savingUrgency ? (
+                    <ActivityIndicator size="small" color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="save-outline" size={18} color="#fff" />
+                      <Text style={styles.policySaveText}>
+                        Guardar reasignaciones
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.policyAuditText}>
+                  Último cambio:{" "}
+                  {new Intl.DateTimeFormat("es-AR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  }).format(new Date(urgency.policy.updatedAt))}
+                  . Cada cambio conserva el antes, el después y el administrador
+                  responsable.
+                </Text>
+              </View>
+            ) : null}
+
+            {notificationHealth ? (
+              <View style={styles.section}>
+                <SectionHeader
+                  icon="notifications-outline"
+                  title="Notificaciones transaccionales"
+                  subtitle="Estado del correo, push y eventos conservados en la bandeja"
+                />
+                <View style={styles.integrationList}>
+                  <View style={styles.integrationRow}>
+                    <View
+                      style={[
+                        styles.integrationIcon,
+                        notificationHealth.providers.emailConfigured
+                          ? styles.integrationIconOk
+                          : styles.integrationIconWarning,
+                      ]}
+                    >
+                      <Ionicons
+                        name="mail-outline"
+                        size={19}
+                        color={
+                          notificationHealth.providers.emailConfigured
+                            ? "#fff"
+                            : "#76541c"
+                        }
+                      />
+                    </View>
+                    <View style={styles.integrationCopy}>
+                      <Text style={styles.integrationTitle}>
+                        Correo transaccional
+                      </Text>
+                      <Text style={styles.integrationText}>
+                        {notificationHealth.providers.emailConfigured
+                          ? "Resend y el remitente están configurados."
+                          : "Faltan Resend y/o el remitente verificado."}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.integrationBadge,
+                        notificationHealth.providers.emailConfigured
+                          ? styles.integrationBadgeOk
+                          : styles.integrationBadgeWarning,
+                      ]}
+                    >
+                      {notificationHealth.providers.emailConfigured
+                        ? "LISTO"
+                        : "PENDIENTE"}
+                    </Text>
+                  </View>
+
+                  <View style={styles.integrationRow}>
+                    <View
+                      style={[
+                        styles.integrationIcon,
+                        notificationHealth.providers.pushAccessTokenConfigured
+                          ? styles.integrationIconOk
+                          : styles.integrationIconWarning,
+                      ]}
+                    >
+                      <Ionicons
+                        name="phone-portrait-outline"
+                        size={19}
+                        color={
+                          notificationHealth.providers.pushAccessTokenConfigured
+                            ? "#fff"
+                            : "#76541c"
+                        }
+                      />
+                    </View>
+                    <View style={styles.integrationCopy}>
+                      <Text style={styles.integrationTitle}>Push de Expo</Text>
+                      <Text style={styles.integrationText}>
+                        {notificationHealth.providers.pushAccessTokenConfigured
+                          ? "Token de acceso configurado para envíos protegidos."
+                          : "Sin token de acceso del proveedor push."}
+                      </Text>
+                    </View>
+                    <Text
+                      style={[
+                        styles.integrationBadge,
+                        notificationHealth.providers.pushAccessTokenConfigured
+                          ? styles.integrationBadgeOk
+                          : styles.integrationBadgeWarning,
+                      ]}
+                    >
+                      {notificationHealth.providers.pushAccessTokenConfigured
+                        ? "LISTO"
+                        : "REVISAR"}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.integrationMetrics}>
+                  <View style={styles.integrationMetric}>
+                    <Text style={styles.integrationMetricValue}>
+                      {formatCount(notificationHealth.outbox.waitingEmail)}
+                    </Text>
+                    <Text style={styles.integrationMetricLabel}>
+                      Correos esperando configuración
+                    </Text>
+                  </View>
+                  <View style={styles.integrationMetric}>
+                    <Text style={styles.integrationMetricValue}>
+                      {formatCount(notificationHealth.outbox.sentEmail)}
+                    </Text>
+                    <Text style={styles.integrationMetricLabel}>
+                      Correos enviados
+                    </Text>
+                  </View>
+                  <View style={styles.integrationMetric}>
+                    <Text
+                      style={[
+                        styles.integrationMetricValue,
+                        (notificationHealth.outbox.failedEmail > 0 ||
+                          notificationHealth.outbox.failedPush > 0) &&
+                          styles.integrationMetricValueError,
+                      ]}
+                    >
+                      {formatCount(
+                        notificationHealth.outbox.failedEmail +
+                          notificationHealth.outbox.failedPush,
+                      )}
+                    </Text>
+                    <Text style={styles.integrationMetricLabel}>
+                      Fallos definitivos
+                    </Text>
+                  </View>
+                </View>
+
+                {!notificationHealth.providers.emailConfigured ? (
+                  <View style={styles.integrationHint}>
+                    <Ionicons name="key-outline" size={18} color="#76541c" />
+                    <Text style={styles.integrationHintText}>
+                      Configurá RESEND_API_KEY y TRANSACTIONAL_EMAIL_FROM en
+                      Supabase. Los eventos conservados se liberarán
+                      automáticamente en el siguiente ciclo seguro.
+                    </Text>
+                  </View>
+                ) : notificationHealth.outbox.pendingEmail > 0 ? (
+                  <Text style={styles.integrationFootnote}>
+                    Hay {formatCount(notificationHealth.outbox.pendingEmail)}
+                    correos programados para próximos recordatorios.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={styles.section}>
+              <SectionHeader
+                icon="receipt-outline"
+                title="Arrepentimientos y bajas"
+                subtitle="Solicitudes públicas con código inmediato, incluso sin inicio de sesión"
+              />
+              {consumerRequests.length === 0 ? (
+                <View style={styles.emptyModeration}>
+                  <Ionicons name="checkmark-circle" size={30} color="#12815e" />
+                  <Text style={styles.emptyModerationTitle}>
+                    No hay solicitudes pendientes
+                  </Text>
+                  <Text style={styles.emptyText}>La cola está al día.</Text>
+                </View>
+              ) : (
+                consumerRequests.map((request) => {
+                  const updating = updatingReportId === request.id;
+                  return (
+                    <View key={request.id} style={styles.reportCard}>
+                      <View style={styles.reportTopRow}>
+                        <View style={styles.reportReasonBadge}>
+                          <Text style={styles.reportReasonText}>
+                            {request.request_type === "withdrawal"
+                              ? "Arrepentimiento"
+                              : "Baja de servicio"}
+                          </Text>
+                        </View>
+                        <Text style={styles.reportDate}>
+                          {new Intl.DateTimeFormat("es-AR", {
+                            dateStyle: "short",
+                          }).format(new Date(request.created_at))}
+                        </Text>
+                      </View>
+                      <Text style={styles.reportProvider}>
+                        {request.request_code}
+                      </Text>
+                      <Text selectable style={styles.reportLocation}>
+                        {request.email}
+                      </Text>
+                      {request.operation_reference ? (
+                        <Text style={styles.reportReference}>
+                          Referencia: {request.operation_reference}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.reportDetails}>
+                        {request.details || "Sin información adicional."}
+                      </Text>
+                      {updating ? (
+                        <ActivityIndicator
+                          color="#069eb3"
+                          style={styles.reportLoader}
+                        />
+                      ) : (
+                        <View style={styles.reportActions}>
+                          {request.status !== "reviewing" ? (
+                            <TouchableOpacity
+                              onPress={() =>
+                                void updateConsumerRequest(request, "reviewing")
+                              }
+                              style={styles.reviewButton}
+                            >
+                              <Text style={styles.reviewButtonText}>
+                                Tomar gestión
+                              </Text>
+                            </TouchableOpacity>
+                          ) : null}
+                          <TouchableOpacity
+                            onPress={() =>
+                              void updateConsumerRequest(request, "completed")
+                            }
+                            style={styles.resolveButton}
+                          >
+                            <Text style={styles.resolveButtonText}>
+                              Completar
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() =>
+                              void updateConsumerRequest(request, "rejected")
+                            }
+                            style={styles.dismissButton}
+                          >
+                            <Text style={styles.dismissButtonText}>
+                              Rechazar
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </View>
+
             <View style={styles.section}>
               <SectionHeader
                 icon="shield-outline"
-                title="Cola de moderación"
-                subtitle="Los datos de quien reportó permanecen protegidos"
+                title="Reclamos y moderación"
+                subtitle="MICA toma el caso inicial y escala aquí lo que requiere a Agustín"
               />
               {reports.length === 0 ? (
                 <View style={styles.emptyModeration}>
                   <Ionicons name="checkmark-circle" size={30} color="#12815e" />
                   <Text style={styles.emptyModerationTitle}>
-                    No hay reportes de perfiles pendientes
+                    No hay reclamos ni reportes pendientes
                   </Text>
                   <Text style={styles.emptyText}>La cola está al día.</Text>
                 </View>
@@ -611,11 +1256,19 @@ export default function OperationalDashboard() {
                         </Text>
                       </View>
                       <Text style={styles.reportProvider}>
-                        {report.providerName}
+                        {report.source === "incident" && report.case_number
+                          ? `${report.case_number} · ${report.providerName}`
+                          : report.providerName}
                       </Text>
                       <Text style={styles.reportLocation}>
                         {report.providerLocation}
                       </Text>
+                      {report.source === "incident" ? (
+                        <Text style={styles.reportReference}>
+                          Chat {report.chat_id?.slice(0, 8) ?? "—"} · Pago{" "}
+                          {report.payment_record_id?.slice(0, 8) ?? "—"}
+                        </Text>
+                      ) : null}
                       {report.details ? (
                         <Text style={styles.reportDetails}>
                           {report.details}
@@ -641,7 +1294,9 @@ export default function OperationalDashboard() {
                               style={styles.reviewButton}
                             >
                               <Text style={styles.reviewButtonText}>
-                                Tomar revisión
+                                {report.source === "incident"
+                                  ? "Tomar caso"
+                                  : "Tomar revisión"}
                               </Text>
                             </TouchableOpacity>
                           ) : null}
@@ -658,7 +1313,9 @@ export default function OperationalDashboard() {
                             style={styles.resolveButton}
                           >
                             <Text style={styles.resolveButtonText}>
-                              Resolver
+                              {report.source === "incident"
+                                ? "Cerrar revisión"
+                                : "Resolver"}
                             </Text>
                           </TouchableOpacity>
                           <TouchableOpacity
@@ -1070,6 +1727,251 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: "#d67b17",
   },
+  policyStatusRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: "#fff8e9",
+    borderWidth: 1,
+    borderColor: "#f1dfb2",
+  },
+  policyStatusIcon: {
+    width: 39,
+    height: 39,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+    backgroundColor: "#f5e5bd",
+  },
+  policyStatusIconEnabled: {
+    backgroundColor: "#12815e",
+  },
+  policyStatusCopy: {
+    flex: 1,
+  },
+  policyStatusTitle: {
+    color: "#294b51",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  policyStatusText: {
+    marginTop: 2,
+    color: "#71868a",
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  policyMetricsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  policyMetric: {
+    flex: 1,
+    minHeight: 76,
+    padding: 12,
+    borderRadius: 15,
+    backgroundColor: "#f3f8f7",
+  },
+  policyMetricValue: {
+    color: "#047a8f",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  policyMetricLabel: {
+    marginTop: 3,
+    color: "#687f83",
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  policyFixedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+    marginBottom: 3,
+    padding: 11,
+    borderRadius: 14,
+    backgroundColor: "#e9f7f6",
+  },
+  policyFixedText: {
+    flex: 1,
+    color: "#31545a",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+  policyField: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 66,
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#dce8e6",
+  },
+  policyFieldCopy: {
+    flex: 1,
+  },
+  policyFieldLabel: {
+    color: "#31545a",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  policyFieldHelper: {
+    marginTop: 3,
+    color: "#7a8d90",
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  policyInput: {
+    width: 56,
+    minHeight: 42,
+    paddingHorizontal: 7,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#b9d7dc",
+    backgroundColor: "#fff",
+    color: "#183b42",
+    fontSize: 15,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  policySaveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 48,
+    marginTop: 14,
+    borderRadius: 15,
+    backgroundColor: "#047a8f",
+  },
+  policySaveButtonDisabled: {
+    opacity: 0.55,
+  },
+  policySaveText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  policyAuditText: {
+    marginTop: 9,
+    color: "#7a8d90",
+    fontSize: 9,
+    lineHeight: 13,
+    textAlign: "center",
+  },
+  integrationList: {
+    gap: 8,
+  },
+  integrationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minHeight: 64,
+    padding: 11,
+    borderRadius: 16,
+    backgroundColor: "#f6faf9",
+    borderWidth: 1,
+    borderColor: "#dce8e6",
+  },
+  integrationIcon: {
+    width: 39,
+    height: 39,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 13,
+  },
+  integrationIconOk: {
+    backgroundColor: "#12815e",
+  },
+  integrationIconWarning: {
+    backgroundColor: "#f5e5bd",
+  },
+  integrationCopy: {
+    flex: 1,
+  },
+  integrationTitle: {
+    color: "#294b51",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  integrationText: {
+    marginTop: 2,
+    color: "#71868a",
+    fontSize: 9,
+    lineHeight: 13,
+  },
+  integrationBadge: {
+    overflow: "hidden",
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 9,
+    fontSize: 8,
+    fontWeight: "900",
+  },
+  integrationBadgeOk: {
+    color: "#0c6b4e",
+    backgroundColor: "#dff4ec",
+  },
+  integrationBadgeWarning: {
+    color: "#76541c",
+    backgroundColor: "#fff0c9",
+  },
+  integrationMetrics: {
+    flexDirection: "row",
+    gap: 7,
+    marginTop: 10,
+  },
+  integrationMetric: {
+    flex: 1,
+    minHeight: 78,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 8,
+    borderRadius: 14,
+    backgroundColor: "#f3f8f7",
+  },
+  integrationMetricValue: {
+    color: "#047a8f",
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  integrationMetricValueError: {
+    color: "#a43b32",
+  },
+  integrationMetricLabel: {
+    marginTop: 3,
+    color: "#687f83",
+    fontSize: 8,
+    lineHeight: 11,
+    textAlign: "center",
+  },
+  integrationHint: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginTop: 10,
+    padding: 11,
+    borderRadius: 14,
+    backgroundColor: "#fff8e9",
+    borderWidth: 1,
+    borderColor: "#f1dfb2",
+  },
+  integrationHintText: {
+    flex: 1,
+    color: "#76541c",
+    fontSize: 9,
+    lineHeight: 14,
+  },
+  integrationFootnote: {
+    marginTop: 9,
+    color: "#71868a",
+    fontSize: 9,
+    lineHeight: 13,
+    textAlign: "center",
+  },
   emptyText: {
     color: "#7a8d90",
     fontSize: 11,
@@ -1127,6 +2029,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
     color: "#5f7b80",
     fontSize: 10,
+  },
+  reportReference: {
+    marginTop: 4,
+    color: "#047a8f",
+    fontSize: 11,
+    fontWeight: "700",
   },
   reportDetails: {
     marginTop: 10,
