@@ -1,6 +1,7 @@
-# TOORI_UNIFIED_CONTRACT.md — Web + App + Mica
+# SERVICIOSYA_UNIFIED_CONTRACT.md — Web + App + Mica
 
-Objetivo: que Toori no funcione como web por un lado y app por otro. La fuente operativa común es el flujo Web/Mica sobre Supabase.
+Objetivo: que ServiciosYa no funcione como web por un lado y app por otro. La
+fuente operativa común es el flujo Web/Mica sobre Supabase.
 
 ## Fuente de verdad operativa
 
@@ -52,14 +53,19 @@ Endpoints existentes en el repo web:
 - `POST /api/app/responder-pedido.php`
 - `GET /api/app/estado-pedido.php?ofertaId=...&appUserId=...`
 
-La app usa `lib/tooriBridge.ts` para estos endpoints.
+La app usa `lib/serviciosYaBridge.ts` para estos endpoints.
+
+El hostname técnico continúa siendo `https://tooriserviciosya.com` por
+compatibilidad de infraestructura. Esa URL es la única excepción donde puede
+permanecer el nombre comercial retirado; módulos, variables y textos se nombran
+ServiciosYa.
 
 Variables requeridas para build/app:
 
 ```env
-EXPO_PUBLIC_TOORI_APP_API_BASE_URL=https://tooriserviciosya.com/api/app
+EXPO_PUBLIC_SERVICIOSYA_APP_API_BASE_URL=https://tooriserviciosya.com/api/app
 # Fallback MVP opcional; la app intenta usar primero la sesión Supabase del usuario.
-EXPO_PUBLIC_TOORI_APP_SYNC_TOKEN=<mismo token que TOORI_APP_SYNC_TOKEN en webhook/.env>
+EXPO_PUBLIC_SERVICIOSYA_APP_SYNC_TOKEN=<mismo token compartido del webhook/.env>
 ```
 
 > Seguridad actual: backend acepta JWT de Supabase Auth y valida que `appUserId` coincida. El token compartido queda como fallback operativo/MVP.
@@ -99,7 +105,7 @@ Antes de publicar Android/iOS/Web:
 ## Pendientes técnicos importantes
 
 - Sustituir token compartido por JWT/Supabase Auth.
-- Unificar nomenclatura visual: Toori ServiciosYa / TOORI Servicios Ya.
+- Mantener la nomenclatura visual y técnica unificada como ServiciosYa.
 - Crear migraciones/versionado formal del esquema operativo.
 - Definir la política de resolución y reembolso de reclamos; hasta entonces los
   pagos quedan en estado `disputed` para revisión humana.

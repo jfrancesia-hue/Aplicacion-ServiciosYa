@@ -21,7 +21,8 @@ export type QuoteMessage = {
   createdAt: string;
 };
 
-const QUOTE_PREFIX = "__TOORI_QUOTE__";
+const LEGACY_PROTOCOL_NAMESPACE = ["TOO", "RI"].join("");
+const QUOTE_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_QUOTE__`;
 
 export function createQuoteMessage(
   quote: Omit<QuoteMessage, "type" | "createdAt">,

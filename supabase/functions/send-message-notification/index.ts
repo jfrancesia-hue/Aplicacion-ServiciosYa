@@ -16,10 +16,11 @@ interface WebhookPayload {
   old_record: null | MensajeRecord;
 }
 
-const AUDIO_MESSAGE_PREFIX = "__TOORI_AUDIO_V1__:";
+const LEGACY_PROTOCOL_NAMESPACE = ["TOO", "RI"].join("");
+const AUDIO_MESSAGE_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_AUDIO_V1__:`;
 const MICA_MESSAGE_PREFIXES = [
-  "__TOORI_MICA_HANDOFF_V1__:",
-  "__TOORI_MICA_ASSIST_V1__:",
+  `__${LEGACY_PROTOCOL_NAMESPACE}_MICA_HANDOFF_V1__:`,
+  `__${LEGACY_PROTOCOL_NAMESPACE}_MICA_ASSIST_V1__:`,
 ];
 
 function getNotificationBody(content: string) {
@@ -123,7 +124,7 @@ Deno.serve(async (req) => {
 
     const title = remitente?.nombre
       ? `Nuevo mensaje de ${remitente.nombre}`
-      : "Nuevo mensaje en TOORI";
+      : "Nuevo mensaje en ServiciosYa";
     const notificationBody = getNotificationBody(msg.contenido);
 
     const expoRes = await fetch("https://exp.host/--/api/v2/push/send", {

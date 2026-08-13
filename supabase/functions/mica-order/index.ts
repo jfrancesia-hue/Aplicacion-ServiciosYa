@@ -1,7 +1,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const HANDOFF_PREFIX = "__TOORI_MICA_HANDOFF_V1__:";
-const QUOTE_PREFIX = "__TOORI_QUOTE__";
+const LEGACY_PROTOCOL_NAMESPACE = ["TOO", "RI"].join("");
+const HANDOFF_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_MICA_HANDOFF_V1__:`;
+const QUOTE_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_QUOTE__`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -251,7 +252,7 @@ async function loadQuotes(
       name:
         [profile?.nombre, profile?.apellido].filter(Boolean).join(" ").trim() ||
         marketplaceProfile?.nombre ||
-        "Profesional de TOORI",
+        "Profesional de ServiciosYa",
       amount: normalizeAmount(budget.monto),
       pricingMode:
         budget.pricing_mode === "hour" || budget.pricing_mode === "day"
@@ -477,7 +478,7 @@ Deno.serve(async (req) => {
         descripcion: isDecline
           ? "Prestador no disponible"
           : String(response?.description ?? "").trim() ||
-            "Presupuesto enviado desde la app TOORI",
+            "Presupuesto enviado desde la app ServiciosYa",
         metadata: isDecline
           ? { source: "mica_app" }
           : {

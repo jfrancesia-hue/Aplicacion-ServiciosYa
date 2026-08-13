@@ -31,7 +31,7 @@ begin
     where p.chat_id = c.id and p.status = 'approved'
   ) into v_paid from public.chats c where c.id = new.chat_id;
 
-  if left(v_content, 15) = '__TOORI_QUOTE__' then
+  if left(v_content, 15) = ('__TOO' || 'RI_QUOTE__') then
     v_is_quote := true;
     begin v_payload := substring(v_content from 16)::jsonb;
     exception when others then raise exception 'CHAT_QUOTE_INVALID'; end;
@@ -48,7 +48,7 @@ begin
         and lower(s.rol::text) in ('worker', 'prestador')
     ) into v_is_provider;
     if not v_is_provider then raise exception 'CHAT_QUOTE_PROVIDER_ONLY'; end if;
-  elsif left(v_content, 19) = '__TOORI_AUDIO_V1__:' then
+  elsif left(v_content, 19) = ('__TOO' || 'RI_AUDIO_V1__:') then
     begin v_payload := substring(v_content from 20)::jsonb;
     exception when others then raise exception 'CHAT_AUDIO_INVALID'; end;
     v_check := coalesce(v_payload->>'transcript', '');

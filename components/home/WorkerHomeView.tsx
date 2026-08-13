@@ -23,7 +23,7 @@ import {
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import CategoryList from "./CategoryList";
 import { supabase } from "../../lib/supabase";
-import { obtenerPedidosDisponibles } from "../../lib/tooriApi";
+import { obtenerPedidosDisponibles } from "../../lib/serviciosYaApi";
 import { respondToMicaOrder } from "../../lib/micaOrder";
 import { getWorkerServiceRequests } from "../../lib/serviceRequests";
 import {

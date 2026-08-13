@@ -68,7 +68,7 @@ function HomeHeader({ onSearch, onShowCountsOnlyChange }: HomeHeaderProps) {
               style={styles.headerLogo}
             />
             <View style={styles.saludoContainer}>
-              <Text style={styles.tooriLogo}>Servicios Ya</Text>
+              <Text style={styles.brandName}>Servicios Ya</Text>
               <Text style={styles.subtitulo}>¿Qué necesitás hoy?</Text>
             </View>
           </View>
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
   saludoContainer: {
     flex: 1,
   },
-  tooriLogo: {
+  brandName: {
     color: "#fff",
     fontSize: 26,
     fontWeight: "bold",

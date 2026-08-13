@@ -18,7 +18,7 @@ import {
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BotonVolver from "../components/BotonVolver";
-import PedidosMicaSection from "../components/tooriBridge/PedidosMicaSection";
+import PedidosMicaSection from "../components/serviciosYa/PedidosMicaSection";
 import { misServicionQueryOptions } from "../lib/queryOptions";
 import { supabase } from "../lib/supabase";
 

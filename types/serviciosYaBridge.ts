@@ -1,4 +1,4 @@
-export type TooriBridgePedido = {
+export type ServiciosYaBridgePedido = {
   id: number | string;
   categoria: string;
   zona: string;
@@ -12,14 +12,14 @@ export type TooriBridgePedido = {
   yaRespondio?: boolean;
 };
 
-export type TooriBridgePedidoResponse = {
+export type ServiciosYaBridgePedidoResponse = {
   ok: boolean;
   count: number;
-  pedidos: TooriBridgePedido[];
+  pedidos: ServiciosYaBridgePedido[];
   error?: string;
 };
 
-export type TooriBridgeSyncPrestadorPayload = {
+export type ServiciosYaBridgeSyncPrestadorPayload = {
   appUserId: string;
   nombre: string;
   telefono: string;
@@ -31,7 +31,7 @@ export type TooriBridgeSyncPrestadorPayload = {
   verificado?: boolean;
 };
 
-export type TooriBridgeResponderPedidoPayload = {
+export type ServiciosYaBridgeResponderPedidoPayload = {
   ofertaId: number | string;
   appUserId: string;
   nombre?: string;
@@ -42,7 +42,7 @@ export type TooriBridgeResponderPedidoPayload = {
   descripcion?: string;
 };
 
-export type TooriBridgeResponse<T = unknown> = {
+export type ServiciosYaBridgeResponse<T = unknown> = {
   ok: boolean;
   error?: string;
 } & T;

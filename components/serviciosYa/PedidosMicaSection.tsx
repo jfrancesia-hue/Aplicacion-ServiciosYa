@@ -13,8 +13,8 @@ import { supabase } from "../../lib/supabase";
 import showToast from "../../lib/toast";
 import {
   getPedidosDisponibles,
-  isTooriBridgeConfigured,
-} from "../../lib/tooriBridge";
+  isServiciosYaBridgeConfigured,
+} from "../../lib/serviciosYaBridge";
 import { respondToMicaOrder } from "../../lib/micaOrder";
 import {
   buildQuotePricing,
@@ -24,7 +24,7 @@ import {
 } from "../../lib/utils/quotePricing";
 import { getUserID } from "../../store/authStore";
 import { QUOTE_OPERATIONAL_NOTICE_VERSION } from "../../lib/constants/billing";
-import type { TooriBridgePedido } from "../../types/tooriBridge";
+import type { ServiciosYaBridgePedido } from "../../types/serviciosYaBridge";
 import QuoteOperationalNoticeModal from "../quotes/QuoteOperationalNoticeModal";
 
 const colors = {
@@ -113,7 +113,7 @@ async function getMicaAppFallbackPedidos(ctx: {
 export default function PedidosMicaSection() {
   const queryClient = useQueryClient();
   const [selectedPedido, setSelectedPedido] =
-    useState<TooriBridgePedido | null>(null);
+    useState<ServiciosYaBridgePedido | null>(null);
   const [modalidad, setModalidad] = useState<QuotePricingMode>("project");
   const [monto, setMonto] = useState("");
   const [unidades, setUnidades] = useState("1");
@@ -137,17 +137,17 @@ export default function PedidosMicaSection() {
     [modalidad, monto, tipoReferencia, unidades],
   );
 
-  const enabled = isTooriBridgeConfigured();
+  const enabled = isServiciosYaBridgeConfigured();
 
   const contextQuery = useQuery({
-    queryKey: ["tooriBridge", "workerContext"],
+    queryKey: ["serviciosYaBridge", "workerContext"],
     queryFn: getBridgeWorkerContext,
     enabled,
   });
 
   const pedidosQuery = useQuery({
     queryKey: [
-      "tooriBridge",
+      "serviciosYaBridge",
       "pedidosDisponibles",
       contextQuery.data?.appUserId,
       contextQuery.data?.oficios,
@@ -159,7 +159,7 @@ export default function PedidosMicaSection() {
       if (!ctx) throw new Error("Prestador no disponible");
       if (ctx.oficios.length === 0) return [];
 
-      let bridgePedidos: TooriBridgePedido[] = [];
+      let bridgePedidos: ServiciosYaBridgePedido[] = [];
       try {
         const response = await getPedidosDisponibles({
           appUserId: ctx.appUserId,
@@ -178,7 +178,7 @@ export default function PedidosMicaSection() {
       }
 
       const fallbackPedidos = await getMicaAppFallbackPedidos(ctx);
-      const mergedPedidos = new Map<string, TooriBridgePedido>();
+      const mergedPedidos = new Map<string, ServiciosYaBridgePedido>();
 
       for (const pedido of [...bridgePedidos, ...fallbackPedidos]) {
         mergedPedidos.set(String(pedido.id), pedido);
@@ -237,7 +237,7 @@ export default function PedidosMicaSection() {
       setValidez("24 horas");
       setNotas("");
       queryClient.invalidateQueries({
-        queryKey: ["tooriBridge", "pedidosDisponibles"],
+        queryKey: ["serviciosYaBridge", "pedidosDisponibles"],
       });
     },
     onError: (error: unknown) => {

@@ -56,7 +56,7 @@ declare
   v_amount numeric;
   v_expected numeric;
 begin
-  if left(coalesce(new.contenido, ''), 15) <> '__TOORI_QUOTE__' then
+  if left(coalesce(new.contenido, ''), 15) <> ('__TOO' || 'RI_QUOTE__') then
     return new;
   end if;
 

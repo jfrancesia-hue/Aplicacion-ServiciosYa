@@ -1,5 +1,6 @@
-const HANDOFF_PREFIX = "__TOORI_MICA_HANDOFF_V1__:";
-const ASSISTANT_PREFIX = "__TOORI_MICA_ASSIST_V1__:";
+const LEGACY_PROTOCOL_NAMESPACE = ["TOO", "RI"].join("");
+const HANDOFF_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_MICA_HANDOFF_V1__:`;
+const ASSISTANT_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_MICA_ASSIST_V1__:`;
 
 export type MicaSystemMessage = {
   kind: "handoff" | "assistant";

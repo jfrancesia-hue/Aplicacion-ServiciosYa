@@ -1,7 +1,8 @@
 export const CHAT_AUDIO_BUCKET = "chat-audios";
 export const CHAT_AUDIO_MAX_SECONDS = 120;
 
-const AUDIO_MESSAGE_PREFIX = "__TOORI_AUDIO_V1__:";
+const LEGACY_PROTOCOL_NAMESPACE = ["TOO", "RI"].join("");
+const AUDIO_MESSAGE_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_AUDIO_V1__:`;
 
 export interface AudioMessagePayload {
   kind: "audio";

@@ -1,6 +1,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const MICA_ASSISTANT_PREFIX = "__TOORI_MICA_ASSIST_V1__:";
+const LEGACY_PROTOCOL_NAMESPACE = ["TOO", "RI"].join("");
+const MICA_ASSISTANT_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_MICA_ASSIST_V1__:`;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

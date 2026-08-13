@@ -1,35 +1,35 @@
 import Constants from "expo-constants";
 import type {
-  TooriBridgePedidoResponse,
-  TooriBridgeResponderPedidoPayload,
-  TooriBridgeResponse,
-  TooriBridgeSyncPrestadorPayload,
-} from "../types/tooriBridge";
+  ServiciosYaBridgePedidoResponse,
+  ServiciosYaBridgeResponderPedidoPayload,
+  ServiciosYaBridgeResponse,
+  ServiciosYaBridgeSyncPrestadorPayload,
+} from "../types/serviciosYaBridge";
 import { supabase } from "./supabase";
 
-type TooriBridgeExtra = {
-  tooriBridge?: {
+type ServiciosYaBridgeExtra = {
+  serviciosYaBridge?: {
     baseUrl?: string;
     syncToken?: string;
   };
 };
 
-const extra = (Constants.expoConfig?.extra ?? {}) as TooriBridgeExtra;
+const extra = (Constants.expoConfig?.extra ?? {}) as ServiciosYaBridgeExtra;
 
 const DEFAULT_BASE_URL = "https://tooriserviciosya.com/api/app";
 
-export const TOORI_BRIDGE_BASE_URL =
-  process.env.EXPO_PUBLIC_TOORI_APP_API_BASE_URL ||
-  extra.tooriBridge?.baseUrl ||
+export const SERVICIOSYA_BRIDGE_BASE_URL =
+  process.env.EXPO_PUBLIC_SERVICIOSYA_APP_API_BASE_URL ||
+  extra.serviciosYaBridge?.baseUrl ||
   DEFAULT_BASE_URL;
 
-const TOORI_BRIDGE_TOKEN =
-  process.env.EXPO_PUBLIC_TOORI_APP_SYNC_TOKEN ||
-  extra.tooriBridge?.syncToken ||
+const SERVICIOSYA_BRIDGE_TOKEN =
+  process.env.EXPO_PUBLIC_SERVICIOSYA_APP_SYNC_TOKEN ||
+  extra.serviciosYaBridge?.syncToken ||
   "";
 
-export function isTooriBridgeConfigured() {
-  return Boolean(TOORI_BRIDGE_BASE_URL);
+export function isServiciosYaBridgeConfigured() {
+  return Boolean(SERVICIOSYA_BRIDGE_BASE_URL);
 }
 
 function normalizeBaseUrl(url: string) {
@@ -38,7 +38,7 @@ function normalizeBaseUrl(url: string) {
 
 async function getBridgeAuthToken() {
   const { data } = await supabase.auth.getSession();
-  return data.session?.access_token || TOORI_BRIDGE_TOKEN;
+  return data.session?.access_token || SERVICIOSYA_BRIDGE_TOKEN;
 }
 
 async function requestBridge<T>(
@@ -48,12 +48,12 @@ async function requestBridge<T>(
   const authToken = await getBridgeAuthToken();
   if (!authToken) {
     throw new Error(
-      "Falta sesión de usuario o EXPO_PUBLIC_TOORI_APP_SYNC_TOKEN para conectar la app con Web/Mica.",
+      "Falta sesión de usuario o EXPO_PUBLIC_SERVICIOSYA_APP_SYNC_TOKEN para conectar la app con Web/Mica.",
     );
   }
 
   const response = await fetch(
-    `${normalizeBaseUrl(TOORI_BRIDGE_BASE_URL)}/${endpoint}`,
+    `${normalizeBaseUrl(SERVICIOSYA_BRIDGE_BASE_URL)}/${endpoint}`,
     {
       ...options,
       headers: {
@@ -65,27 +65,30 @@ async function requestBridge<T>(
   );
 
   const text = await response.text();
-  let json: TooriBridgeResponse | Record<string, unknown> = {};
+  let json: ServiciosYaBridgeResponse | Record<string, unknown> = {};
   try {
     json = text ? JSON.parse(text) : {};
   } catch {
-    json = { ok: false, error: text || "Respuesta no JSON del puente Toori" };
+    json = {
+      ok: false,
+      error: text || "Respuesta no JSON del puente ServiciosYa",
+    };
   }
 
   if (!response.ok || json?.ok === false) {
     const message =
       typeof json?.error === "string"
         ? json.error
-        : `Error ${response.status} en puente Toori`;
+        : `Error ${response.status} en puente ServiciosYa`;
     throw new Error(message);
   }
 
   return json as T;
 }
 
-export function syncPrestador(payload: TooriBridgeSyncPrestadorPayload) {
+export function syncPrestador(payload: ServiciosYaBridgeSyncPrestadorPayload) {
   return requestBridge<
-    TooriBridgeResponse<{ action: string; marketplaceId?: string }>
+    ServiciosYaBridgeResponse<{ action: string; marketplaceId?: string }>
   >("sync-prestador.php", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -100,15 +103,15 @@ export function getPedidosDisponibles(payload: {
   provincia?: string;
   limit?: number;
 }) {
-  return requestBridge<TooriBridgePedidoResponse>("pedidos-disponibles.php", {
+  return requestBridge<ServiciosYaBridgePedidoResponse>("pedidos-disponibles.php", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export function responderPedido(payload: TooriBridgeResponderPedidoPayload) {
+export function responderPedido(payload: ServiciosYaBridgeResponderPedidoPayload) {
   return requestBridge<
-    TooriBridgeResponse<{ action: string; ofertaId: string | number }>
+    ServiciosYaBridgeResponse<{ action: string; ofertaId: string | number }>
   >("responder-pedido.php", {
     method: "POST",
     body: JSON.stringify(payload),
@@ -120,7 +123,7 @@ export function getEstadoPedido(ofertaId: string | number, appUserId: string) {
     ofertaId: String(ofertaId),
     appUserId,
   });
-  return requestBridge<TooriBridgeResponse>(
+  return requestBridge<ServiciosYaBridgeResponse>(
     `estado-pedido.php?${params.toString()}`,
     {
       method: "GET",

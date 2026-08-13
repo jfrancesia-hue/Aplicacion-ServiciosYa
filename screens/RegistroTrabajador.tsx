@@ -27,7 +27,7 @@ import { AuthContext } from "../lib/context/AppContext";
 import { recordCurrentLegalAcceptance } from "../lib/legal/acceptance";
 import { VERIFICATION_DOCUMENTS_BUCKET } from "../lib/legal/verificationDocuments";
 import { supabase } from "../lib/supabase";
-import { syncPrestadorConToori } from "../lib/tooriApi";
+import { syncPrestadorConServiciosYa } from "../lib/serviciosYaApi";
 import vexo from "../lib/vexo";
 import type { UserUpdate } from "../types/db.overrides.types";
 import type { MainStackParamList } from "../types/navigation";
@@ -364,7 +364,7 @@ export default function RegistroTrabajadorSimplificado() {
         );
       }
 
-      const syncResult = await syncPrestadorConToori({
+      const syncResult = await syncPrestadorConServiciosYa({
         appUserId: user.id,
         nombre,
         telefono: numeroCelular,
@@ -378,7 +378,7 @@ export default function RegistroTrabajadorSimplificado() {
 
       if (!syncResult.ok && !syncResult.skipped) {
         console.warn(
-          "No se pudo sincronizar prestador con Toori/Mica",
+          "No se pudo sincronizar prestador con ServiciosYa/Mica",
           syncResult.error,
           syncResult.raw,
         );

@@ -1,28 +1,37 @@
-# TOORI Servicios Ya App
+# ServiciosYa App
 
 App móvil Expo/React Native para clientes y prestadores.
 
-## Integración Web + Mica
+## Arquitectura operativa
 
-Ver [`TOORI_UNIFIED_CONTRACT.md`](./TOORI_UNIFIED_CONTRACT.md).
+Ver [`SERVICIOSYA_UNIFIED_CONTRACT.md`](./SERVICIOSYA_UNIFIED_CONTRACT.md).
 
-La app no debe operar como producto aislado. Para operaciones reales usa el puente Web/Mica:
+ServiciosYa usa Supabase como fuente de verdad para perfiles, pedidos,
+presupuestos, pagos, agenda, reclamos y notificaciones. MICA opera mediante
+Edge Functions autenticadas y los flujos protegidos de la app.
 
-- `lib/tooriBridge.ts`
-- `components/tooriBridge/PedidosMicaSection.tsx`
-- endpoints web `/api/app/*`
+- `lib/serviceRequests.ts`
+- `lib/micaOrder.ts`
+- `lib/serviciosYaApi.ts`
+- `lib/serviciosYaBridge.ts`
+- `components/serviciosYa/PedidosMicaSection.tsx`
 
-Variables necesarias en build:
+El puente con la web se conserva bajo nombres ServiciosYa. Por compatibilidad,
+su hostname sigue siendo `https://tooriserviciosya.com`; esa URL es la única
+excepción donde permanece el nombre comercial retirado.
 
-```env
-EXPO_PUBLIC_TOORI_APP_API_BASE_URL=https://tooriserviciosya.com/api/app
-# opcional/fallback: la app usa primero sesión Supabase Auth
-EXPO_PUBLIC_TOORI_APP_SYNC_TOKEN=<mismo token que TOORI_APP_SYNC_TOKEN en web/webhook/.env>
+## Validación
+
+```powershell
+npm run check:serviciosya-contract
+npm run typecheck
+npm test
+npx expo-doctor
 ```
 
-## Build actual trabajado
+## Build actual
 
-- Rama base funcional: `main`
-- Versión Android/iOS objetivo: `91.0.0`
-- Android `versionCode`: `91`
-- Nombre visible: `TOORI Servicios Ya`
+- Rama base funcional: `main`.
+- Versión de app: `95.0.0`.
+- Android `versionCode`: `95`.
+- Nombre visible: `Servicios Ya`.

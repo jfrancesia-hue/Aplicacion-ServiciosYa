@@ -157,9 +157,9 @@
       "@react-native-community/datetimepicker"
     ],
     "extra": {
-      "tooriSyncBaseUrl": "https://tooriserviciosya.com",
-      "tooriAppSyncToken": "",
-      "tooriBridge": {
+      "serviciosYaSyncBaseUrl": "https://tooriserviciosya.com",
+      "serviciosYaAppSyncToken": "",
+      "serviciosYaBridge": {
         "baseUrl": "https://tooriserviciosya.com/api/app"
       },
       "eas": {
