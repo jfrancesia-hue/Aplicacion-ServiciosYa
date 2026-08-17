@@ -8,7 +8,7 @@
       "android",
       "web"
     ],
-    "version": "96.0.0",
+    "version": "94.0.0",
     "orientation": "portrait",
     "icon": "./assets/serviciosya-logo-2026.png",
     "userInterfaceStyle": "light",
@@ -53,7 +53,7 @@
       "appleTeamId": "HHY5MJ22J3"
     },
     "android": {
-      "versionCode": 96,
+      "versionCode": 94,
       "adaptiveIcon": {
         "foregroundImage": "./assets/serviciosya-logo-2026.png",
         "backgroundColor": "#20231f"

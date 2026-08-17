@@ -18,7 +18,8 @@
       "distribution": "store",
       "environment": "preview",
       "env": {
-        "EXPO_PUBLIC_RELEASE_CHANNEL": "internal"
+        "EXPO_PUBLIC_RELEASE_CHANNEL": "internal",
+        "EXPO_PUBLIC_INTERNAL_USES_PRODUCTION": "true"
       },
       "android": {
         "buildType": "app-bundle"

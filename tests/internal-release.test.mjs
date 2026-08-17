@@ -37,7 +37,7 @@ test("la build interna exige un Supabase de pruebas explícito", () => {
   );
 });
 
-test("la próxima compilación usa un versionCode posterior a la build 95", () => {
-  assert.equal(app.expo.version, "96.0.0");
-  assert.equal(app.expo.android.versionCode, 96);
+test("la próxima compilación usa un versionCode posterior a producción 93", () => {
+  assert.equal(app.expo.version, "94.0.0");
+  assert.equal(app.expo.android.versionCode, 94);
 });
