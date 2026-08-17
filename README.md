@@ -5,6 +5,8 @@ App móvil Expo/React Native para clientes y prestadores.
 ## Arquitectura operativa
 
 Ver [`SERVICIOSYA_UNIFIED_CONTRACT.md`](./SERVICIOSYA_UNIFIED_CONTRACT.md).
+Para preparar una entrega limitada a testers, seguir
+[`INTERNAL_TEST_RELEASE.md`](./INTERNAL_TEST_RELEASE.md).
 
 ServiciosYa usa Supabase como fuente de verdad para perfiles, pedidos,
 presupuestos, pagos, agenda, reclamos y notificaciones. MICA opera mediante
@@ -24,6 +26,7 @@ excepción donde permanece el nombre comercial retirado.
 
 ```powershell
 npm run check:serviciosya-contract
+npm run check:internal-release-env
 npm run typecheck
 npm test
 npx expo-doctor
@@ -32,6 +35,6 @@ npx expo-doctor
 ## Build actual
 
 - Rama base funcional: `main`.
-- Versión de app: `95.0.0`.
-- Android `versionCode`: `95`.
+- Versión de app: `96.0.0`.
+- Android `versionCode`: `96`.
 - Nombre visible: `Servicios Ya`.
