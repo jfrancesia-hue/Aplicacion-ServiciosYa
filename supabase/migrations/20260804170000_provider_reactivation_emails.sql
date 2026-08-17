@@ -174,7 +174,7 @@ profiles as (
     or exists (
       select 1
       from public.servicios servicio
-      where coalesce(servicio.user_id, servicio.usuario_id) = usuario.id::text
+      where coalesce(servicio.user_id::text, servicio.usuario_id::text) = usuario.id::text
         and lower(coalesce(servicio.estado, 'activo')) = 'activo'
     )
 )
