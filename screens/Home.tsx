@@ -43,9 +43,8 @@ import vexo from "../lib/vexo";
 
 type Props = NativeStackScreenProps<MainStackParamList, "Home">;
 
-function Home({ navigation }: Props) {
+function Home({ navigation, route }: Props) {
   usePrefetchData();
-  const [authUser, setAuthUser] = useState(null);
   const [busqueda, setBusqueda] = useState("");
   const [showCountsOnly, setShowCountsOnly] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
@@ -58,6 +57,9 @@ function Home({ navigation }: Props) {
   const {
     askDniVerification,
     askProfileCompletion,
+    askProviderProfileCompletion,
+    providerProfileScore,
+    providerMissingFields,
     rol,
   } = useHomeData();
   const isWorker = rol === "worker";
@@ -145,16 +147,19 @@ function Home({ navigation }: Props) {
             onShowCountsOnlyChange={(value) => setShowCountsOnly(value)}
           />
 
-          {authUser && askProfileCompletion && (
+          {!isGuest && (isWorker ? askProviderProfileCompletion : askProfileCompletion) && (
             <ProfileIncompleteWarning
-              onPress={() => navigation.navigate("CrearPerfil")}
+              isProvider={isWorker}
+              score={providerProfileScore}
+              missingFields={providerMissingFields}
+              onPress={() => navigation.navigate(isWorker ? "Perfil" : "CrearPerfil")}
             />
           )}
 
-          {authUser && askDniVerification && <DniPendingWarning />}
+          {!isGuest && askDniVerification && <DniPendingWarning />}
 
           {isWorker ? (
-            <WorkerHomeView navigation={navigation} onCategoryPress={handleCategoryPress} busqueda={busqueda} />
+            <WorkerHomeView navigation={navigation} onCategoryPress={handleCategoryPress} busqueda={busqueda} initialTab={route.params?.workerTab} />
           ) : (
             <CategoryList
               busqueda={busqueda}

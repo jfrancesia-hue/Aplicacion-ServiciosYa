@@ -39,14 +39,16 @@ const ReadItem = ({ label, value }) => (
   </View>
 );
 
-const EditItem = ({ label, value, onChange, keyboardType = 'default' }) => (
+const EditItem = ({ label, value, onChange, keyboardType = 'default', multiline = false, placeholder = '' }) => (
   <View style={styles.item}>
     <Text style={styles.itemLabel}>{label}</Text>
     <TextInput
-      style={styles.editInput}
+      style={[styles.editInput, multiline && styles.editInputMultiline]}
       value={value != null ? String(value) : ''}
       onChangeText={onChange}
       keyboardType={keyboardType}
+      multiline={multiline}
+      placeholder={placeholder}
       placeholderTextColor="#aaa"
     />
   </View>
@@ -74,6 +76,9 @@ export default function Perfil() {
   const [provincia, setProvincia] = useState('');
   const [ciudad, setCiudad] = useState('');
   const [barrio, setBarrio] = useState('');
+  const [descripcion, setDescripcion] = useState('');
+  const [experiencia, setExperiencia] = useState('');
+  const [horarios, setHorarios] = useState('');
 
   // Categorías — ref para evitar closure stale en guardarCambios
   const [categorias, setCategorias] = useState([]);
@@ -101,6 +106,9 @@ export default function Perfil() {
       setProvincia(userData.provincia ? String(userData.provincia) : '');
       setCiudad(userData.ciudad ? String(userData.ciudad) : '');
       setBarrio(userData.barrio ? String(userData.barrio) : '');
+      setDescripcion(userData.descripcion ? String(userData.descripcion) : '');
+      setExperiencia(userData.experiencia ? String(userData.experiencia) : '');
+      setHorarios(userData.horarios ? String(userData.horarios) : '');
 
       const cats = Array.isArray(userData.categoria) ? userData.categoria : [];
       setCategoriasSeleccionadas(cats);
@@ -239,6 +247,9 @@ export default function Perfil() {
     const edadVal = edad != null ? String(edad).trim() : '';
     const dniVal = dni != null ? String(dni).trim() : '';
     const barrioVal = barrio != null ? String(barrio).trim() : '';
+    const descripcionVal = descripcion != null ? String(descripcion).trim() : '';
+    const experienciaVal = experiencia != null ? String(experiencia).trim() : '';
+    const horariosVal = horarios != null ? String(horarios).trim() : '';
 
     // Leer desde refs para evitar valores stale de closures
     const categoriasActuales = categoriasRef.current;
@@ -287,6 +298,9 @@ export default function Perfil() {
         provincia: provinciaVal,
         ciudad: ciudadVal,
         barrio: barrioVal || null,
+        descripcion: descripcionVal || null,
+        experiencia: experienciaVal || null,
+        horarios: horariosVal || null,
         categoria: categoriasActuales,
         matricula: matriculaUrls.length > 0 ? matriculaUrls[0] : null,
       };
@@ -323,6 +337,9 @@ export default function Perfil() {
       setProvincia(userData.provincia ? String(userData.provincia) : '');
       setCiudad(userData.ciudad ? String(userData.ciudad) : '');
       setBarrio(userData.barrio ? String(userData.barrio) : '');
+      setDescripcion(userData.descripcion ? String(userData.descripcion) : '');
+      setExperiencia(userData.experiencia ? String(userData.experiencia) : '');
+      setHorarios(userData.horarios ? String(userData.horarios) : '');
 
       const cats = Array.isArray(userData.categoria) ? userData.categoria : [];
       setCategoriasSeleccionadas(cats);
@@ -555,6 +572,44 @@ export default function Perfil() {
         </View>
 
         {/* Botón guardar inferior */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Presentación profesional</Text>
+          <Text style={styles.sectionHelp}>
+            Estos datos ayudan al cliente a entender qué hacés antes de escribirte. Completar el perfil no tiene costo.
+          </Text>
+          {editing ? (
+            <>
+              <EditItem
+                label="Sobre mi trabajo"
+                value={descripcion}
+                onChange={setDescripcion}
+                multiline
+                placeholder="Contá qué trabajos realizás y cómo trabajás"
+              />
+              <EditItem
+                label="Experiencia"
+                value={experiencia}
+                onChange={setExperiencia}
+                multiline
+                placeholder="Ej.: 5 años en reparaciones domiciliarias"
+              />
+              <EditItem
+                label="Horarios disponibles"
+                value={horarios}
+                onChange={setHorarios}
+                multiline
+                placeholder="Ej.: lunes a viernes de 9 a 18 h"
+              />
+            </>
+          ) : (
+            <>
+              <ReadItem label="Sobre mi trabajo" value={userData.descripcion} />
+              <ReadItem label="Experiencia" value={userData.experiencia} />
+              <ReadItem label="Horarios disponibles" value={userData.horarios} />
+            </>
+          )}
+        </View>
+
         {editing && (
           <TouchableOpacity
             style={[styles.saveBtn, { marginTop: 24 }, saving && { opacity: 0.6 }]}
@@ -630,6 +685,7 @@ const styles = StyleSheet.create({
   cancelBtnText: { color: '#666', fontWeight: '600', fontSize: 14 },
   section: { marginTop: 24, borderTopWidth: 1, borderTopColor: '#e8f0f2', paddingTop: 16 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: BLUE_DARK, marginBottom: 12, letterSpacing: 0.3 },
+  sectionHelp: { color: '#668086', fontSize: 12, lineHeight: 18, marginBottom: 12 },
   item: { marginBottom: 10 },
   itemLabel: {
     fontSize: 11, color: '#89b5bf', fontWeight: '700', marginBottom: 2,
@@ -642,6 +698,7 @@ const styles = StyleSheet.create({
     fontSize: 15, color: '#333', backgroundColor: LIGHT_BG,
     marginBottom: 2,
   },
+  editInputMultiline: { minHeight: 82, textAlignVertical: 'top' },
   tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8, marginBottom: 4 },
   tag: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: BLUE,

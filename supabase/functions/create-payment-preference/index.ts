@@ -191,7 +191,44 @@ Deno.serve(async (req) => {
     }
 
     const pricing = quotePricing(message.contenido);
-    const amountTotal = quoteAmount(message.contenido);
+    const { data: quote, error: quoteError } = await admin
+      .from("chat_quotes")
+      .select(
+        "id,provider_id,client_id,amount_provider,fee_rate,fee_amount,client_total,status",
+      )
+      .eq("chat_id", chatId)
+      .eq("message_id", messageId)
+      .maybeSingle();
+    if (quoteError) throw quoteError;
+    if (!quote) {
+      return json(
+        {
+          error:
+            "Esta propuesta es anterior al sistema de reserva. Pedile al prestador que envie una nueva.",
+        },
+        409,
+      );
+    }
+    if (quote.client_id !== user.id || quote.provider_id !== message.remitente_id) {
+      return json(
+        { error: "Solo el cliente puede aceptar una propuesta del prestador." },
+        403,
+      );
+    }
+    if (!["pending", "accepted_payment_pending"].includes(quote.status)) {
+      return json(
+        { error: "La propuesta ya no esta disponible para reservar." },
+        409,
+      );
+    }
+
+    const amountTotal = Number(quote.amount_provider);
+    if (Math.abs(quoteAmount(message.contenido) - amountTotal) >= 0.01) {
+      return json(
+        { error: "El monto guardado no coincide con el presupuesto del chat." },
+        409,
+      );
+    }
     if (
       !Number.isFinite(amountTotal) ||
       amountTotal < MIN_QUOTE_ARS ||
@@ -199,7 +236,21 @@ Deno.serve(async (req) => {
     ) {
       return json({ error: "El monto del presupuesto no es válido." }, 400);
     }
-    const commissionAmount = commissionFor(amountTotal);
+    const quoteRate = Number(quote.fee_rate);
+    const storedCommission = Number(quote.fee_amount);
+    const commissionAmount =
+      Number.isFinite(storedCommission) && storedCommission > 0
+        ? storedCommission
+        : commissionFor(amountTotal);
+    const clientTotal = Number(quote.client_total);
+    if (
+      !Number.isFinite(quoteRate) ||
+      Math.abs(quoteRate - COMMISSION_RATE) >= 0.00001 ||
+      !Number.isFinite(clientTotal) ||
+      Math.abs(clientTotal - (amountTotal + commissionAmount)) >= 0.01
+    ) {
+      return json({ error: "El desglose de la propuesta no es valido." }, 409);
+    }
 
     const { data: existing, error: existingError } = await admin
       .from("service_confirmation_payments")
@@ -222,6 +273,14 @@ Deno.serve(async (req) => {
       return json({ ok: true, approved: true, paymentRecordId: existing.id });
     }
     if (existing?.checkout_url) {
+      await admin
+        .from("chat_quotes")
+        .update({
+          status: "accepted_payment_pending",
+          accepted_at: new Date().toISOString(),
+        })
+        .eq("id", quote.id)
+        .in("status", ["pending", "accepted_payment_pending"]);
       return json({
         ok: true,
         approved: false,
@@ -251,6 +310,9 @@ Deno.serve(async (req) => {
               ? OPERATIONAL_NOTICE_VERSION
               : null,
             operational_notice_accepted_at: noticeDate?.toISOString() ?? null,
+            chat_quote_id: quote.id,
+            fee_rate: quoteRate,
+            client_total: clientTotal,
             status: "creating",
           })
           .select("id,status,checkout_url,preference_id")
@@ -260,7 +322,19 @@ Deno.serve(async (req) => {
       throw new Error("No se pudo registrar el intento de pago.");
     }
 
+    const acceptedAt = new Date().toISOString();
+    const { error: quoteUpdateError } = await admin
+      .from("chat_quotes")
+      .update({
+        status: "accepted_payment_pending",
+        accepted_at: acceptedAt,
+      })
+      .eq("id", quote.id)
+      .in("status", ["pending", "accepted_payment_pending"]);
+    if (quoteUpdateError) throw quoteUpdateError;
+
     const recordParam = encodeURIComponent(paymentRecord.id);
+    const notificationUrl = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/mercadopago-webhook`;
     const preferenceResponse = await fetch(
       "https://api.mercadopago.com/checkout/preferences",
       {
@@ -287,6 +361,7 @@ Deno.serve(async (req) => {
             pending: `solucionesya://presupuesto-confirmado?status=pending&payment_record_id=${recordParam}`,
           },
           auto_return: "approved",
+          notification_url: notificationUrl,
           external_reference: paymentRecord.id,
           metadata: {
             payment_record_id: paymentRecord.id,
@@ -294,6 +369,7 @@ Deno.serve(async (req) => {
             quote_message_id: messageId,
             payer_id: user.id,
             provider_id: message.remitente_id,
+            chat_quote_id: quote.id,
           },
         }),
       },
@@ -307,6 +383,11 @@ Deno.serve(async (req) => {
           provider_status: String(preference?.message ?? "preference_error"),
         })
         .eq("id", paymentRecord.id);
+      await admin
+        .from("chat_quotes")
+        .update({ status: "pending", accepted_at: null })
+        .eq("id", quote.id)
+        .eq("status", "accepted_payment_pending");
       return json(
         {
           error:

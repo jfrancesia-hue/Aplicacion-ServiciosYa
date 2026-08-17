@@ -16,6 +16,19 @@ import {
   getMicaSystemMessagePreview,
   parseMicaSystemMessage,
 } from "../lib/utils/micaMessage.ts";
+import {
+  SERVICE_CONFIRMATION_COMMISSION_RATE,
+  calculateServiceConfirmationFee,
+} from "../lib/constants/billing.ts";
+import {
+  createQuoteMessage,
+  parseQuoteMessage,
+} from "../lib/utils/quoteMessage.ts";
+import {
+  createServiceSystemContent,
+  getServiceSystemMessagePreview,
+  parseServiceSystemMessage,
+} from "../lib/utils/serviceSystemMessage.ts";
 
 test("segmenta prestadores de Catamarca sin depender de tildes", () => {
   const target = {
@@ -87,4 +100,59 @@ test("identifica de forma segura los mensajes compartidos por MICA", () => {
   assert.equal(message?.kind, "assistant");
   assert.equal(message?.requestedBy, "user-id");
   assert.match(getMicaSystemMessagePreview(content) ?? "", /^MICA:/);
+});
+
+test("calcula una reserva del 10% sin retener el precio del trabajo", () => {
+  assert.equal(SERVICE_CONFIRMATION_COMMISSION_RATE, 0.1);
+  assert.equal(calculateServiceConfirmationFee(100_000), 10_000);
+});
+
+test("serializa una propuesta con el desglose autoritativo", () => {
+  const content = createQuoteMessage({
+    quoteId: "quote-id",
+    version: 2,
+    amount: 100_000,
+    feeRate: 0.1,
+    feeAmount: 10_000,
+    clientTotal: 110_000,
+    scope: "Reparación e instalación",
+    materials: "A confirmar",
+    timeframe: "48 horas",
+    warranty: "30 días",
+    validUntil: "24 horas",
+  });
+  const quote = parseQuoteMessage(content);
+
+  assert.equal(quote?.version, 2);
+  assert.equal(quote?.amount, 100_000);
+  assert.equal(quote?.feeAmount, 10_000);
+  assert.equal(quote?.clientTotal, 110_000);
+});
+
+test("los estados de reserva no se presentan como mensajes de MICA", () => {
+  const content = createServiceSystemContent({
+    kind: "booking_confirmed",
+    title: "Reserva confirmada",
+    text: "El cargo de reserva fue aprobado.",
+    actorId: "client-id",
+  });
+  const message = parseServiceSystemMessage(content);
+
+  assert.equal(message?.kind, "booking_confirmed");
+  assert.match(getServiceSystemMessagePreview(content) ?? "", /^ServiciosYa:/);
+  assert.equal(parseMicaSystemMessage(content), null);
+});
+
+test("interpreta una resolución de cancelación como evento del servicio", () => {
+  const content = createServiceSystemContent({
+    kind: "cancellation_rejected",
+    title: "Solicitud revisada",
+    text: "La reserva continúa activa.",
+    eventId: "request-id",
+  });
+  const message = parseServiceSystemMessage(content);
+
+  assert.equal(message?.kind, "cancellation_rejected");
+  assert.equal(message?.eventId, "request-id");
+  assert.equal(parseMicaSystemMessage(content), null);
 });

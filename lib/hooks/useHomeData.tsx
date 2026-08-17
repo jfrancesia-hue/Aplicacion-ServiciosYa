@@ -9,6 +9,7 @@ import {
   servicesCountQuerKey,
 } from "../queryOptions";
 import queryClient from "../reactQuery";
+import { getProviderProfileCompleteness } from "../utils/providerProfile";
 
 interface UserData {
   rol: string;
@@ -23,6 +24,9 @@ export const useHomeData = () => {
   const [askProfileCompletion, setAskProfileCompletion] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const { data: userData } = useQuery(perfilQueryOptions);
+  const profileCompleteness = getProviderProfileCompleteness(userData);
+  const askProviderProfileCompletion =
+    userData?.rol === "worker" && profileCompleteness.score < 100;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -63,6 +67,9 @@ export const useHomeData = () => {
     ...userData,
     askDniVerification,
     askProfileCompletion,
+    askProviderProfileCompletion,
+    providerProfileScore: profileCompleteness.score,
+    providerMissingFields: profileCompleteness.missingLabels,
     conteosPorCategoria,
     refreshing,
     onRefresh,

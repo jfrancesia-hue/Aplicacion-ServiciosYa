@@ -27,6 +27,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import BotonVolver from "../components/BotonVolver";
 import BottomNavBar from "../components/home/BottomNavBar";
 import TrustSafetyModal from "../components/trust/TrustSafetyModal";
+import UrgentRequestPanel from "../components/urgent/UrgentRequestPanel";
 import {
   type ProviderAvailabilityStatus,
   getAvailableProviders,
@@ -699,7 +700,7 @@ interface WorkerService {
   horario?: string | null;
 }
 
-export default function ServiciosPorCategoria({ route }: Props) {
+export default function ServiciosPorCategoria({ route, navigation }: Props) {
   const { categoria } = route.params;
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1061,7 +1062,14 @@ export default function ServiciosPorCategoria({ route }: Props) {
           )}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
-            locationError ? (
+            <View>
+              <UrgentRequestPanel
+                category={categoria}
+                city={userLocation?.ciudad || userLocation?.localidad}
+                province={userLocation?.provincia}
+                navigation={navigation}
+              />
+            {locationError ? (
               <View style={styles.locationBanner}>
                 <MaterialIcons name="location-off" size={18} color="#92400e" />
                 <View style={styles.locationBannerCopy}>
@@ -1182,7 +1190,8 @@ export default function ServiciosPorCategoria({ route }: Props) {
                   )}
                 </View>
               </View>
-            )
+            )}
+            </View>
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>

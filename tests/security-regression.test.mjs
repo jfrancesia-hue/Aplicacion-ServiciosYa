@@ -25,6 +25,13 @@ const operationalDashboard = await readFile(
   ),
   "utf8",
 );
+const quoteReservationMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260804130000_chat_quote_reservations.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const paymentPreference = await readFile(
   new URL(
     "../supabase/functions/create-payment-preference/index.ts",
@@ -32,6 +39,7 @@ const paymentPreference = await readFile(
   ),
   "utf8",
 );
+const paymentPreferenceSource = paymentPreference;
 const micaOrder = await readFile(
   new URL("../supabase/functions/mica-order/index.ts", import.meta.url),
   "utf8",
@@ -43,6 +51,13 @@ const protectedChatMigration = await readFile(
   ),
   "utf8",
 );
+const paymentWebhookSource = await readFile(
+  new URL(
+    "../supabase/functions/mercadopago-webhook/index.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const transactionalNotificationsMigration = await readFile(
   new URL(
     "../supabase/migrations/20260812170000_transactional_notification_outbox.sql",
@@ -50,9 +65,27 @@ const transactionalNotificationsMigration = await readFile(
   ),
   "utf8",
 );
+const chatInputSource = await readFile(
+  new URL("../components/chat/ChatInputBar.tsx", import.meta.url),
+  "utf8",
+);
+const cancellationMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260804150000_service_cancellation_refunds.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const transactionalNotificationsFunction = await readFile(
   new URL(
     "../supabase/functions/process-transactional-notifications/index.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const cancellationSource = await readFile(
+  new URL(
+    "../supabase/functions/request-reservation-cancellation/index.ts",
     import.meta.url,
   ),
   "utf8",
@@ -197,6 +230,140 @@ test("las funciones de pago exigen JWT", () => {
     supabaseConfig,
     /\[functions\.operational-dashboard\][\s\S]*?verify_jwt = true/,
   );
+  assert.match(
+    supabaseConfig,
+    /\[functions\.mercadopago-webhook\][\s\S]*?verify_jwt = false/,
+  );
+  assert.match(
+    supabaseConfig,
+    /\[functions\.request-reservation-cancellation\][\s\S]*?verify_jwt = true/,
+  );
+});
+
+test("las propuestas se crean con roles y montos controlados por la base", () => {
+  assert.match(
+    quoteReservationMigration,
+    /alter table public\.chat_quotes enable row level security/,
+  );
+  assert.match(quoteReservationMigration, /ONLY_PROVIDER_CAN_QUOTE/);
+  assert.match(quoteReservationMigration, /ONLY_CLIENT_CAN_REQUEST_CHANGES/);
+  assert.match(
+    quoteReservationMigration,
+    /v_fee_rate numeric\(6, 5\) := 0\.10/,
+  );
+  assert.match(
+    quoteReservationMigration,
+    /fee_amount = round\(amount_provider \* fee_rate, 2\)/,
+  );
+});
+
+test("el checkout cobra la reserva guardada y no confía en el texto del chat", () => {
+  assert.match(paymentPreferenceSource, /\.from\("chat_quotes"\)/);
+  assert.match(
+    paymentPreferenceSource,
+    /quote\.client_id !== user\.id/,
+  );
+  assert.match(
+    paymentPreferenceSource,
+    /const amountTotal = Number\(quote\.amount_provider\)/,
+  );
+  assert.match(
+    paymentPreferenceSource,
+    /quoteAmount\(message\.contenido\) - amountTotal/,
+  );
+  assert.match(paymentPreferenceSource, /notification_url: notificationUrl/);
+  assert.match(paymentPreferenceSource, /accepted_payment_pending/);
+});
+
+test("el webhook verifica el pago en Mercado Pago antes de confirmarlo", () => {
+  assert.match(
+    paymentWebhookSource,
+    /api\.mercadopago\.com\/v1\/payments/,
+  );
+  assert.match(
+    paymentWebhookSource,
+    /external_reference[\s\S]{0,180}paymentRecord\.id/,
+  );
+  assert.match(
+    paymentWebhookSource,
+    /transaction_amount[\s\S]{0,120}commission_amount/,
+  );
+  assert.match(paymentWebhookSource, /confirm_service_reservation/);
+  assert.match(
+    quoteReservationMigration,
+    /create or replace function public\.confirm_service_reservation/,
+  );
+  assert.match(
+    quoteReservationMigration,
+    /from public\.service_confirmation_payments[\s\S]{0,100}for update/,
+  );
+});
+
+test("la interacción distingue prestador, cliente y agenda posterior", () => {
+  assert.match(chatInputSource, /canSendQuote/);
+  assert.match(chatInputSource, /contentProtectionActive/);
+  assert.match(chatInputSource, /Crear presupuesto/);
+  assert.match(chatSource, /quoteState\.client_id === usuarioId/);
+  assert.match(chatSource, /Aceptar y reservar/);
+  assert.match(chatSource, /request_chat_quote_changes/);
+  assert.match(chatSource, /propose_service_visit/);
+  assert.match(chatSource, /respond_service_visit/);
+});
+
+test("la cancelación valida participantes y decide entre reintegro o revisión", () => {
+  assert.match(cancellationMigration, /CANCELLATION_FORBIDDEN/);
+  assert.match(
+    cancellationMigration,
+    /v_requester_role = 'provider'[\s\S]{0,260}v_reason_code <> 'provider_no_show'/,
+  );
+  assert.match(
+    cancellationMigration,
+    /visit_scheduled_for <= now\(\)/,
+  );
+  assert.match(cancellationMigration, /v_status := case when v_auto_refund/);
+  assert.match(chatSource, /request-reservation-cancellation/);
+  assert.match(chatSource, /Cancelar reserva/);
+});
+
+test("los reintegros son totales, idempotentes y se concilian en la base", () => {
+  assert.match(
+    cancellationSource,
+    /v1\/payments\/\$\{encodeURIComponent\(paymentId\)\}\/refunds/,
+  );
+  assert.match(cancellationSource, /"X-Idempotency-Key": cancellation\.request_id/);
+  assert.match(cancellationSource, /body: "{}"/);
+  assert.match(cancellationSource, /sameAmount\(providerRefundAmount, refundAmount\)/);
+  assert.match(
+    cancellationMigration,
+    /abs\(p_refund_amount - v_payment\.commission_amount\) >= 0\.01/,
+  );
+  assert.match(
+    cancellationMigration,
+    /status = 'refunded'[\s\S]{0,180}job_status = 'cancelled'/,
+  );
+  assert.match(paymentWebhookSource, /providerStatus === "refunded"/);
+});
+
+test("solo el panel administrador puede resolver los casos manuales", () => {
+  assert.match(
+    operationalDashboard,
+    /profile\?\.rol === "admin"[\s\S]*resolve-cancellation/,
+  );
+  assert.match(
+    operationalDashboard,
+    /prepare_service_cancellation_refund_internal/,
+  );
+  assert.match(
+    operationalDashboard,
+    /reject_service_cancellation_review_internal/,
+  );
+  assert.match(
+    cancellationMigration,
+    /grant execute on function public\.prepare_service_cancellation_refund_internal\([\s\S]{0,30}uuid, uuid[\s\S]{0,40}to service_role/,
+  );
+  assert.match(cancellationMigration, /resolution_note/);
+  assert.match(cancellationMigration, /CANCELLATION_REVIEWER_NOT_ADMIN/);
+  assert.match(cancellationMigration, /CANCELLATION_REJECTION_NOT_ALLOWED/);
 });
 
 test("la comisión es 10% tanto en chat directo como en MICA", () => {

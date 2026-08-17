@@ -26,6 +26,7 @@ type DashboardSummary = {
     chatsInPeriod: number;
     messagesLast24Hours: number;
     openReports: number;
+    openCancellations: number;
     reviewsInPeriod: number;
     measuredResponseProviders: number;
     averageResponseMinutes: number | null;
@@ -134,6 +135,35 @@ function policyToDraft(policy: UrgencyPolicy): UrgencyPolicyDraft {
   };
 }
 
+type CancellationCase = {
+  id: string;
+  request_code: string;
+  requester_role: "client" | "provider" | "system";
+  reason_code: string;
+  reason_detail: string | null;
+  status: "review_required" | "refund_failed" | "refund_pending";
+  auto_refund: boolean;
+  error_message: string | null;
+  created_at: string;
+  commission_amount: number;
+  currency: string;
+  visit_status: string;
+  visit_scheduled_for: string | null;
+  client_name: string;
+  provider_name: string;
+};
+
+type ProviderCampaignStatus = {
+  due: number;
+  incomplete: number;
+  recent: Array<{
+    id: string;
+    status: string;
+    sent_at: string | null;
+    created_at: string;
+  }>;
+};
+
 const REPORT_REASON_LABELS: Record<string, string> = {
   inappropriate_content: "Contenido inapropiado",
   false_information: "Información falsa",
@@ -143,6 +173,14 @@ const REPORT_REASON_LABELS: Record<string, string> = {
   other: "Otro motivo",
   provider_no_show: "Prestador no se presentó",
   work_not_completed: "Trabajo no realizado",
+};
+
+const CANCELLATION_REASON_LABELS: Record<string, string> = {
+  client_changed_mind: "El cliente cambió de idea",
+  provider_cancelled: "Canceló el prestador",
+  provider_no_show: "El prestador no se presentó",
+  scheduling_issue: "No pudieron coordinar",
+  other: "Otro motivo",
 };
 
 const PERIODS = [7, 30, 90] as const;
@@ -156,6 +194,14 @@ function formatMinutes(value?: number | null) {
   if (value < 60) return `~${Math.max(1, Math.round(value))} min`;
   if (value < 24 * 60) return `~${Math.round(value / 60)} h`;
   return `~${Math.round(value / (24 * 60))} días`;
+}
+
+function formatMoney(value: number, currency = "ARS") {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency,
+    maximumFractionDigits: 2,
+  }).format(Number(value ?? 0));
 }
 
 function MetricCard({
@@ -253,11 +299,18 @@ export default function OperationalDashboard() {
   const [urgencyDraft, setUrgencyDraft] = useState<UrgencyPolicyDraft | null>(
     null,
   );
+  const [cancellations, setCancellations] = useState<CancellationCase[]>([]);
+  const [providerCampaign, setProviderCampaign] =
+    useState<ProviderCampaignStatus | null>(null);
+  const [sendingProviderEmails, setSendingProviderEmails] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [updatingReportId, setUpdatingReportId] = useState<string | null>(null);
   const [savingUrgency, setSavingUrgency] = useState(false);
+  const [updatingCancellationId, setUpdatingCancellationId] = useState<
+    string | null
+  >(null);
 
   const loadDashboard = useCallback(
     async (refresh = false) => {
@@ -276,6 +329,8 @@ export default function OperationalDashboard() {
           urgencyResult,
           notificationResult,
           consumerRequestsResult,
+          cancellationsResult,
+          campaignResult,
         ] = await Promise.all([
           supabase.functions.invoke("operational-dashboard", {
             body: { action: "summary", days: periodDays },
@@ -291,6 +346,12 @@ export default function OperationalDashboard() {
           }),
           supabase.functions.invoke("operational-dashboard", {
             body: { action: "consumer-right-requests" },
+          }),
+          supabase.functions.invoke("operational-dashboard", {
+            body: { action: "cancellation-requests" },
+          }),
+          supabase.functions.invoke("provider-reactivation-emails", {
+            body: { action: "status" },
           }),
         ]);
 
@@ -342,6 +403,23 @@ export default function OperationalDashboard() {
         setConsumerRequests(
           (consumerRequestsResult.data?.requests ??
             []) as ConsumerRightRequest[],
+        );
+        if (cancellationsResult.error || cancellationsResult.data?.error) {
+          throw new Error(
+            cancellationsResult.data?.error ||
+              cancellationsResult.error?.message ||
+              "No se pudieron cargar las cancelaciones.",
+          );
+        }
+        setSummary(summaryResult.data as DashboardSummary);
+        setReports((reportsResult.data?.reports ?? []) as ModerationReport[]);
+        setCancellations(
+          (cancellationsResult.data?.cancellations ?? []) as CancellationCase[],
+        );
+        setProviderCampaign(
+          campaignResult.error || campaignResult.data?.error
+            ? null
+            : (campaignResult.data as ProviderCampaignStatus),
         );
       } catch (error) {
         setErrorMessage(
@@ -487,6 +565,62 @@ export default function OperationalDashboard() {
     [],
   );
 
+  const resolveCancellation = useCallback(
+    async (cancellation: CancellationCase, decision: "refund" | "reject") => {
+      setUpdatingCancellationId(cancellation.id);
+      try {
+        const { data, error } = await supabase.functions.invoke(
+          "operational-dashboard",
+          {
+            body: {
+              action: "resolve-cancellation",
+              requestId: cancellation.id,
+              decision,
+            },
+          },
+        );
+        if (error || data?.error) {
+          throw new Error(
+            data?.error ||
+              error?.message ||
+              "No se pudo resolver la cancelación.",
+          );
+        }
+        setCancellations((current) =>
+          current.filter((item) => item.id !== cancellation.id),
+        );
+        setSummary((current) =>
+          current
+            ? {
+                ...current,
+                counts: {
+                  ...current.counts,
+                  openCancellations: Math.max(
+                    0,
+                    current.counts.openCancellations - 1,
+                  ),
+                },
+              }
+            : current,
+        );
+        Alert.alert(
+          decision === "refund" ? "Reintegro procesado" : "Solicitud rechazada",
+          decision === "refund"
+            ? "El cargo completo fue devuelto y ambas partes ya pueden verlo en el chat."
+            : "La reserva volvió a quedar activa y la decisión quedó registrada.",
+        );
+      } catch (error) {
+        Alert.alert(
+          "No se pudo resolver",
+          error instanceof Error ? error.message : "Intentá nuevamente.",
+        );
+      } finally {
+        setUpdatingCancellationId(null);
+      }
+    },
+    [],
+  );
+
   const updateUrgencyDraft = useCallback(
     (field: keyof UrgencyPolicyDraft, value: string) => {
       setUrgencyDraft((current) =>
@@ -569,6 +703,56 @@ export default function OperationalDashboard() {
       ],
     );
   }, [persistUrgencyPolicy, urgencyDraft]);
+
+  const confirmCancellationResolution = useCallback(
+    (cancellation: CancellationCase, decision: "refund" | "reject") => {
+      const isRefund = decision === "refund";
+      Alert.alert(
+        isRefund ? "Confirmar devolución" : "Rechazar devolución",
+        isRefund
+          ? `Se devolverán ${formatMoney(
+              cancellation.commission_amount,
+              cancellation.currency,
+            )}. Esta acción no se puede deshacer.`
+          : "La reserva volverá a quedar activa. Usá esta opción solamente después de revisar el caso.",
+        [
+          { text: "Volver", style: "cancel" },
+          {
+            text: isRefund ? "Devolver dinero" : "Rechazar solicitud",
+            style: isRefund ? "default" : "destructive",
+            onPress: () => void resolveCancellation(cancellation, decision),
+          },
+        ],
+      );
+    },
+    [resolveCancellation],
+  );
+
+  const sendProviderProfileReminders = useCallback(async () => {
+    if (!providerCampaign?.due || sendingProviderEmails) return;
+    setSendingProviderEmails(true);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "provider-reactivation-emails",
+        { body: { action: "send", batchSize: 10 } },
+      );
+      if (error || data?.error) {
+        throw new Error(data?.error || error?.message || "No se pudieron enviar los recordatorios.");
+      }
+      Alert.alert(
+        "Lote procesado",
+        `Enviados: ${data.sent ?? 0} · Omitidos: ${data.skipped ?? 0} · Con error: ${data.failed ?? 0}`,
+      );
+      await loadDashboard(true);
+    } catch (error) {
+      Alert.alert(
+        "No se pudo enviar",
+        error instanceof Error ? error.message : "Intentá nuevamente.",
+      );
+    } finally {
+      setSendingProviderEmails(false);
+    }
+  }, [loadDashboard, providerCampaign?.due, sendingProviderEmails]);
 
   return (
     <View style={styles.screen}>
@@ -684,6 +868,47 @@ export default function OperationalDashboard() {
               />
             </View>
 
+            {providerCampaign ? (
+              <View style={styles.section}>
+                <SectionHeader
+                  icon="mail-outline"
+                  title="Perfiles de prestadores"
+                  subtitle="Recordatorios con baja voluntaria, máximo 3 por cuenta y 7 días entre envíos"
+                />
+                <View style={styles.campaignMetrics}>
+                  <View style={styles.campaignMetric}>
+                    <Text style={styles.campaignValue}>{formatCount(providerCampaign.incomplete)}</Text>
+                    <Text style={styles.campaignLabel}>Perfiles incompletos</Text>
+                  </View>
+                  <View style={styles.campaignMetric}>
+                    <Text style={styles.campaignValue}>{formatCount(providerCampaign.due)}</Text>
+                    <Text style={styles.campaignLabel}>Habilitados para email</Text>
+                  </View>
+                </View>
+                <Text style={styles.campaignNote}>
+                  El mensaje aclara que completar el perfil no tiene costo, no promete trabajos y ofrece un enlace de baja. Solo se envía a emails confirmados.
+                </Text>
+                <TouchableOpacity
+                  activeOpacity={0.8}
+                  disabled={sendingProviderEmails || providerCampaign.due === 0}
+                  onPress={() => void sendProviderProfileReminders()}
+                  style={[
+                    styles.campaignButton,
+                    (sendingProviderEmails || providerCampaign.due === 0) && styles.campaignButtonDisabled,
+                  ]}
+                >
+                  {sendingProviderEmails ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={17} color="#fff" />
+                      <Text style={styles.campaignButtonText}>Enviar próximo lote de 10</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
             <View style={styles.section}>
               <SectionHeader
                 icon="git-commit-outline"
@@ -786,6 +1011,128 @@ export default function OperationalDashboard() {
                   </View>
                 </View>
               </View>
+            </View>
+
+            <View style={styles.section}>
+              <SectionHeader
+                icon="receipt-outline"
+                title="Cancelaciones a revisar"
+                subtitle={`${formatCount(
+                  summary.counts.openCancellations,
+                )} casos esperan una decisión`}
+              />
+              {cancellations.length === 0 ? (
+                <View style={styles.emptyModeration}>
+                  <Ionicons name="checkmark-circle" size={30} color="#12815e" />
+                  <Text style={styles.emptyModerationTitle}>
+                    No hay cancelaciones pendientes
+                  </Text>
+                  <Text style={styles.emptyText}>
+                    Los reintegros automáticos no aparecen en esta cola.
+                  </Text>
+                </View>
+              ) : (
+                cancellations.map((cancellation) => {
+                  const updating = updatingCancellationId === cancellation.id;
+                  const visitDate = cancellation.visit_scheduled_for
+                    ? new Intl.DateTimeFormat("es-AR", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      }).format(new Date(cancellation.visit_scheduled_for))
+                    : null;
+                  return (
+                    <View key={cancellation.id} style={styles.cancellationCard}>
+                      <View style={styles.reportTopRow}>
+                        <View style={styles.cancellationCodeBadge}>
+                          <Text style={styles.cancellationCodeText}>
+                            {cancellation.request_code}
+                          </Text>
+                        </View>
+                        <Text style={styles.reportDate}>
+                          {new Intl.DateTimeFormat("es-AR", {
+                            dateStyle: "short",
+                            timeStyle: "short",
+                          }).format(new Date(cancellation.created_at))}
+                        </Text>
+                      </View>
+                      <Text style={styles.reportProvider}>
+                        {CANCELLATION_REASON_LABELS[
+                          cancellation.reason_code
+                        ] ?? cancellation.reason_code}
+                      </Text>
+                      <Text style={styles.cancellationParties}>
+                        Cliente: {cancellation.client_name}
+                      </Text>
+                      <Text style={styles.cancellationParties}>
+                        Prestador: {cancellation.provider_name}
+                      </Text>
+                      <Text style={styles.cancellationAmount}>
+                        Reserva a devolver:{" "}
+                        {formatMoney(
+                          cancellation.commission_amount,
+                          cancellation.currency,
+                        )}
+                      </Text>
+                      {visitDate ? (
+                        <Text style={styles.cancellationVisit}>
+                          Visita registrada: {visitDate} ·{" "}
+                          {cancellation.visit_status}
+                        </Text>
+                      ) : null}
+                      {cancellation.reason_detail ? (
+                        <Text style={styles.reportDetails}>
+                          {cancellation.reason_detail}
+                        </Text>
+                      ) : null}
+                      {cancellation.error_message ? (
+                        <Text style={styles.cancellationError}>
+                          Último intento: {cancellation.error_message}
+                        </Text>
+                      ) : null}
+                      {updating ? (
+                        <ActivityIndicator
+                          color="#069eb3"
+                          style={styles.reportLoader}
+                        />
+                      ) : (
+                        <View style={styles.reportActions}>
+                          <TouchableOpacity
+                            activeOpacity={0.78}
+                            onPress={() =>
+                              confirmCancellationResolution(
+                                cancellation,
+                                "refund",
+                              )
+                            }
+                            style={styles.resolveButton}
+                          >
+                            <Text style={styles.resolveButtonText}>
+                              Devolver cargo
+                            </Text>
+                          </TouchableOpacity>
+                          {!cancellation.auto_refund &&
+                          cancellation.status === "review_required" ? (
+                            <TouchableOpacity
+                              activeOpacity={0.78}
+                              onPress={() =>
+                                confirmCancellationResolution(
+                                  cancellation,
+                                  "reject",
+                                )
+                              }
+                              style={styles.dismissButton}
+                            >
+                              <Text style={styles.dismissButtonText}>
+                                Rechazar solicitud
+                              </Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })
+              )}
             </View>
 
             <View style={styles.section}>
@@ -1995,6 +2342,58 @@ const styles = StyleSheet.create({
     backgroundColor: "#fbfcfc",
     borderWidth: 1,
     borderColor: "#dce8e6",
+  },
+  campaignMetrics: { flexDirection: "row", gap: 10 },
+  campaignMetric: { flex: 1, padding: 14, borderRadius: 16, backgroundColor: "#eff8f7" },
+  campaignValue: { color: "#047a8f", fontSize: 24, fontWeight: "900" },
+  campaignLabel: { color: "#60777a", fontSize: 11, fontWeight: "700", marginTop: 3 },
+  campaignNote: { color: "#60777a", fontSize: 12, lineHeight: 18, marginTop: 13 },
+  campaignButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 46, borderRadius: 23, backgroundColor: "#069eb3", marginTop: 14 },
+  campaignButtonDisabled: { opacity: 0.45 },
+  campaignButtonText: { color: "#fff", fontSize: 13, fontWeight: "900" },
+  cancellationCard: {
+    marginBottom: 11,
+    padding: 14,
+    borderRadius: 17,
+    backgroundColor: "#fffaf0",
+    borderWidth: 1,
+    borderColor: "#ead3a5",
+  },
+  cancellationCodeBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: "#fff0cf",
+  },
+  cancellationCodeText: {
+    color: "#8d5b16",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  cancellationParties: {
+    marginTop: 3,
+    color: "#5f7478",
+    fontSize: 10,
+  },
+  cancellationAmount: {
+    marginTop: 10,
+    color: "#17373e",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  cancellationVisit: {
+    marginTop: 5,
+    color: "#6d7f82",
+    fontSize: 10,
+  },
+  cancellationError: {
+    marginTop: 9,
+    padding: 9,
+    borderRadius: 10,
+    color: "#9c3c33",
+    backgroundColor: "#fff0ed",
+    fontSize: 10,
+    lineHeight: 15,
   },
   reportTopRow: {
     flexDirection: "row",

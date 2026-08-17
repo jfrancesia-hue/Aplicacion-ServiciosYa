@@ -11,9 +11,29 @@ entrypoint = "./functions/send_force_update_notification/index.ts"
 # static_files = [ "./functions/send_force_update_notification/*.html" ]
 
 [functions.process-urgent-work-alerts]
-enabled = true
+enabled = false
 verify_jwt = false
 entrypoint = "./functions/process-urgent-work-alerts/index.ts"
+
+[functions.urgent-service]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/urgent-service/index.ts"
+
+[functions.provider-reactivation-emails]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/provider-reactivation-emails/index.ts"
+
+[functions.provider-email-preferences]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/provider-email-preferences/index.ts"
+
+[functions.provider-email-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/provider-email-webhook/index.ts"
 
 [functions.mica-chat]
 enabled = true
@@ -44,6 +64,16 @@ entrypoint = "./functions/create-payment-preference/index.ts"
 enabled = true
 verify_jwt = true
 entrypoint = "./functions/verify-payment/index.ts"
+
+[functions.mercadopago-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/mercadopago-webhook/index.ts"
+
+[functions.request-reservation-cancellation]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/request-reservation-cancellation/index.ts"
 
 [functions.operational-dashboard]
 enabled = true

@@ -35,6 +35,10 @@ import {
   type QuoteReferenceType,
 } from "../../lib/utils/quotePricing";
 import QuoteOperationalNoticeModal from "../quotes/QuoteOperationalNoticeModal";
+import {
+  SERVICE_CONFIRMATION_COMMISSION_RATE,
+  calculateServiceConfirmationFee,
+} from "../../lib/constants/billing";
 
 interface ChatInputBarProps {
   onSend: (message: string) => void | Promise<void>;
@@ -66,7 +70,7 @@ function ChatInputBar({
   const [tipoReferencia, setTipoReferencia] =
     React.useState<QuoteReferenceType>("estimate");
   const [alcance, setAlcance] = React.useState("");
-  const [materiales, setMateriales] = React.useState("Materiales incluidos");
+  const [materiales, setMateriales] = React.useState("A confirmar");
   const [tiempo, setTiempo] = React.useState("A coordinar");
   const [garantia, setGarantia] = React.useState("7 dias");
   const [validez, setValidez] = React.useState("24 horas");
@@ -231,7 +235,7 @@ function ChatInputBar({
     setUnidades("1");
     setTipoReferencia("estimate");
     setAlcance("");
-    setMateriales("Materiales incluidos");
+    setMateriales("A confirmar");
     setTiempo("A coordinar");
     setGarantia("7 dias");
     setValidez("24 horas");
@@ -466,6 +470,23 @@ function ChatInputBar({
                   ${Math.round(pricing.amount).toLocaleString("es-AR")}
                 </Text>
               </View>
+              {pricing.amount > 0 ? (
+                <View style={styles.quoteSummary}>
+                  <View style={styles.quoteSummaryRow}>
+                    <Text style={styles.quoteSummaryLabel}>Vos cobrás al finalizar</Text>
+                    <Text style={styles.quoteSummaryValue}>${pricing.amount.toLocaleString("es-AR")}</Text>
+                  </View>
+                  <View style={styles.quoteSummaryRow}>
+                    <Text style={styles.quoteSummaryLabel}>Confirmación ServiciosYa ({Math.round(SERVICE_CONFIRMATION_COMMISSION_RATE * 100)}%)</Text>
+                    <Text style={styles.quoteSummaryValue}>${calculateServiceConfirmationFee(pricing.amount).toLocaleString("es-AR")}</Text>
+                  </View>
+                  <View style={[styles.quoteSummaryRow, styles.quoteSummaryTotal]}>
+                    <Text style={styles.quoteSummaryTotalLabel}>Costo total para el cliente</Text>
+                    <Text style={styles.quoteSummaryTotalValue}>${(pricing.amount + calculateServiceConfirmationFee(pricing.amount)).toLocaleString("es-AR")}</Text>
+                  </View>
+                  <Text style={styles.quoteSummaryHint}>ServiciosYa cobra solo la confirmación. El precio del trabajo te lo paga el cliente directamente al finalizar.</Text>
+                </View>
+              ) : null}
 
               <Text style={styles.fieldLabel}>Que incluye el trabajo</Text>
               <TextInput
@@ -580,7 +601,7 @@ function ChatInputBar({
                 }}
               >
                 <Ionicons name="send" size={16} color="#fff" />
-                <Text style={styles.modalSendText}>Enviar</Text>
+                <Text style={styles.modalSendText}>Enviar propuesta</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -849,6 +870,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
+  quoteSummary: { marginTop: 10, marginBottom: 4, padding: 12, borderRadius: 8, backgroundColor: "#eefaf8", borderWidth: 1, borderColor: "#bce8e1", gap: 7 },
+  quoteSummaryRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 },
+  quoteSummaryLabel: { flex: 1, color: "#567078", fontSize: 11, fontWeight: "700" },
+  quoteSummaryValue: { color: "#1d4148", fontSize: 12, fontWeight: "900" },
+  quoteSummaryTotal: { marginTop: 3, paddingTop: 8, borderTopWidth: 1, borderTopColor: "#cce8e3" },
+  quoteSummaryTotalLabel: { flex: 1, color: "#153f46", fontSize: 12, fontWeight: "900" },
+  quoteSummaryTotalValue: { color: "#047a8f", fontSize: 14, fontWeight: "900" },
+  quoteSummaryHint: { marginTop: 3, color: "#667f83", fontSize: 10, lineHeight: 14 },
   quoteInputLarge: { minHeight: 78, textAlignVertical: "top" },
   modalActions: { flexDirection: "row", gap: 10, marginTop: 14 },
   modalCancelBtn: {

@@ -12,7 +12,7 @@ export type MainStackParamList = {
   SeleccionRol: undefined;
   RegistroCliente: undefined;
   RegistroTrabajador: undefined;
-  Home: undefined;
+  Home: { workerTab?: "calendario" | "ofertas" | "contratar" } | undefined;
   CrearPerfil: undefined;
   Perfil: undefined;
   OfrecerServicio: undefined;

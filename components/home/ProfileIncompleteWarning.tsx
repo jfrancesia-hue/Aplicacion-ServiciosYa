@@ -4,34 +4,52 @@ import { Ionicons } from "@expo/vector-icons";
 
 interface ProfileIncompleteWarningProps {
   onPress: () => void;
+  isProvider?: boolean;
+  score?: number;
+  missingFields?: string[];
 }
 
 export const ProfileIncompleteWarning = ({
   onPress,
+  isProvider = false,
+  score = 0,
+  missingFields = [],
 }: ProfileIncompleteWarningProps) => (
   <View style={styles.container}>
     <View style={styles.content}>
       <Ionicons
-        name="alert-circle-outline"
+        name={isProvider ? "briefcase-outline" : "alert-circle-outline"}
         size={28}
-        color="#ff4d4d"
+        color="#047a8f"
         style={styles.icon}
       />
-      <Text style={styles.text}>
-        Para usar todas las funciones, completa tu perfil. SI YA SE REGISTRO ESPERE A SER VERIFICADO NO SE REGISTRE NUEVAMENTER
-      </Text>
+      <View style={styles.copy}>
+        <Text style={styles.title}>
+          {isProvider ? `Tu perfil está ${score}% completo` : "Completá tu perfil"}
+        </Text>
+        <Text style={styles.text}>
+          {isProvider
+            ? `Agregar ${missingFields.slice(0, 3).join(", ") || "tus datos profesionales"} ayuda a generar confianza. Crear y completar tu perfil no tiene costo.`
+            : "Completá tus datos para usar todas las funciones de ServiciosYa."}
+        </Text>
+        {isProvider ? (
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(100, score))}%` }]} />
+          </View>
+        ) : null}
+      </View>
     </View>
     <TouchableOpacity style={styles.button} onPress={onPress}>
-      <Text style={styles.buttonText}>Completar perfil</Text>
+      <Text style={styles.buttonText}>{isProvider ? "Mejorar mi perfil" : "Completar perfil"}</Text>
     </TouchableOpacity>
   </View>
 );
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#fff0f0",
+    backgroundColor: "#eef9f9",
     borderLeftWidth: 5,
-    borderLeftColor: "#ff4d4d",
+    borderLeftColor: "#069eb3",
     padding: 15,
     margin: 16,
     borderRadius: 10,
@@ -39,10 +57,14 @@ const styles = StyleSheet.create({
   },
   content: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
   icon: { marginRight: 10 },
-  text: { flex: 1, color: "#333", fontSize: 15, lineHeight: 20 },
+  copy: { flex: 1 },
+  title: { color: "#193f46", fontSize: 15, fontWeight: "800", marginBottom: 3 },
+  text: { color: "#49656a", fontSize: 13, lineHeight: 18 },
+  progressTrack: { height: 6, borderRadius: 3, backgroundColor: "#cde6e8", marginTop: 9, overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 3, backgroundColor: "#069eb3" },
   button: {
     alignSelf: "flex-start",
-    backgroundColor: "#ff4d4d",
+    backgroundColor: "#069eb3",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,

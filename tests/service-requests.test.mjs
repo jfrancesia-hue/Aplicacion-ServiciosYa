@@ -88,7 +88,7 @@ test("cada cliente solo lista y cancela publicaciones propias", () => {
 test("los prestadores reciben pedidos manuales y de MICA sin duplicarlos", () => {
   assert.match(migration, /in \('mica_app', 'manual_app'\)/);
   assert.match(workerHome, /getWorkerServiceRequests/);
-  assert.match(workerHome, /new Map<string, any>/);
+  assert.match(workerHome, /new Map<string, WorkerOffer>/);
   assert.match(workerHome, /respondToMicaOrder/);
 });
 

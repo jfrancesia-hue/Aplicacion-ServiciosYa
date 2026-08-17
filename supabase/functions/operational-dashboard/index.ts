@@ -58,6 +58,36 @@ type PaymentRow = {
   created_at: string;
 };
 
+type CancellationRequestRow = {
+  id: string;
+  request_code: string;
+  payment_record_id: string;
+  requested_by: string;
+  requester_role: string;
+  reason_code: string;
+  reason_detail: string | null;
+  status: "review_required" | "refund_failed" | "refund_pending";
+  auto_refund: boolean;
+  error_message: string | null;
+  created_at: string;
+};
+
+type CancellationPaymentRow = {
+  id: string;
+  payer_id: string;
+  provider_id: string;
+  commission_amount: number;
+  currency: string;
+  visit_status: string;
+  visit_scheduled_for: string | null;
+};
+
+type CancellationUserRow = {
+  id: string;
+  nombre: string | null;
+  apellido: string | null;
+};
+
 type TrustSummaryRow = {
   completed_jobs: number | null;
   average_rating: number | null;
@@ -192,6 +222,7 @@ async function buildSummary(
     reviewsResult,
     providerLocationsResult,
     trustResult,
+    cancellationResult,
   ] = await Promise.all([
     admin
       .from("provider_trust_summary")
@@ -242,6 +273,10 @@ async function buildSummary(
         "completed_jobs,average_rating,review_count,average_response_minutes,response_sample_size",
       )
       .limit(5000),
+    admin
+      .from("service_cancellation_requests")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["review_required", "refund_failed", "refund_pending"]),
   ]);
 
   const failures = [
@@ -258,6 +293,7 @@ async function buildSummary(
     reviewsResult.error,
     providerLocationsResult.error,
     trustResult.error,
+    cancellationResult.error,
   ].filter(Boolean);
   if (failures.length > 0) {
     throw new Error(failures[0]?.message ?? "No se pudo armar el panel.");
@@ -362,6 +398,7 @@ async function buildSummary(
         (profileReportsResult.count ?? 0) +
         (legacyReportsResult.count ?? 0) +
         (incidentsResult.count ?? 0),
+      openCancellations: cancellationResult.count ?? 0,
       reviewsInPeriod: reviewsResult.count ?? 0,
       measuredResponseProviders: measuredResponseProviders.length,
       averageResponseMinutes,
@@ -753,6 +790,207 @@ async function getNotificationHealth(admin: ReturnType<typeof createClient>) {
   };
 }
 
+async function getCancellationRequests(
+  admin: ReturnType<typeof createClient>,
+) {
+  const { data, error } = await admin
+    .from("service_cancellation_requests")
+    .select(
+      "id,request_code,payment_record_id,requested_by,requester_role,reason_code,reason_detail,status,auto_refund,error_message,created_at",
+    )
+    .in("status", ["review_required", "refund_failed", "refund_pending"])
+    .order("created_at", { ascending: true })
+    .limit(50);
+  if (error) throw error;
+
+  const requests = (data ?? []) as CancellationRequestRow[];
+  const paymentIds = requests.map((request) => request.payment_record_id);
+  const { data: rawPayments, error: paymentError } = paymentIds.length
+    ? await admin
+        .from("service_confirmation_payments")
+        .select(
+          "id,payer_id,provider_id,commission_amount,currency,visit_status,visit_scheduled_for",
+        )
+        .in("id", paymentIds)
+    : { data: [], error: null };
+  if (paymentError) throw paymentError;
+
+  const payments = (rawPayments ?? []) as CancellationPaymentRow[];
+  const paymentsById = new Map(
+    payments.map((payment) => [payment.id, payment]),
+  );
+  const userIds = Array.from(
+    new Set(
+      payments.flatMap((payment) => [payment.payer_id, payment.provider_id]),
+    ),
+  );
+  const { data: rawUsers, error: userError } = userIds.length
+    ? await admin
+        .from("usuarios")
+        .select("id,nombre,apellido")
+        .in("id", userIds)
+    : { data: [], error: null };
+  if (userError) throw userError;
+
+  const users = (rawUsers ?? []) as CancellationUserRow[];
+  const usersById = new Map(users.map((user) => [user.id, user]));
+  const displayName = (userId?: string) => {
+    const user = userId ? usersById.get(userId) : null;
+    return (
+      [user?.nombre, user?.apellido].filter(Boolean).join(" ") ||
+      "Usuario sin nombre"
+    );
+  };
+
+  return {
+    ok: true,
+    cancellations: requests.map((request) => {
+      const payment = paymentsById.get(request.payment_record_id);
+      return {
+        ...request,
+        commission_amount: Number(payment?.commission_amount ?? 0),
+        currency: payment?.currency ?? "ARS",
+        visit_status: payment?.visit_status ?? "unknown",
+        visit_scheduled_for: payment?.visit_scheduled_for ?? null,
+        client_name: displayName(payment?.payer_id),
+        provider_name: displayName(payment?.provider_id),
+      };
+    }),
+  };
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
+}
+
+function sameAmount(left: unknown, right: unknown) {
+  const a = Number(left);
+  const b = Number(right);
+  return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) < 0.01;
+}
+
+async function resolveCancellation(
+  admin: ReturnType<typeof createClient>,
+  requestId: unknown,
+  decision: unknown,
+  resolutionNote: unknown,
+  adminUserId: string,
+) {
+  const cleanRequestId = String(requestId ?? "").trim();
+  const cleanDecision = String(decision ?? "").trim();
+  const cleanNote = String(resolutionNote ?? "").trim().slice(0, 800);
+  if (!isUuid(cleanRequestId) || !["refund", "reject"].includes(cleanDecision)) {
+    return json({ error: "Resolución de cancelación inválida." }, 400);
+  }
+
+  if (cleanDecision === "reject") {
+    const { data, error } = await admin.rpc(
+      "reject_service_cancellation_review_internal",
+      {
+        p_request_id: cleanRequestId,
+        p_resolved_by: adminUserId,
+        p_resolution_note:
+          cleanNote ||
+          "La revisión determinó que no corresponde devolver el cargo de reserva.",
+      },
+    );
+    if (error) throw error;
+    return json({ ok: true, resolution: data });
+  }
+
+  const mercadoPagoToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
+  if (!mercadoPagoToken) {
+    return json({ error: "Mercado Pago no está configurado." }, 503);
+  }
+
+  const { data: prepared, error: prepareError } = await admin.rpc(
+    "prepare_service_cancellation_refund_internal",
+    { p_request_id: cleanRequestId, p_resolved_by: adminUserId },
+  );
+  if (prepareError) throw prepareError;
+  if (prepared?.already_refunded) {
+    return json({ ok: true, refunded: true, resolution: prepared });
+  }
+
+  const paymentId = String(prepared?.payment_id ?? "");
+  const paymentRecordId = String(prepared?.payment_record_id ?? "");
+  const expectedAmount = Number(prepared?.refund_amount ?? 0);
+  if (!/^\d{4,32}$/.test(paymentId) || !isUuid(paymentRecordId)) {
+    throw new Error("La reserva no tiene un pago válido para devolver.");
+  }
+
+  try {
+    const refundResponse = await fetch(
+      `https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}/refunds`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${mercadoPagoToken}`,
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": cleanRequestId,
+        },
+        body: "{}",
+      },
+    );
+    let providerRefund = await refundResponse.json().catch(() => ({}));
+
+    if (!refundResponse.ok) {
+      const paymentResponse = await fetch(
+        `https://api.mercadopago.com/v1/payments/${encodeURIComponent(paymentId)}`,
+        { headers: { Authorization: `Bearer ${mercadoPagoToken}` } },
+      );
+      const providerPayment = await paymentResponse.json().catch(() => ({}));
+      if (
+        !paymentResponse.ok ||
+        String(providerPayment?.status ?? "") !== "refunded"
+      ) {
+        throw new Error(
+          String(providerRefund?.message ?? "Mercado Pago rechazó el reintegro."),
+        );
+      }
+      const refunds = Array.isArray(providerPayment?.refunds)
+        ? providerPayment.refunds
+        : [];
+      providerRefund = refunds.at(-1) ?? {
+        id: "",
+        amount: providerPayment?.transaction_amount,
+        status: "approved",
+      };
+    }
+
+    const refundAmount = Number(providerRefund?.amount ?? expectedAmount);
+    if (!sameAmount(refundAmount, expectedAmount)) {
+      throw new Error("Mercado Pago informó un importe de reintegro distinto.");
+    }
+
+    const { data: reconciled, error: reconcileError } = await admin.rpc(
+      "reconcile_service_reservation_refund",
+      {
+        p_payment_record_id: paymentRecordId,
+        p_request_id: cleanRequestId,
+        p_payment_id: paymentId,
+        p_refund_id: String(providerRefund?.id ?? ""),
+        p_refund_amount: refundAmount,
+        p_provider_status: String(providerRefund?.status ?? "refunded"),
+      },
+    );
+    if (reconcileError || !reconciled?.refunded) {
+      throw reconcileError ?? new Error("No se pudo conciliar el reintegro.");
+    }
+    return json({ ok: true, refunded: true, resolution: reconciled });
+  } catch (error) {
+    await admin.rpc("fail_service_reservation_refund", {
+      p_request_id: cleanRequestId,
+      p_error_message:
+        error instanceof Error ? error.message : "Error al procesar reintegro",
+      p_provider_status: "admin_refund_error",
+    });
+    throw error;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -784,6 +1022,9 @@ Deno.serve(async (req) => {
     if (action === "reports") {
       return json(await getReports(admin));
     }
+    if (action === "cancellation-requests") {
+      return json(await getCancellationRequests(admin));
+    }
     if (action === "update-report") {
       return updateReport(
         admin,
@@ -807,6 +1048,15 @@ Deno.serve(async (req) => {
     }
     if (action === "notification-health") {
       return json(await getNotificationHealth(admin));
+    }
+    if (action === "resolve-cancellation") {
+      return resolveCancellation(
+        admin,
+        body?.requestId,
+        body?.decision,
+        body?.resolutionNote,
+        currentAdmin.id,
+      );
     }
 
     return json({ error: "Acción no permitida." }, 400);

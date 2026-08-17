@@ -10,6 +10,7 @@ export const navegationLinkin: LinkingOptions<MainStackParamList | AuthStackPara
   config: {
     screens: {
       NotificacionesScreen: "NotificacionesScreen",
+      Perfil: "completar-perfil",
       Register: "invite/:referralCode",
       "Nueva contraseña": "reset-password",
 

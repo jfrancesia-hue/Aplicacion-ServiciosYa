@@ -1,4 +1,5 @@
 import React, {
+  type ComponentProps,
   useState,
   useEffect,
   useRef,
@@ -36,25 +37,45 @@ import WorkerState from "./WorkerState";
 import JobsOverview from "../jobs/JobsOverview";
 import QuoteOperationalNoticeModal from "../quotes/QuoteOperationalNoticeModal";
 import { QUOTE_OPERATIONAL_NOTICE_VERSION } from "../../lib/constants/billing";
+import ProviderUrgentOffers from "../urgent/ProviderUrgentOffers";
+import type { WorkerServiceRequest } from "../../lib/serviceRequests";
+import type { ServiciosYaBridgePedido } from "../../types/serviciosYaBridge";
+import type { MainStackNavigationProp } from "../../types/navigation";
 
 type Tab = "calendario" | "ofertas" | "contratar";
+type WorkerHomeNavigation = Pick<MainStackNavigationProp, "navigate">;
+type WorkerOffer = ServiciosYaBridgePedido & {
+  source?: string;
+  metadata?: WorkerServiceRequest["metadata"];
+  nombre_cliente?: string | null;
+};
 
 export default function WorkerHomeView({
   navigation,
   onCategoryPress,
   busqueda = "",
+  initialTab,
 }: {
-  navigation: any;
+  navigation: WorkerHomeNavigation;
   onCategoryPress: (cat: string) => void;
   busqueda?: string;
+  initialTab?: Tab;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("calendario");
+
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
 
   useEffect(() => {
     if (busqueda.trim().length > 0) setActiveTab("contratar");
   }, [busqueda]);
 
-  const tabs: { id: Tab; label: string; icon: string }[] = [
+  const tabs: {
+    id: Tab;
+    label: string;
+    icon: ComponentProps<typeof MaterialIcons>["name"];
+  }[] = [
     { id: "calendario", label: "Calendario", icon: "calendar-today" },
     { id: "ofertas", label: "Ofertas", icon: "work-outline" },
     { id: "contratar", label: "Contratar", icon: "person-add-alt" },
@@ -75,7 +96,7 @@ export default function WorkerHomeView({
               activeOpacity={0.8}
             >
               <MaterialIcons
-                name={tab.icon as any}
+                name={tab.icon}
                 size={20}
                 color={isActive ? "#fff" : "#069eb3"}
               />
@@ -112,12 +133,12 @@ export default function WorkerHomeView({
   );
 }
 
-function CalendarioView({ navigation }: { navigation: any }) {
+function CalendarioView({ navigation }: { navigation: WorkerHomeNavigation }) {
   return <JobsOverview navigation={navigation} compact />;
 }
 
-function OfertasView({ navigation }: { navigation: any }) {
-  const [ofertas, setOfertas] = useState<any[]>([]);
+function OfertasView({ navigation }: { navigation: WorkerHomeNavigation }) {
+  const [ofertas, setOfertas] = useState<WorkerOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -183,7 +204,7 @@ function OfertasView({ navigation }: { navigation: any }) {
         }),
       ]);
 
-      const merged = new Map<string, any>();
+      const merged = new Map<string, WorkerOffer>();
       if (bridgeResult.ok) {
         for (const pedido of bridgeResult.data.pedidos) {
           if (!pedido.yaRespondio) merged.set(String(pedido.id), pedido);
@@ -214,7 +235,7 @@ function OfertasView({ navigation }: { navigation: any }) {
             new Date(a.createdAt || 0).getTime(),
         ),
       );
-    } catch (e: any) {
+    } catch {
       setError("Error al cargar ofertas. Intenta nuevamente.");
     } finally {
       setLoading(false);
@@ -232,7 +253,8 @@ function OfertasView({ navigation }: { navigation: any }) {
   };
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [ofertaSeleccionada, setOfertaSeleccionada] = useState<any>(null);
+  const [ofertaSeleccionada, setOfertaSeleccionada] =
+    useState<WorkerOffer | null>(null);
   const [modalidad, setModalidad] = useState<QuotePricingMode>("project");
   const [monto, setMonto] = useState("");
   const [unidades, setUnidades] = useState("1");
@@ -257,7 +279,7 @@ function OfertasView({ navigation }: { navigation: any }) {
     [modalidad, monto, tipoReferencia, unidades],
   );
 
-  const enviarPresupuesto = (oferta: any) => {
+  const enviarPresupuesto = (oferta: WorkerOffer) => {
     setOfertaSeleccionada(oferta);
     setModalidad("project");
     setMonto("");
@@ -273,6 +295,10 @@ function OfertasView({ navigation }: { navigation: any }) {
   };
 
   const confirmarPresupuesto = async () => {
+    if (!ofertaSeleccionada) {
+      Alert.alert("Error", "No hay una oferta seleccionada.");
+      return;
+    }
     if (pricing.amount <= 0 || !descripcion.trim() || !horarios.trim()) {
       Alert.alert(
         "Campos incompletos",
@@ -306,8 +332,13 @@ function OfertasView({ navigation }: { navigation: any }) {
         "Tu presupuesto fue enviado correctamente.",
         [{ text: "OK", onPress: () => cargarOfertas() }],
       );
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "No se pudo enviar el presupuesto.");
+    } catch (error: unknown) {
+      Alert.alert(
+        "Error",
+        error instanceof Error
+          ? error.message
+          : "No se pudo enviar el presupuesto.",
+      );
     } finally {
       setEnviando(false);
     }
@@ -325,8 +356,13 @@ function OfertasView({ navigation }: { navigation: any }) {
       Alert.alert("Gracias", "Marcamos que no podés tomar este pedido.", [
         { text: "OK", onPress: () => cargarOfertas() },
       ]);
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "No se pudo responder el pedido.");
+    } catch (error: unknown) {
+      Alert.alert(
+        "Error",
+        error instanceof Error
+          ? error.message
+          : "No se pudo responder el pedido.",
+      );
     } finally {
       setEnviando(false);
     }
@@ -362,6 +398,7 @@ function OfertasView({ navigation }: { navigation: any }) {
         />
       }
     >
+      <ProviderUrgentOffers />
       {/* Ofertas disponibles */}
       <Text style={styles.seccionTitle}>
         <MaterialIcons name="bolt" size={16} color="#069eb3" /> Publicaciones
@@ -712,7 +749,7 @@ function ContratarView({
   onCategoryPress,
   busqueda,
 }: {
-  navigation: any;
+  navigation: WorkerHomeNavigation;
   onCategoryPress: (cat: string) => void;
   busqueda: string;
 }) {

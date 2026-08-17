@@ -1,8 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
-const LEGACY_PROTOCOL_NAMESPACE = ["TOO", "RI"].join("");
-const MICA_ASSISTANT_PREFIX = `__${LEGACY_PROTOCOL_NAMESPACE}_MICA_ASSIST_V1__:`;
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -74,7 +71,7 @@ Deno.serve(async (req) => {
     const { data: paymentRecord, error: recordError } = await admin
       .from("service_confirmation_payments")
       .select(
-        "id,chat_id,quote_message_id,payer_id,provider_id,commission_amount,currency,status,confirmation_message_id",
+        "id,chat_id,quote_message_id,chat_quote_id,payer_id,provider_id,amount_total,commission_amount,client_total,currency,status,confirmation_message_id",
       )
       .eq("id", paymentRecordId)
       .eq("payer_id", user.id)
@@ -149,63 +146,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    const confirmationContent = `${MICA_ASSISTANT_PREFIX}${JSON.stringify({
-      kind: "assistant",
-      title: "Pago verificado por ServiciosYa",
-      text: "La confirmación del presupuesto fue aprobada. Continúen coordinando fecha, alcance y condiciones dentro de este chat.",
-      requestedBy: user.id,
-    })}`;
-
-    let confirmationMessageId = paymentRecord.confirmation_message_id;
-    if (!confirmationMessageId) {
-      const existingMessage = await admin
-        .from("mensajes")
-        .select("id")
-        .eq("chat_id", paymentRecord.chat_id)
-        .eq("contenido", confirmationContent)
-        .limit(1)
-        .maybeSingle();
-      confirmationMessageId = existingMessage.data?.id ?? null;
-
-      if (!confirmationMessageId) {
-        const insertedMessage = await admin
-          .from("mensajes")
-          .insert({
-            chat_id: paymentRecord.chat_id,
-            remitente_id: user.id,
-            contenido: confirmationContent,
-          })
-          .select("id")
-          .single();
-        if (insertedMessage.error || !insertedMessage.data) {
-          throw (
-            insertedMessage.error ??
-            new Error("No se pudo registrar la confirmación.")
-          );
-        }
-        confirmationMessageId = insertedMessage.data.id;
-      }
+    const { data: confirmation, error: confirmationError } = await admin.rpc(
+      "confirm_service_reservation",
+      {
+        p_payment_record_id: paymentRecord.id,
+        p_payment_id: paymentId,
+        p_provider_status: providerStatus,
+      },
+    );
+    if (confirmationError || !confirmation?.approved) {
+      throw (
+        confirmationError ??
+        new Error("No se pudo registrar la confirmación.")
+      );
     }
-
-    const now = new Date().toISOString();
-    const { error: updateError } = await admin
-      .from("service_confirmation_payments")
-      .update({
-        status: "approved",
-        job_status: "confirmed",
-        schedule_status: "awaiting_provider_options",
-        payment_id: paymentId,
-        provider_status: providerStatus,
-        approved_at: now,
-        confirmation_message_id: confirmationMessageId,
-      })
-      .eq("id", paymentRecord.id);
-    if (updateError) throw updateError;
-
-    await admin
-      .from("chats")
-      .update({ acceso_contratado: true, updated_at: now })
-      .eq("id", paymentRecord.chat_id);
 
     return json({ ok: true, approved: true, status: "approved" });
   } catch (error) {

@@ -31,6 +31,9 @@
     },
     "ios": {
       "buildNumber": "94",
+      "associatedDomains": [
+        "applinks:inicio.serviciosya.info"
+      ],
       "supportsTablet": false,
       "usesAppleSignIn": true,
       "infoPlist": {
@@ -75,6 +78,11 @@
               "scheme": "https",
               "host": "inicio.serviciosya.info",
               "pathPrefix": "/invite"
+            },
+            {
+              "scheme": "https",
+              "host": "inicio.serviciosya.info",
+              "pathPrefix": "/completar-perfil"
             }
           ],
           "category": [

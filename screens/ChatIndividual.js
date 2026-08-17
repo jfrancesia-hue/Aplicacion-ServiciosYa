@@ -21,6 +21,7 @@ import { supabase } from "../lib/supabase";
 import ChatInputBar from "../components/chat/ChatInputBar";
 import MicaAssistantModal from "../components/chat/MicaAssistantModal";
 import MicaSystemBubble from "../components/chat/MicaSystemBubble";
+import ServiceSystemBubble from "../components/chat/ServiceSystemBubble";
 import BotonVolver from "../components/BotonVolver";
 import { withModalProvider } from "../components/sheet/withModalProvider";
 import {
@@ -49,6 +50,7 @@ import {
   createMicaAssistantContent,
   parseMicaSystemMessage,
 } from "../lib/utils/micaMessage";
+import { parseServiceSystemMessage } from "../lib/utils/serviceSystemMessage";
 import TrustSafetyModal from "../components/trust/TrustSafetyModal";
 import { useNavigation } from "@react-navigation/native";
 import vexo from "../lib/vexo";
@@ -72,6 +74,18 @@ function ChatIndividual({ route }) {
   const [enviandoCalificacion, setEnviandoCalificacion] = useState(false);
   const [jobStatus, setJobStatus] = useState(null);
   const [pagando, setPagando] = React.useState(false);
+  const [isProvider, setIsProvider] = useState(false);
+  const [quoteStates, setQuoteStates] = useState({});
+  const [requestingQuoteChanges, setRequestingQuoteChanges] = useState(null);
+  const [visitModalVisible, setVisitModalVisible] = useState(false);
+  const [visitDate, setVisitDate] = useState("");
+  const [visitTime, setVisitTime] = useState("");
+  const [visitNote, setVisitNote] = useState("");
+  const [savingVisit, setSavingVisit] = useState(false);
+  const [cancellationModalVisible, setCancellationModalVisible] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState("");
+  const [cancellationDetail, setCancellationDetail] = useState("");
+  const [cancellingReservation, setCancellingReservation] = useState(false);
   const [hasOlderMessages, setHasOlderMessages] = useState(false);
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false);
   const [micaAssistantVisible, setMicaAssistantVisible] = useState(false);
@@ -109,6 +123,24 @@ function ChatIndividual({ route }) {
       );
     } catch (error) {
       console.warn("[chat] estado del trabajo no disponible:", error);
+    }
+  }, [chatId]);
+
+  const cargarPresupuestosChat = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from("chat_quotes")
+        .select(
+          "id,message_id,version,provider_id,client_id,amount_provider,fee_rate,fee_amount,client_total,status,accepted_at,paid_at",
+        )
+        .eq("chat_id", chatId)
+        .order("version", { ascending: true });
+      if (error) throw error;
+      setQuoteStates(
+        Object.fromEntries((data ?? []).map((quote) => [quote.message_id, quote])),
+      );
+    } catch (error) {
+      console.warn("[chat] propuestas no disponibles:", error);
     }
   }, [chatId]);
 
@@ -178,7 +210,7 @@ function ChatIndividual({ route }) {
         vexo.marketplace("payment_confirmed", {
           origen: "retorno_mercadopago",
         });
-        await cargarEstadoTrabajo();
+        await Promise.all([cargarEstadoTrabajo(), cargarPresupuestosChat()]);
       } catch (error) {
         processingPaymentReturn.current = null;
         vexo.marketplace("payment_failed", {
@@ -194,12 +226,13 @@ function ChatIndividual({ route }) {
         setPagando(false);
       }
     },
-    [cargarEstadoTrabajo],
+    [cargarEstadoTrabajo, cargarPresupuestosChat],
   );
 
   useEffect(() => {
     void cargarEstadoTrabajo();
-  }, [cargarEstadoTrabajo]);
+    void cargarPresupuestosChat();
+  }, [cargarEstadoTrabajo, cargarPresupuestosChat]);
 
   useEffect(() => {
     const linkSub = Linking.addEventListener("url", ({ url }) => {
@@ -273,11 +306,16 @@ function ChatIndividual({ route }) {
             .eq("id", user.id)
             .maybeSingle(),
         ]);
-      setCanSendQuote(
+      const currentUserIsProvider =
         String(appProfile?.rol ?? "").toLowerCase() === "worker" ||
-          String(marketplaceProfile?.rol ?? "").toLowerCase() === "prestador",
-      );
-      await cargarMensajes(user.id);
+        String(marketplaceProfile?.rol ?? "").toLowerCase() === "prestador";
+      setCanSendQuote(currentUserIsProvider);
+      setIsProvider(currentUserIsProvider);
+      await Promise.all([
+        cargarMensajes(user.id),
+        cargarPresupuestosChat(),
+        cargarEstadoTrabajo(),
+      ]);
       suscribirRealtime(user.id);
     };
 
@@ -405,11 +443,10 @@ function ChatIndividual({ route }) {
           if (nuevo.remitente_id !== userId) {
             marcarComoLeidos([nuevo], userId);
           }
-          setTimeout(
-            () => flatListRef.current?.scrollToEnd({ animated: true }),
-            100,
-          );
-        },
+          void cargarPresupuestosChat();
+          void cargarEstadoTrabajo();
+          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+        }
       )
       .subscribe();
 
@@ -428,6 +465,41 @@ function ChatIndividual({ route }) {
       }
       const policy = inspectChatContent(cleanMessage);
       if (!chatUnlocked && !policy.allowed) throw new Error(policy.message);
+
+      if (quote) {
+        const { data, error } = await supabase.rpc("send_chat_quote", {
+          p_chat_id: chatId,
+          p_amount: quote.amount,
+          p_scope: quote.scope,
+          p_materials: quote.materials,
+          p_timeframe: quote.timeframe,
+          p_warranty: quote.warranty,
+          p_validity_text: quote.validUntil,
+          p_notes: quote.notes ?? null,
+          p_pricing_mode: quote.pricingMode ?? "project",
+          p_unit_rate: quote.unitRate ?? quote.amount,
+          p_estimated_units: quote.estimatedUnits ?? 1,
+          p_reference_type: quote.referenceType ?? "fixed",
+          p_operational_notice_version:
+            quote.operationalNoticeVersion ?? null,
+          p_operational_notice_accepted_at:
+            quote.operationalNoticeAcceptedAt ?? null,
+        });
+        if (error || !data?.ok) {
+          throw new Error(
+            error?.message?.includes("QUOTE_ALREADY_CONFIRMED")
+              ? "Ya existe una reserva confirmada o con pago iniciado en este chat."
+              : error?.message || "No se pudo enviar la propuesta.",
+          );
+        }
+
+        vexo.marketplace("quote_sent", {
+          categoria:
+            servicioData?.categoria || servicioData?.titulo || "sin_categoria",
+        });
+        await cargarPresupuestosChat();
+        return;
+      }
 
       const { error } = await supabase.from("mensajes").insert({
         chat_id: chatId,
@@ -450,13 +522,6 @@ function ChatIndividual({ route }) {
         );
       }
 
-      if (quote) {
-        vexo.marketplace("quote_sent", {
-          categoria:
-            servicioData?.categoria || servicioData?.titulo || "sin_categoria",
-        });
-      }
-
       await supabase
         .from("chats")
         .update({ updated_at: new Date().toISOString() })
@@ -467,6 +532,7 @@ function ChatIndividual({ route }) {
       chatId,
       canSendQuote,
       chatUnlocked,
+      cargarPresupuestosChat,
       servicioData?.categoria,
       servicioData?.titulo,
     ],
@@ -608,6 +674,14 @@ function ChatIndividual({ route }) {
 
     return Promise.all(
       recentMessages.map(async (message) => {
+        const serviceSystemMessage = parseServiceSystemMessage(message.contenido);
+        if (serviceSystemMessage) {
+          return {
+            author: "system",
+            text: `ServiciosYa: ${sanitizeMicaContext(serviceSystemMessage.text)}`,
+          };
+        }
+
         const micaMessage = parseMicaSystemMessage(message.contenido);
         if (micaMessage) {
           return {
@@ -810,6 +884,204 @@ function ChatIndividual({ route }) {
     }
   };
 
+  const solicitarCambiosPresupuesto = (quoteState) => {
+    Alert.alert(
+      "Pedir cambios",
+      "La propuesta quedará pendiente de revisión. Podés explicar el cambio en el chat y el prestador deberá enviar una nueva versión.",
+      [
+        { text: "Volver", style: "cancel" },
+        {
+          text: "Pedir cambios",
+          onPress: async () => {
+            setRequestingQuoteChanges(quoteState.id);
+            try {
+              const { data, error } = await supabase.rpc(
+                "request_chat_quote_changes",
+                {
+                  p_quote_id: quoteState.id,
+                  p_reason: "Revisar precio, alcance o condiciones",
+                },
+              );
+              if (error || !data?.ok) {
+                throw new Error(error?.message || "No se pudo pedir el cambio.");
+              }
+              await cargarPresupuestosChat();
+            } catch (error) {
+              Alert.alert(
+                "No se pudo pedir el cambio",
+                error instanceof Error ? error.message : "Intentá nuevamente.",
+              );
+            } finally {
+              setRequestingQuoteChanges(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const confirmarReserva = (messageId, amount, feeAmount, clientTotal) => {
+    Alert.alert(
+      "Aceptar y reservar",
+      `Precio del trabajo: ${formatQuoteAmount(amount)}\nCargo de reserva ServiciosYa: ${formatQuoteAmount(feeAmount)}\nCosto total: ${formatQuoteAmount(clientTotal)}\n\nAhora pagás solamente la reserva. El trabajo se paga directamente al prestador al finalizar.`,
+      [
+        { text: "Seguir conversando", style: "cancel" },
+        {
+          text: `Pagar ${formatQuoteAmount(feeAmount)}`,
+          onPress: () => pagarPresupuesto(messageId),
+        },
+      ],
+    );
+  };
+
+  const abrirAgendaVisita = () => {
+    const suggested = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    setVisitDate(
+      `${String(suggested.getDate()).padStart(2, "0")}/${String(suggested.getMonth() + 1).padStart(2, "0")}/${suggested.getFullYear()}`,
+    );
+    setVisitTime("09:00");
+    setVisitNote("");
+    setVisitModalVisible(true);
+  };
+
+  const proponerVisita = async () => {
+    if (!jobStatus?.payment_record_id) return;
+    const dateMatch = visitDate.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    const timeMatch = visitTime.trim().match(/^(\d{2}):(\d{2})$/);
+    if (!dateMatch || !timeMatch) {
+      Alert.alert("Fecha inválida", "Usá el formato DD/MM/AAAA y HH:MM.");
+      return;
+    }
+
+    const scheduledFor = new Date(
+      Number(dateMatch[3]),
+      Number(dateMatch[2]) - 1,
+      Number(dateMatch[1]),
+      Number(timeMatch[1]),
+      Number(timeMatch[2]),
+      0,
+      0,
+    );
+    const validDate =
+      scheduledFor.getFullYear() === Number(dateMatch[3]) &&
+      scheduledFor.getMonth() === Number(dateMatch[2]) - 1 &&
+      scheduledFor.getDate() === Number(dateMatch[1]) &&
+      scheduledFor.getHours() === Number(timeMatch[1]) &&
+      scheduledFor.getMinutes() === Number(timeMatch[2]) &&
+      scheduledFor.getTime() > Date.now();
+    if (!validDate) {
+      Alert.alert("Fecha inválida", "Elegí una fecha y hora futuras.");
+      return;
+    }
+
+    setSavingVisit(true);
+    try {
+      const { data, error } = await supabase.rpc("propose_service_visit", {
+        p_payment_record_id: jobStatus.payment_record_id,
+        p_scheduled_for: scheduledFor.toISOString(),
+        p_note: visitNote.trim() || null,
+      });
+      if (error || !data?.ok) {
+        throw new Error(error?.message || "No se pudo proponer la visita.");
+      }
+      setVisitModalVisible(false);
+      await cargarEstadoTrabajo();
+    } catch (error) {
+      Alert.alert(
+        "No se pudo proponer la visita",
+        error instanceof Error ? error.message : "Intentá nuevamente.",
+      );
+    } finally {
+      setSavingVisit(false);
+    }
+  };
+
+  const responderVisita = async (accept) => {
+    if (!jobStatus?.payment_record_id) return;
+    try {
+      setSavingVisit(true);
+      const { data, error } = await supabase.rpc("respond_service_visit", {
+        p_payment_record_id: jobStatus.payment_record_id,
+        p_accept: accept,
+      });
+      if (error || !data?.ok) {
+        throw new Error(error?.message || "No se pudo responder la fecha.");
+      }
+      await cargarEstadoTrabajo();
+    } catch (error) {
+      Alert.alert(
+        "No se pudo actualizar la visita",
+        error instanceof Error ? error.message : "Intentá nuevamente.",
+      );
+    } finally {
+      setSavingVisit(false);
+    }
+  };
+
+  const abrirCancelacionReserva = () => {
+    setCancellationReason(
+      jobStatus?.is_provider ? "provider_cancelled" : "client_changed_mind",
+    );
+    setCancellationDetail("");
+    setCancellationModalVisible(true);
+  };
+
+  const solicitarCancelacionReserva = async () => {
+    if (
+      !jobStatus?.payment_record_id ||
+      !cancellationReason ||
+      cancellingReservation
+    ) {
+      return;
+    }
+
+    setCancellingReservation(true);
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "request-reservation-cancellation",
+        {
+          body: {
+            paymentRecordId: jobStatus.payment_record_id,
+            reasonCode: cancellationReason,
+            reasonDetail: cancellationDetail.trim() || null,
+          },
+        },
+      );
+      if (error) throw error;
+
+      setCancellationModalVisible(false);
+      await Promise.all([cargarEstadoTrabajo(), cargarPresupuestosChat()]);
+
+      if (data?.refunded) {
+        Alert.alert(
+          "Devolución procesada",
+          `La reserva quedó cancelada y Mercado Pago recibió la devolución total del cargo. Código: ${data.requestCode ?? "registrado"}.`,
+        );
+      } else if (data?.reviewRequired) {
+        Alert.alert(
+          "Solicitud registrada",
+          `El caso quedó en revisión. Código: ${data.requestCode ?? "registrado"}. Vas a ver cualquier cambio dentro de este chat.`,
+        );
+      } else if (!data?.ok) {
+        Alert.alert(
+          "Cancelación registrada",
+          data?.message ||
+            "La devolución requiere revisión. El caso quedó guardado.",
+        );
+      }
+    } catch (error) {
+      await cargarEstadoTrabajo();
+      Alert.alert(
+        "No se pudo cancelar",
+        error instanceof Error
+          ? error.message
+          : "Intentá nuevamente desde la reserva.",
+      );
+    } finally {
+      setCancellingReservation(false);
+    }
+  };
+
   const renderItem = ({ item }) => {
     if (item.tipo === "fecha") {
       return (
@@ -820,6 +1092,11 @@ function ChatIndividual({ route }) {
     }
 
     const esMio = item.remitente_id === usuarioId;
+    const serviceSystemMessage = parseServiceSystemMessage(item.contenido);
+    if (serviceSystemMessage) {
+      return <ServiceSystemBubble message={serviceSystemMessage} />;
+    }
+
     const micaSystemMessage = parseMicaSystemMessage(item.contenido);
     if (micaSystemMessage) {
       return <MicaSystemBubble message={micaSystemMessage} />;
@@ -838,6 +1115,21 @@ function ChatIndividual({ route }) {
         ? Number.parseFloat(montoMatch[1].replace(/\./g, "").replace(",", "."))
         : 0);
     const esPresupuesto = Boolean(quote) || esPresupuestoTexto;
+    const quoteState = quote ? quoteStates[item.id] ?? null : null;
+    const providerAmount = Number(quoteState?.amount_provider ?? montoNumerico);
+    const feeAmount = Number(
+      quoteState?.fee_amount ??
+        quote?.feeAmount ??
+        calculateServiceConfirmationFee(providerAmount),
+    );
+    const clientTotal = Number(
+      quoteState?.client_total ?? quote?.clientTotal ?? providerAmount + feeAmount,
+    );
+    const canReserve =
+      Boolean(quoteState) &&
+      !esMio &&
+      quoteState.client_id === usuarioId &&
+      ["pending", "accepted_payment_pending"].includes(quoteState.status);
 
     return (
       <View
@@ -861,22 +1153,42 @@ function ChatIndividual({ route }) {
           <View style={styles.quoteCard}>
             <View style={styles.quoteHeader}>
               <View>
-                <Text style={styles.quoteEyebrow}>Presupuesto completo</Text>
-                <Text style={styles.quoteTitle}>Propuesta profesional</Text>
+                <Text style={styles.quoteEyebrow}>Propuesta de trabajo</Text>
+                <Text style={styles.quoteTitle}>
+                  Propuesta {quoteState?.version || quote.version
+                    ? `v${quoteState?.version ?? quote.version}`
+                    : "segura"}
+                </Text>
               </View>
               <View style={styles.quoteBadge}>
                 <Ionicons name="shield-checkmark" size={15} color="#047a8f" />
-                <Text style={styles.quoteBadgeText}>App segura</Text>
+                <Text style={styles.quoteBadgeText}>
+                  {quoteStatusLabel(quoteState?.status)}
+                </Text>
               </View>
             </View>
 
+            <Text style={styles.quotePriceLabel}>Precio del prestador</Text>
             <Text style={styles.quoteAmount}>
-              {formatQuoteAmount(quote.amount)}
+              {formatQuoteAmount(providerAmount)}
             </Text>
             <Text style={styles.quotePricingMode}>
               {pricingModeLabel(getQuotePricing(quote).pricingMode)} ·{" "}
               {quotePricingSummary(getQuotePricing(quote))}
             </Text>
+            <View style={styles.quotePaymentBreakdown}>
+              <View style={styles.quotePaymentRow}>
+                <Text style={styles.quotePaymentLabel}>Reserva ServiciosYa (10%)</Text>
+                <Text style={styles.quotePaymentValue}>{formatQuoteAmount(feeAmount)}</Text>
+              </View>
+              <View style={[styles.quotePaymentRow, styles.quotePaymentTotalRow]}>
+                <Text style={styles.quotePaymentTotalLabel}>Costo total</Text>
+                <Text style={styles.quotePaymentTotalValue}>{formatQuoteAmount(clientTotal)}</Text>
+              </View>
+              <Text style={styles.quotePaymentHint}>
+                Se paga ahora solo la reserva. El trabajo se paga directamente al prestador al finalizar.
+              </Text>
+            </View>
 
             <View style={styles.quoteDivider} />
             <QuoteRow
@@ -915,26 +1227,43 @@ function ChatIndividual({ route }) {
         ) : (
           <Text style={styles.textoMensaje}>{item.contenido}</Text>
         )}
-        {esPresupuesto && !esMio && jobStatus?.status !== "approved" && (
-          <TouchableOpacity
-            style={styles.pagarBtn}
-            onPress={() =>
-              setPendingPaymentQuote({
-                messageId: item.id,
-                amount: montoNumerico,
-              })
-            }
-            disabled={pagando}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="card-outline" size={15} color="#fff" />
-            <Text style={styles.pagarBtnText}>
-              {pagando
-                ? "Procesando..."
-                : `Aceptar y pagar 10% ($${Math.round(calculateServiceConfirmationFee(montoNumerico)).toLocaleString("es-AR")})`}
-            </Text>
-          </TouchableOpacity>
-        )}
+        {canReserve ? (
+          <View style={styles.quoteActions}>
+            <TouchableOpacity
+              style={styles.pagarBtn}
+              onPress={() => confirmarReserva(item.id, providerAmount, feeAmount, clientTotal)}
+              disabled={pagando}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="card-outline" size={15} color="#fff" />
+              <Text style={styles.pagarBtnText}>
+                {pagando
+                  ? "Procesando..."
+                  : quoteState.status === "accepted_payment_pending"
+                    ? `Continuar pago de ${formatQuoteAmount(feeAmount)}`
+                    : `Aceptar y reservar por ${formatQuoteAmount(feeAmount)}`}
+              </Text>
+            </TouchableOpacity>
+            {quoteState.status === "pending" ? (
+              <TouchableOpacity
+                style={styles.requestChangesBtn}
+                onPress={() => solicitarCambiosPresupuesto(quoteState)}
+                disabled={requestingQuoteChanges === quoteState.id}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="chatbubble-ellipses-outline" size={15} color="#047a8f" />
+                <Text style={styles.requestChangesText}>
+                  {requestingQuoteChanges === quoteState.id ? "Actualizando..." : "Pedir cambios"}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+        {quote && !quoteState && !esMio ? (
+          <Text style={styles.legacyQuoteHint}>
+            Esta propuesta es anterior al sistema de reserva. Pedile al prestador una nueva versión para poder aceptarla.
+          </Text>
+        ) : null}
       </View>
     );
   };
@@ -1040,12 +1369,13 @@ function ChatIndividual({ route }) {
         vexo.marketplace("payment_confirmed", {
           origen: "presupuesto_previamente_aprobado",
         });
-        await cargarEstadoTrabajo();
+        await Promise.all([cargarEstadoTrabajo(), cargarPresupuestosChat()]);
         Alert.alert(
           "Pago verificado",
           "Este presupuesto ya tiene una confirmación de pago aprobada.",
         );
       } else if (data?.initPoint) {
+        await cargarPresupuestosChat();
         await Linking.openURL(data.initPoint);
       } else {
         throw new Error(
@@ -1168,6 +1498,11 @@ function ChatIndividual({ route }) {
                     status={jobStatus}
                     reporting={reportandoIncidente}
                     onReportIssue={elegirTipoIncidente}
+                    busy={savingVisit || cancellingReservation}
+                    onProposeVisit={abrirAgendaVisita}
+                    onAcceptVisit={() => responderVisita(true)}
+                    onRequestReschedule={() => responderVisita(false)}
+                    onCancel={abrirCancelacionReserva}
                     onReview={() => {
                       setReviewTarget("provider");
                       setEstrellas(0);
@@ -1224,9 +1559,16 @@ function ChatIndividual({ route }) {
         {!loadingMsg && (
           <ChatInputBar
             serviceId={servicioId}
+            canSendQuote={
+              canSendQuote &&
+              (!jobStatus?.payment_record_id ||
+                jobStatus?.job_status === "cancelled") &&
+              !Object.values(quoteStates).some((quote) =>
+                ["accepted_payment_pending", "paid"].includes(quote.status),
+              )
+            }
             onSend={enviarMensaje}
             onSendAudio={enviarAudio}
-            canSendQuote={canSendQuote}
             contentProtectionActive={!chatUnlocked}
           />
         )}
@@ -1354,6 +1696,195 @@ function ChatIndividual({ route }) {
           </View>
         </Modal>
 
+        <Modal
+          visible={visitModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => {
+            if (!savingVisit) setVisitModalVisible(false);
+          }}
+        >
+          <View style={styles.visitModalOverlay}>
+            <View style={styles.visitModalCard}>
+              <View style={styles.visitModalHeader}>
+                <View style={styles.visitModalIcon}>
+                  <Ionicons name="calendar-outline" size={22} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.visitModalTitle}>Proponer fecha de visita</Text>
+                  <Text style={styles.visitModalHint}>El cliente deberá confirmar esta fecha dentro del chat.</Text>
+                </View>
+              </View>
+              <Text style={styles.visitFieldLabel}>Fecha</Text>
+              <TextInput
+                editable={!savingVisit}
+                keyboardType="numeric"
+                onChangeText={setVisitDate}
+                placeholder="DD/MM/AAAA"
+                style={styles.visitInput}
+                value={visitDate}
+              />
+              <Text style={styles.visitFieldLabel}>Hora</Text>
+              <TextInput
+                editable={!savingVisit}
+                keyboardType="numeric"
+                onChangeText={setVisitTime}
+                placeholder="HH:MM"
+                style={styles.visitInput}
+                value={visitTime}
+              />
+              <Text style={styles.visitFieldLabel}>Nota opcional</Text>
+              <TextInput
+                editable={!savingVisit}
+                maxLength={500}
+                multiline
+                onChangeText={setVisitNote}
+                placeholder="Ej: necesito acceso al tablero eléctrico."
+                style={[styles.visitInput, styles.visitNoteInput]}
+                textAlignVertical="top"
+                value={visitNote}
+              />
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={savingVisit}
+                onPress={proponerVisita}
+                style={styles.visitSaveButton}
+              >
+                {savingVisit ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.visitSaveText}>Enviar fecha al cliente</Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                disabled={savingVisit}
+                onPress={() => setVisitModalVisible(false)}
+                style={styles.visitCancelButton}
+              >
+                <Text style={styles.visitCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        <Modal
+          visible={cancellationModalVisible}
+          animationType="fade"
+          transparent
+          onRequestClose={() => {
+            if (!cancellingReservation) setCancellationModalVisible(false);
+          }}
+        >
+          <View style={styles.cancellationModalOverlay}>
+            <View style={styles.cancellationModalCard}>
+              <View style={styles.cancellationModalHeader}>
+                <View style={styles.cancellationModalIcon}>
+                  <Ionicons name="receipt-outline" size={22} color="#fff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cancellationModalTitle}>
+                    Cancelar reserva
+                  </Text>
+                  <Text style={styles.cancellationModalHint}>
+                    {jobStatus?.is_provider
+                      ? "Al cancelar como prestador se devuelve al cliente el cargo completo."
+                      : "Si la visita todavía no ocurrió, se devuelve el cargo completo. Los casos posteriores pasan a revisión."}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.cancellationFieldLabel}>Motivo</Text>
+              <View style={styles.cancellationReasons}>
+                {getCancellationReasons(Boolean(jobStatus?.is_provider)).map(
+                  (reason) => (
+                    <TouchableOpacity
+                      activeOpacity={0.78}
+                      disabled={cancellingReservation}
+                      key={reason.value}
+                      onPress={() => setCancellationReason(reason.value)}
+                      style={[
+                        styles.cancellationReasonButton,
+                        cancellationReason === reason.value &&
+                          styles.cancellationReasonButtonSelected,
+                      ]}
+                    >
+                      <Ionicons
+                        name={reason.icon}
+                        size={16}
+                        color={
+                          cancellationReason === reason.value
+                            ? "#fff"
+                            : "#526d72"
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.cancellationReasonText,
+                          cancellationReason === reason.value &&
+                            styles.cancellationReasonTextSelected,
+                        ]}
+                      >
+                        {reason.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ),
+                )}
+              </View>
+
+              <Text style={styles.cancellationFieldLabel}>
+                Detalle opcional
+              </Text>
+              <TextInput
+                editable={!cancellingReservation}
+                maxLength={800}
+                multiline
+                onChangeText={setCancellationDetail}
+                placeholder="Contanos brevemente qué pasó."
+                placeholderTextColor="#829296"
+                style={styles.cancellationDetailInput}
+                textAlignVertical="top"
+                value={cancellationDetail}
+              />
+
+              <View style={styles.cancellationPolicyBox}>
+                <Ionicons name="information-circle-outline" size={17} color="#8b5a18" />
+                <Text style={styles.cancellationPolicyText}>
+                  La acreditación de una devolución puede demorar según el medio
+                  de pago. Recibirás un código de seguimiento inmediatamente.
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={cancellingReservation || !cancellationReason}
+                onPress={solicitarCancelacionReserva}
+                style={[
+                  styles.cancellationSubmitButton,
+                  (cancellingReservation || !cancellationReason) &&
+                    styles.cancellationSubmitButtonDisabled,
+                ]}
+              >
+                {cancellingReservation ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.cancellationSubmitText}>
+                    Solicitar cancelación
+                  </Text>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                disabled={cancellingReservation}
+                onPress={() => setCancellationModalVisible(false)}
+                style={styles.cancellationCloseButton}
+              >
+                <Text style={styles.cancellationCloseText}>Volver</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
         <MicaAssistantModal
           visible={micaAssistantVisible}
           loading={askingMica}
@@ -1415,35 +1946,125 @@ function QuoteRow({ icon, label, value }) {
   );
 }
 
+function quoteStatusLabel(status) {
+  const labels = {
+    pending: "Pendiente",
+    changes_requested: "Cambios pedidos",
+    accepted_payment_pending: "Pago pendiente",
+    paid: "Reserva confirmada",
+    withdrawn: "Retirada",
+    superseded: "Reemplazada",
+    expired: "Vencida",
+    cancelled: "Cancelada",
+  };
+  return labels[status] ?? "Propuesta anterior";
+}
+
+function getCancellationReasons(isProvider) {
+  if (isProvider) {
+    return [
+      {
+        value: "provider_cancelled",
+        label: "No puedo realizar el trabajo",
+        icon: "briefcase-outline",
+      },
+      {
+        value: "scheduling_issue",
+        label: "Problema de coordinación",
+        icon: "calendar-outline",
+      },
+      { value: "other", label: "Otro motivo", icon: "ellipsis-horizontal" },
+    ];
+  }
+
+  return [
+    {
+      value: "client_changed_mind",
+      label: "Ya no necesito el servicio",
+      icon: "close-circle-outline",
+    },
+    {
+      value: "scheduling_issue",
+      label: "Problema de coordinación",
+      icon: "calendar-outline",
+    },
+    {
+      value: "provider_no_show",
+      label: "El prestador no se presentó",
+      icon: "person-remove-outline",
+    },
+    { value: "other", label: "Otro motivo", icon: "ellipsis-horizontal" },
+  ];
+}
+
 function JobStatusBanner({
   status,
   onReview,
   onReviewClient,
   onReportIssue,
   reporting,
+  onProposeVisit,
+  onAcceptVisit,
+  onRequestReschedule,
+  onCancel,
+  busy,
 }) {
   const completed = status.job_status === "completed";
   const disputed = status.job_status === "disputed";
   const incidentClosed = ["resolved", "dismissed"].includes(
     status.incident_status,
   );
+  const cancelled =
+    status.job_status === "cancelled" || status.status === "refunded";
+  const cancellationStatus =
+    status.cancellation_status ?? "not_requested";
+  const cancellationRejected = cancellationStatus === "review_rejected";
+  const cancellationVisible = cancellationStatus !== "not_requested";
+  const cancellationActive =
+    cancellationVisible && !cancellationRejected && !cancelled;
+  const cancellationReview = [
+    "review_required",
+    "refund_failed",
+  ].includes(cancellationStatus);
   const amount = Number(status.amount_total ?? 0);
+  const feeAmount = Number(status.commission_amount ?? 0);
+  const refundAmount = Number(status.refund_amount ?? feeAmount);
+  const clientTotal = Number(status.client_total ?? amount + feeAmount);
+  const visitDate = status.visit_scheduled_for
+    ? new Date(status.visit_scheduled_for).toLocaleString("es-AR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      })
+    : null;
+
   return (
     <View
       style={[
         jobStyles.container,
         completed && jobStyles.containerCompleted,
         disputed && jobStyles.containerDisputed,
+        cancelled && jobStyles.containerCancelled,
+        cancellationReview && jobStyles.containerReview,
       ]}
     >
-      <View style={[jobStyles.icon, completed && jobStyles.iconCompleted]}>
+      <View
+        style={[
+          jobStyles.icon,
+          (completed || cancelled) && jobStyles.iconCompleted,
+          cancellationReview && jobStyles.iconReview,
+        ]}
+      >
         <Ionicons
           name={
             completed
               ? "checkmark-done"
               : disputed
                 ? "alert-circle"
-                : "shield-checkmark"
+                : cancelled
+                  ? "return-down-back"
+                  : cancellationVisible
+                    ? "receipt-outline"
+                    : "shield-checkmark"
           }
           size={19}
           color="#fff"
@@ -1457,14 +2078,28 @@ function JobStatusBanner({
               ? incidentClosed
                 ? "RECLAMO REVISADO"
                 : "RECLAMO EN REVISIÓN"
-              : "SERVICIO CONFIRMADO"}
+              : cancelled
+                ? "RESERVA CANCELADA"
+                : cancellationRejected
+                  ? "SOLICITUD REVISADA"
+                  : cancellationActive
+                    ? "CANCELACIÓN REGISTRADA"
+                    : "SERVICIO CONFIRMADO"}
         </Text>
         <Text style={jobStyles.title}>
           {completed
             ? "Trabajo terminado dentro de la app"
             : disputed
               ? `Caso ${status.incident_case_number ?? "abierto"} ${incidentClosed ? "cerrado por soporte" : "derivado a soporte"}`
-              : "El presupuesto quedó confirmado"}
+              : cancelled
+                ? "El cargo de reserva fue devuelto"
+                : cancellationStatus === "refund_pending"
+                  ? "Estamos procesando la devolución"
+                  : cancellationReview
+                    ? "El caso requiere revisión"
+                    : cancellationRejected
+                      ? "La reserva continúa activa"
+                      : "El presupuesto quedó confirmado"}
         </Text>
         <Text style={jobStyles.text}>
           {amount > 0 ? `Presupuesto de ${formatQuoteAmount(amount)}. ` : ""}
@@ -1482,21 +2117,44 @@ function JobStatusBanner({
               ? incidentClosed
                 ? "La revisión humana finalizó. El pago conserva su historial y no se reembolsa automáticamente."
                 : "MICA reunió el contexto y el equipo operativo puede tomar el caso desde su bandeja."
-              : status.is_payer
-                ? "Cuando finalice, cerralo y calificá al prestador."
-                : "El cliente podrá cerrarlo y calificar al finalizar."}
+              : cancelled
+                ? "Cliente y prestador pueden volver a conversar y generar una nueva propuesta."
+                : cancellationReview
+                  ? "La reserva quedó pausada hasta resolver la solicitud."
+                  : cancellationStatus === "refund_pending"
+                    ? "La reserva quedó pausada mientras Mercado Pago procesa el reintegro."
+                    : cancellationRejected
+                      ? "La devolución no fue aprobada. Pueden continuar coordinando la visita."
+                      : status.is_payer
+                        ? "Cuando finalice, cerralo y calificá al prestador."
+                        : "El cliente podrá cerrarlo y calificar al finalizar."}
         </Text>
-        {status.can_review ? (
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={onReview}
-            style={jobStyles.reviewButton}
-          >
-            <Ionicons name="star-outline" size={16} color="#fff" />
-            <Text style={jobStyles.reviewButtonText}>
-              Finalizar y calificar
-            </Text>
-          </TouchableOpacity>
+
+        {!completed ? (
+          <View style={jobStyles.paymentSummary}>
+            <View style={jobStyles.summaryRow}>
+              <Text style={jobStyles.summaryLabel}>Trabajo al finalizar</Text>
+              <Text style={jobStyles.summaryValue}>
+                {formatQuoteAmount(amount)}
+              </Text>
+            </View>
+            <View style={jobStyles.summaryRow}>
+              <Text style={jobStyles.summaryLabel}>
+                {cancelled ? "Reserva devuelta" : "Reserva pagada"}
+              </Text>
+              <Text style={jobStyles.summaryValue}>
+                {formatQuoteAmount(cancelled ? refundAmount : feeAmount)}
+              </Text>
+            </View>
+            <View style={jobStyles.summaryRow}>
+              <Text style={jobStyles.summaryTotalLabel}>
+                Costo total acordado
+              </Text>
+              <Text style={jobStyles.summaryTotalValue}>
+                {formatQuoteAmount(clientTotal)}
+              </Text>
+            </View>
+          </View>
         ) : null}
         {status.can_review_client ? (
           <TouchableOpacity
@@ -1523,6 +2181,163 @@ function JobStatusBanner({
             </Text>
           </TouchableOpacity>
         ) : null}
+
+        {cancellationVisible ? (
+          <View
+            style={[
+              jobStyles.cancellationBox,
+              cancelled && jobStyles.cancellationBoxRefunded,
+            ]}
+          >
+            <View style={jobStyles.cancellationHeading}>
+              <Ionicons
+                name={
+                  cancelled
+                    ? "checkmark-circle"
+                    : cancellationRejected
+                      ? "close-circle-outline"
+                      : "time-outline"
+                }
+                size={16}
+                color={
+                  cancelled
+                    ? "#12815e"
+                    : cancellationRejected
+                      ? "#8b5a44"
+                      : "#9a6117"
+                }
+              />
+              <Text style={jobStyles.cancellationTitle}>
+                {cancelled
+                  ? "Devolución confirmada"
+                  : cancellationStatus === "refund_pending"
+                    ? "Devolución en proceso"
+                    : cancellationRejected
+                      ? "Devolución no aprobada"
+                      : "Revisión pendiente"}
+              </Text>
+            </View>
+            {status.cancellation_request_code ? (
+              <Text style={jobStyles.cancellationCode}>
+                Código: {status.cancellation_request_code}
+              </Text>
+            ) : null}
+            <Text style={jobStyles.cancellationText}>
+              {cancelled
+                ? "La acreditación final depende de los tiempos del medio de pago."
+                : cancellationStatus === "refund_failed"
+                  ? "Mercado Pago no completó el reintegro automático; el caso quedó guardado."
+                  : cancellationStatus === "review_required"
+                    ? "ServiciosYa debe validar lo ocurrido antes de devolver el cargo."
+                    : cancellationRejected
+                      ? status.cancellation_resolution_note ||
+                        "La reserva volvió a quedar activa."
+                    : "No hace falta iniciar otra solicitud."}
+            </Text>
+          </View>
+        ) : null}
+
+        {!completed &&
+        !disputed &&
+        !cancellationActive &&
+        status.visit_status ? (
+          <View style={jobStyles.visitBox}>
+            <View style={jobStyles.visitHeading}>
+              <Ionicons name="calendar-outline" size={16} color="#047a8f" />
+              <Text style={jobStyles.visitTitle}>Visita del prestador</Text>
+            </View>
+            {status.visit_status === "scheduled" ? (
+              <Text style={jobStyles.visitText}>
+                Confirmada para {visitDate}.
+              </Text>
+            ) : status.visit_status === "proposed" ? (
+              <>
+                <Text style={jobStyles.visitText}>
+                  {status.is_payer
+                    ? `El prestador propuso ${visitDate}.`
+                    : `Fecha enviada: ${visitDate}. Esperando confirmación del cliente.`}
+                </Text>
+                {status.visit_note ? (
+                  <Text style={jobStyles.visitNote}>{status.visit_note}</Text>
+                ) : null}
+                {status.is_payer ? (
+                  <View style={jobStyles.visitActions}>
+                    <TouchableOpacity
+                      disabled={busy}
+                      onPress={onAcceptVisit}
+                      style={jobStyles.visitPrimaryButton}
+                    >
+                      <Text style={jobStyles.visitPrimaryText}>
+                        Confirmar fecha
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      disabled={busy}
+                      onPress={onRequestReschedule}
+                      style={jobStyles.visitSecondaryButton}
+                    >
+                      <Text style={jobStyles.visitSecondaryText}>
+                        Pedir otra
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </>
+            ) : status.is_provider ? (
+              <>
+                <Text style={jobStyles.visitText}>
+                  {status.visit_status === "reschedule_requested"
+                    ? "El cliente pidió otra fecha. Enviá una nueva propuesta."
+                    : "Proponé una fecha y hora para realizar la visita."}
+                </Text>
+                <TouchableOpacity
+                  disabled={busy}
+                  onPress={onProposeVisit}
+                  style={jobStyles.visitPrimaryButton}
+                >
+                  <Text style={jobStyles.visitPrimaryText}>
+                    {status.visit_status === "reschedule_requested"
+                      ? "Proponer otra fecha"
+                      : "Proponer fecha"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={jobStyles.visitText}>
+                Esperando que el prestador proponga una fecha.
+              </Text>
+            )}
+          </View>
+        ) : null}
+
+        <View style={jobStyles.footerActions}>
+          {status.can_review ? (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              disabled={busy}
+              onPress={onReview}
+              style={jobStyles.reviewButton}
+            >
+              <Ionicons name="star-outline" size={16} color="#fff" />
+              <Text style={jobStyles.reviewButtonText}>
+                Finalizar y calificar
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+          {status.can_cancel ? (
+            <TouchableOpacity
+              activeOpacity={0.8}
+              disabled={busy}
+              onPress={onCancel}
+              style={jobStyles.cancelButton}
+            >
+              <Ionicons name="close-circle-outline" size={15} color="#9a4c22" />
+              <Text style={jobStyles.cancelButtonText}>
+                Cancelar reserva
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -1548,6 +2363,14 @@ const jobStyles = StyleSheet.create({
     borderColor: "#f0c78a",
     backgroundColor: "#fff8e8",
   },
+  containerCancelled: {
+    borderColor: "#bde4d5",
+    backgroundColor: "#edf9f4",
+  },
+  containerReview: {
+    borderColor: "#e5c994",
+    backgroundColor: "#fff8eb",
+  },
   icon: {
     width: 36,
     height: 36,
@@ -1559,9 +2382,10 @@ const jobStyles = StyleSheet.create({
   iconCompleted: {
     backgroundColor: "#12815e",
   },
-  copy: {
-    flex: 1,
+  iconReview: {
+    backgroundColor: "#b56b18",
   },
+  copy: { flex: 1 },
   eyebrow: {
     color: "#047a8f",
     fontSize: 9,
@@ -1580,6 +2404,88 @@ const jobStyles = StyleSheet.create({
     fontSize: 10.5,
     lineHeight: 15,
   },
+  paymentSummary: {
+    marginTop: 9,
+    padding: 9,
+    borderRadius: 10,
+    backgroundColor: "rgba(255,255,255,0.72)",
+    gap: 5,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  summaryLabel: { color: "#60777c", fontSize: 9.5, fontWeight: "700" },
+  summaryValue: { color: "#284d54", fontSize: 10, fontWeight: "900" },
+  summaryTotalLabel: { color: "#173f46", fontSize: 10, fontWeight: "900" },
+  summaryTotalValue: { color: "#047a8f", fontSize: 11, fontWeight: "900" },
+  cancellationBox: {
+    marginTop: 9,
+    padding: 10,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#e5c994",
+    backgroundColor: "#fffaf0",
+  },
+  cancellationBoxRefunded: {
+    borderColor: "#bde4d5",
+    backgroundColor: "#f2fbf7",
+  },
+  cancellationHeading: { flexDirection: "row", alignItems: "center", gap: 6 },
+  cancellationTitle: { color: "#324f54", fontSize: 11, fontWeight: "900" },
+  cancellationCode: {
+    marginTop: 6,
+    color: "#1e4148",
+    fontSize: 10,
+    fontWeight: "900",
+  },
+  cancellationText: {
+    marginTop: 4,
+    color: "#60777c",
+    fontSize: 9.5,
+    lineHeight: 14,
+  },
+  visitBox: {
+    marginTop: 9,
+    padding: 10,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#b9dfe5",
+    backgroundColor: "#fff",
+  },
+  visitHeading: { flexDirection: "row", alignItems: "center", gap: 6 },
+  visitTitle: { color: "#1e4148", fontSize: 11, fontWeight: "900" },
+  visitText: { marginTop: 5, color: "#587277", fontSize: 10, lineHeight: 14 },
+  visitNote: {
+    marginTop: 4,
+    color: "#315a61",
+    fontSize: 9.5,
+    fontStyle: "italic",
+  },
+  visitActions: { flexDirection: "row", gap: 7, marginTop: 8 },
+  visitPrimaryButton: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 9,
+    backgroundColor: "#047a8f",
+  },
+  visitPrimaryText: { color: "#fff", fontSize: 10, fontWeight: "900" },
+  visitSecondaryButton: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#80c7ce",
+    backgroundColor: "#fff",
+  },
+  visitSecondaryText: { color: "#047a8f", fontSize: 10, fontWeight: "900" },
+  footerActions: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   reviewButton: {
     alignSelf: "flex-start",
     flexDirection: "row",
@@ -1591,10 +2497,19 @@ const jobStyles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: "#12815e",
   },
-  reviewButtonText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "800",
+  reviewButtonText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  cancelButton: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#ddb69d",
+    backgroundColor: "#fff8f3",
   },
   issueButton: {
     alignSelf: "flex-start",
@@ -1609,6 +2524,7 @@ const jobStyles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: "700",
   },
+  cancelButtonText: { color: "#9a4c22", fontSize: 10.5, fontWeight: "900" },
 });
 
 function ChatRules() {
@@ -1619,11 +2535,11 @@ function ChatRules() {
     },
     {
       icon: "💬",
-      text: "Podés conversar y pedir aclaraciones antes de aceptar. Mantené toda la coordinación dentro de este chat.",
+      text: "Podés conversar, pedir aclaraciones o solicitar cambios antes de aceptar. Mantené toda la coordinación dentro de este chat.",
     },
     {
       icon: "💰",
-      text: 'El prestador envía el monto con "Crear presupuesto". Al aceptar, el cliente paga la comisión del 10% dentro de la app.',
+      text: 'El prestador envía el monto con "Crear presupuesto". Al aceptar, el cliente paga el 10% de confirmación dentro de la app.',
     },
     {
       icon: "🤝",
@@ -1635,7 +2551,7 @@ function ChatRules() {
     },
     {
       icon: "⚠️",
-      text: "Los acuerdos fuera de la plataforma no tienen cobertura ni garantía de Servicios Ya.",
+      text: "Los acuerdos fuera de la plataforma no tienen cobertura ni garantía de ServiciosYa.",
     },
   ];
   return (
@@ -1877,6 +2793,13 @@ const styles = StyleSheet.create({
     color: "#102a35",
     fontSize: 30,
     fontWeight: "900",
+    marginTop: 2,
+  },
+  quotePriceLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase",
     marginTop: 12,
   },
   quotePricingMode: {
@@ -1885,6 +2808,26 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 3,
   },
+  quotePaymentBreakdown: {
+    marginTop: 10,
+    padding: 11,
+    borderRadius: 8,
+    backgroundColor: "#eefaf8",
+    borderWidth: 1,
+    borderColor: "#c1e9e2",
+  },
+  quotePaymentRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  quotePaymentLabel: { flex: 1, color: "#5d7479", fontSize: 11, fontWeight: "700" },
+  quotePaymentValue: { color: "#1d4148", fontSize: 12, fontWeight: "900" },
+  quotePaymentTotalRow: { marginTop: 7, paddingTop: 7, borderTopWidth: 1, borderTopColor: "#cde7e2" },
+  quotePaymentTotalLabel: { color: "#173f46", fontSize: 12, fontWeight: "900" },
+  quotePaymentTotalValue: { color: "#047a8f", fontSize: 15, fontWeight: "900" },
+  quotePaymentHint: { marginTop: 7, color: "#698084", fontSize: 9.5, lineHeight: 13.5 },
   quoteDivider: {
     height: 1,
     backgroundColor: "#e5f2f4",
@@ -1931,6 +2874,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "700",
     flexShrink: 1,
+  },
+  quoteActions: { marginTop: 4, gap: 7 },
+  requestChangesBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#8ed6d0",
+  },
+  requestChangesText: { color: "#047a8f", fontSize: 12, fontWeight: "800" },
+  legacyQuoteHint: {
+    marginTop: 8,
+    padding: 9,
+    borderRadius: 8,
+    color: "#7a5c20",
+    backgroundColor: "#fff7df",
+    fontSize: 10,
+    lineHeight: 14,
   },
   // MODAL
   modalFondo: {
@@ -2013,6 +2979,148 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 14,
     padding: 3,
+  },
+  visitModalOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(14,34,38,0.58)",
+  },
+  visitModalCard: {
+    width: "100%",
+    maxWidth: 420,
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: "#fff",
+  },
+  visitModalHeader: { flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 12 },
+  visitModalIcon: { width: 42, height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#047a8f" },
+  visitModalTitle: { color: "#173f46", fontSize: 17, fontWeight: "900" },
+  visitModalHint: { marginTop: 2, color: "#71868a", fontSize: 10.5, lineHeight: 14 },
+  visitFieldLabel: { marginTop: 8, marginBottom: 5, color: "#38515d", fontSize: 11, fontWeight: "900" },
+  visitInput: { minHeight: 44, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: "#b9deda", backgroundColor: "#f8fcfb", color: "#25464c", fontSize: 14, fontWeight: "700" },
+  visitNoteInput: { minHeight: 76, paddingTop: 11 },
+  visitSaveButton: { minHeight: 46, marginTop: 15, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#047a8f" },
+  visitSaveText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  visitCancelButton: { minHeight: 40, marginTop: 5, alignItems: "center", justifyContent: "center" },
+  visitCancelText: { color: "#66777a", fontSize: 13, fontWeight: "800" },
+  cancellationModalOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "rgba(14,34,38,0.62)",
+  },
+  cancellationModalCard: {
+    width: "100%",
+    maxWidth: 440,
+    padding: 20,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+  },
+  cancellationModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    marginBottom: 12,
+  },
+  cancellationModalIcon: {
+    width: 42,
+    height: 42,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 11,
+    backgroundColor: "#b56b18",
+  },
+  cancellationModalTitle: {
+    color: "#173f46",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  cancellationModalHint: {
+    marginTop: 2,
+    color: "#71868a",
+    fontSize: 10.5,
+    lineHeight: 14,
+  },
+  cancellationFieldLabel: {
+    marginTop: 8,
+    marginBottom: 6,
+    color: "#38515d",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  cancellationReasons: { gap: 7 },
+  cancellationReasonButton: {
+    minHeight: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 11,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#cfdddf",
+    backgroundColor: "#f8fbfb",
+  },
+  cancellationReasonButtonSelected: {
+    borderColor: "#b56b18",
+    backgroundColor: "#b56b18",
+  },
+  cancellationReasonText: {
+    color: "#526d72",
+    fontSize: 11.5,
+    fontWeight: "800",
+  },
+  cancellationReasonTextSelected: { color: "#fff" },
+  cancellationDetailInput: {
+    minHeight: 78,
+    paddingHorizontal: 12,
+    paddingTop: 11,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: "#cfdddf",
+    backgroundColor: "#f8fbfb",
+    color: "#25464c",
+    fontSize: 13,
+  },
+  cancellationPolicyBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 7,
+    marginTop: 11,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#ead3a7",
+    backgroundColor: "#fff9ee",
+  },
+  cancellationPolicyText: {
+    flex: 1,
+    color: "#795b32",
+    fontSize: 9.5,
+    lineHeight: 14,
+  },
+  cancellationSubmitButton: {
+    minHeight: 46,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 14,
+    borderRadius: 12,
+    backgroundColor: "#b14f27",
+  },
+  cancellationSubmitButtonDisabled: { opacity: 0.5 },
+  cancellationSubmitText: { color: "#fff", fontSize: 14, fontWeight: "900" },
+  cancellationCloseButton: {
+    minHeight: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  cancellationCloseText: {
+    color: "#66777a",
+    fontSize: 13,
+    fontWeight: "800",
   },
   transcriptModalOverlay: {
     flex: 1,

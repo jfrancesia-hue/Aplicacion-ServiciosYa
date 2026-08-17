@@ -3,7 +3,12 @@ import { QUOTE_OPERATIONAL_NOTICE_VERSION } from "../constants/billing.ts";
 
 export type QuoteMessage = {
   type: "quote";
+  quoteId?: string;
+  version?: number;
   amount: number;
+  feeRate?: number;
+  feeAmount?: number;
+  clientTotal?: number;
   scope: string;
   materials: string;
   timeframe: string;

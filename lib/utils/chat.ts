@@ -4,6 +4,7 @@ import { supabase } from "../supabase";
 import type { ServicioRow } from "../../types/db.overrides.types";
 import { getChatMessagePreview } from "./audioMessage";
 import { getMicaSystemMessagePreview } from "./micaMessage";
+import { getServiceSystemMessagePreview } from "./serviceSystemMessage";
 import { getBlockedUserIds } from "./trustSafety";
 
 export interface ChatItem {
@@ -109,6 +110,7 @@ async function fetchUserChats() {
       title: user?.nombre ?? "Usuario",
       noLeidos,
       mensaje:
+        getServiceSystemMessagePreview(lastMsg?.contenido) ??
         getMicaSystemMessagePreview(lastMsg?.contenido) ??
         getChatMessagePreview(lastMsg?.contenido),
       usuario_1: chat.participant_a ?? "",
