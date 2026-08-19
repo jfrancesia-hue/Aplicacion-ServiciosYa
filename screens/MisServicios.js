@@ -244,6 +244,17 @@ export default function MisServicios() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.pageTitle}>Mis servicios</Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Hacer una publicación"
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate("OfrecerServicio")}
+          style={styles.publishButton}
+        >
+          <Ionicons name="add-circle-outline" size={22} color="#FFFFFF" />
+          <Text style={styles.publishButtonText}>Hacer una publicación</Text>
+          <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
       </View>
 
       {/* Main Content */}
@@ -374,6 +385,22 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#111827",
     letterSpacing: -0.5,
+  },
+  publishButton: {
+    marginTop: 16,
+    minHeight: 50,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    backgroundColor: "#0e7b78",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  publishButtonText: {
+    flex: 1,
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
   },
   listContainer: {
     padding: 12,

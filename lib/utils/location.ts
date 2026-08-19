@@ -12,6 +12,7 @@ import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import queryClient from "../reactQuery";
 import { useLocationStore } from "../../store/locationStore";
+import type { UserSettings } from "../hooks/useUserSettings";
 
 export function locationQueryString(lat: number, lng: number): string {
   return `POINT(${lng} ${lat})`;
@@ -59,7 +60,7 @@ export async function getLocationParamsFromClient(
   client: QueryClient,
   authLocation?: { latitude: number; longitude: number } | null
 ): Promise<LocationParams> {
-  const settings = client.getQueryData(query.queryKey) || {};
+  const settings = client.getQueryData<UserSettings>(query.queryKey);
   console.log("Solicitando ubicación al iniciar sesión...");
 
   let coords:
@@ -118,8 +119,7 @@ export async function getLocationParamsFromClient(
       search_lat: coords.latitude,
       search_lon: coords.longitude,
       search_radius_meters:
-        (settings as { searchRadius?: number } | null | undefined)
-          ?.searchRadius ?? 5000,
+        settings?.searchRadius ?? 5000,
     };
   } catch (e) {
     console.warn("Error obteniendo ubicación:", e);
@@ -129,9 +129,11 @@ export async function getLocationParamsFromClient(
 
 async function updateClientWithCoords(
   client: QueryClient,
-  settings: any,
+  settings: UserSettings | undefined,
   coords: { latitude: number; longitude: number }
 ) {
+  if (!settings) return;
+
   const baseSettings = {
     ...settings,
     lastGPSLocation: {

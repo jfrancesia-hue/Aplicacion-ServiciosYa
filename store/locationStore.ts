@@ -138,7 +138,7 @@ export const useLocationStore = create<LocationState>()(
                                 : resolved,
                         isLoading: false,
                     }));
-                } catch (e: any) {
+                } catch {
                     // ⚠️ Any failure → IP fallback
                     try {
                         const ipLocation = await resolveLocationFromIP();

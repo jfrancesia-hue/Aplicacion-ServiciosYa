@@ -81,9 +81,8 @@ const ActionButton = ({ isExpanded, index, button, position }: ActionButtonProps
   const labelPositionStyle = React.useMemo(() => {
     if (position.right !== undefined) {
       return { right: ICON_SIZE + ICON_OFFSET }; // Label to the left of icon
-    } else {
-      return { left: ICON_SIZE + ICON_OFFSET }; // Label to the right of icon
     }
+      return { left: ICON_SIZE + ICON_OFFSET }; // Label to the right of icon
   }, [position]);
 
   // Measure text width using hidden text

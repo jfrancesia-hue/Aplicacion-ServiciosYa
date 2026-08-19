@@ -1,12 +1,13 @@
 import sharp from "sharp";
-import { readdir, stat, readFile, writeFile } from "fs/promises";
-import path from "path";
+import { readdir, stat, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 const iconsDir = path.resolve("assets/icons");
 const files = await readdir(iconsDir);
 const images = files.filter(f => /\.(jpg|jpeg|png)$/i.test(f));
 
-let totalBefore = 0, totalAfter = 0;
+let totalBefore = 0;
+let totalAfter = 0;
 
 for (const file of images) {
   const full = path.join(iconsDir, file);

@@ -18,6 +18,7 @@ type MicaRequest = {
   mode: MicaMode;
   message: string;
   insight?: Record<string, string | undefined>;
+  knownLocation?: string | null;
   history?: ChatMessage[];
 };
 
@@ -91,6 +92,7 @@ function buildInput(body: MicaRequest) {
         `Modo: ${body.mode}`,
         `Mensaje actual: ${body.message}`,
         `Datos ya detectados: ${JSON.stringify(body.insight ?? {})}`,
+        `Ubicación ya conocida: ${body.knownLocation?.trim() || "ninguna"}`,
         "Responde SOLO JSON valido con esta forma:",
         `{"reply":"texto natural para el usuario","insightPatch":{"service":"...","location":"...","urgency":"...","timeframe":"...","issue":"...","coverage":"...","experience":"...","price":"...","companyType":"...","units":"...","contactIntent":"..."},"readyForNextStep":false}`,
       ].join("\n"),
@@ -132,6 +134,88 @@ function buildLocalIntermediaryReply(body: MicaRequest) {
     .join("\n");
 }
 
+function buildLocalFallbackResponse(body: MicaRequest) {
+  const insightPatch: Record<string, string> = {};
+  const insight = body.insight ?? {};
+  const knownLocation =
+    body.knownLocation?.trim() || insight.location?.trim() || "";
+
+  if (knownLocation && !insight.location?.trim()) {
+    insightPatch.location = knownLocation;
+  }
+
+  const has = (field: string) =>
+    Boolean(insight[field]?.trim() || insightPatch[field]?.trim());
+
+  const pendingByMode: Record<
+    Exclude<MicaMode, "intermediar-chat">,
+    Array<{ field: string; question: string }>
+  > = {
+    "buscar-servicio": [
+      { field: "service", question: "¿Qué tipo de profesional necesitás?" },
+      {
+        field: "issue",
+        question: "Contame brevemente qué problema hay que resolver.",
+      },
+      {
+        field: "location",
+        question: "¿En qué ciudad o barrio hay que hacer el trabajo?",
+      },
+      {
+        field: "urgency",
+        question: "¿Es urgente o puede coordinarse para otro día?",
+      },
+      {
+        field: "timeframe",
+        question: "¿Qué día u horario te queda mejor?",
+      },
+    ],
+    "ofrecer-servicio": [
+      { field: "service", question: "¿Qué oficio o servicio ofrecés?" },
+      { field: "location", question: "¿En qué zonas trabajás?" },
+      {
+        field: "experience",
+        question: "¿Cuánta experiencia tenés en ese trabajo?",
+      },
+      {
+        field: "price",
+        question: "¿Cómo preferís indicar tus precios orientativos?",
+      },
+    ],
+    b2b: [
+      {
+        field: "companyType",
+        question: "¿Qué tipo de empresa u organización representás?",
+      },
+      {
+        field: "units",
+        question: "¿Cuántas unidades o sucursales necesitás cubrir?",
+      },
+      { field: "coverage", question: "¿En qué zonas necesitás cobertura?" },
+      {
+        field: "service",
+        question: "¿Qué rubros necesitás contratar con más frecuencia?",
+      },
+    ],
+  };
+
+  const pending = pendingByMode[body.mode as Exclude<MicaMode, "intermediar-chat">]
+    .find(({ field }) => !has(field));
+  const readyForNextStep = !pending;
+  const locationAcknowledgement = knownLocation
+    ? `Perfecto, tomo ${knownLocation} como ubicación. `
+    : "";
+  const reply = pending
+    ? `${locationAcknowledgement}${pending.question}`
+    : body.mode === "buscar-servicio"
+      ? "Listo, ya tengo los datos necesarios. Podés pedir presupuestos para publicar el trabajo."
+      : body.mode === "ofrecer-servicio"
+        ? "Listo, ya tengo la información principal. Podés continuar con la publicación de tu servicio."
+        : "Listo, ya tengo los datos principales para continuar con la propuesta B2B.";
+
+  return { reply, insightPatch, readyForNextStep, fallback: true };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -169,13 +253,9 @@ Deno.serve(async (req) => {
       );
     }
     if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: "OPENAI_API_KEY is not configured" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify(buildLocalFallbackResponse(body)), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const model = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
@@ -192,6 +272,7 @@ Deno.serve(async (req) => {
           modeInstructions[body.mode],
           "Escribi en español rioplatense, sin sonar robotico.",
           "Hace una sola pregunta concreta por turno cuando falten datos.",
+          "Toma como validos los datos ya detectados y la ubicacion conocida. No vuelvas a preguntar un dato que ya esta presente.",
           "Si ya hay datos suficientes, explica el siguiente paso sin inventar datos externos.",
           "No pidas datos sensibles innecesarios. No des asesoramiento legal, medico o financiero especializado.",
           body.mode === "intermediar-chat"

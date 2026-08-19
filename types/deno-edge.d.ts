@@ -10,6 +10,7 @@ declare module "npm:@supabase/supabase-js@2" {
     supabaseUrl: string,
     supabaseKey: string,
     options?: unknown,
+    // biome-ignore lint/suspicious/noExplicitAny: Minimal shim for the external Deno module, whose types are resolved remotely at deploy time.
   ): any;
 }
 
@@ -18,5 +19,6 @@ declare module "https://esm.sh/@supabase/supabase-js@2" {
     supabaseUrl: string,
     supabaseKey: string,
     options?: unknown,
+    // biome-ignore lint/suspicious/noExplicitAny: Minimal shim for the external Deno module, whose types are resolved remotely at deploy time.
   ): any;
 }

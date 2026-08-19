@@ -3,8 +3,13 @@ import React, { useMemo, useRef, useEffect } from "react";
 import { View, Text, StyleSheet } from "react-native";
 import BottomSheet from "@gorhom/bottom-sheet";
 
+type BottomSheetScreenProps = {
+  navigation: { goBack: () => void };
+  route: { params?: { itemId?: string | number } };
+};
+
 // Note: `route.params` will contain data passed via navigate()
-const BottomSheetScreen = ({ navigation, route }: { navigation: any; route: any }) => {
+const BottomSheetScreen = ({ navigation, route }: BottomSheetScreenProps) => {
   const { itemId } = route.params || {};
   const bottomSheetRef = useRef<BottomSheet>(null);
 

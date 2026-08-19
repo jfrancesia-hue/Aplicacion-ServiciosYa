@@ -14,7 +14,7 @@
     "eas-build-pre-install": "node scripts/check_internal_release_env.js",
     "check:serviciosya-contract": "node scripts/check_serviciosya_unified_contract.js",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
+    "lint": "biome lint .",
     "test": "node --experimental-strip-types --test tests/*.test.mjs"
   },
   "dependencies": {
@@ -102,6 +102,9 @@
     "sharp": "^0.35.3",
     "supabase": "^2.30.4",
     "typescript": "~5.8.3"
+  },
+  "overrides": {
+    "postcss": "8.5.26"
   },
   "private": true,
   "expo": {

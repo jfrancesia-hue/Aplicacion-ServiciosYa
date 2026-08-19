@@ -1,5 +1,5 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ViewStyle, TextStyle } from 'react-native';
+import type React from 'react';
+import { TouchableOpacity, Text, StyleSheet, type ViewStyle, type TextStyle } from 'react-native';
 
 type SocialButtonProps = {
     onPress: () => void;

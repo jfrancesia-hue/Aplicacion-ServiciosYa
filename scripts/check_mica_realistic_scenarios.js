@@ -57,7 +57,7 @@ const scenarios = [
 ];
 
 function hasUsableText(value, minLength = 3) {
-  return Boolean(value && value.trim() && value.trim().length >= minLength);
+  return Boolean(value?.trim() && value.trim().length >= minLength);
 }
 
 function getSearchReadiness(insight, profileLocation) {

@@ -154,7 +154,7 @@ export default function RegistroCliente() {
             uri,
             type: "image/jpeg",
             name: nombreArchivo,
-          } as any);
+          } as unknown as ArrayBuffer);
         if (error) throw error;
         const urlPublica = supabase.storage
           .from("fotos-perfil")
@@ -190,7 +190,7 @@ export default function RegistroCliente() {
           creditos: 0,
           pago: true,
           dni_verificado: true,
-        } as any)
+        })
         .eq("id", user.id);
 
       if (insertError) throw insertError;
@@ -198,8 +198,10 @@ export default function RegistroCliente() {
       await recordCurrentLegalAcceptance("client_registration");
 
       navigation.navigate("Home");
-    } catch (error: any) {
-      console.error("Error al registrar usuario:", error.message);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Error de registro desconocido";
+      console.error("Error al registrar usuario:", message);
       Alert.alert(
         "Error",
         "Ocurrió un error al guardar tus datos. Intentá de nuevo.",
@@ -260,7 +262,7 @@ export default function RegistroCliente() {
                             !selectedItem && { color: "#999" },
                           ]}
                         >
-                          {(selectedItem && selectedItem.title) || "Sexo"}
+                          {(selectedItem?.title) || "Sexo"}
                         </Text>
                       </View>
                     );

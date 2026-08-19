@@ -40,7 +40,8 @@ const LocationChip = () => {
     <View style={styles.container}>
       <Pressable
         onPress={handleOnPress}
-        disabled
+        accessibilityRole="button"
+        accessibilityLabel="Cambiar ciudad"
         style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
         android_ripple={{ color: "rgba(255, 255, 255, 0.2)" }}
       >

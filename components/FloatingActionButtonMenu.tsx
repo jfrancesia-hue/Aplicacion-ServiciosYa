@@ -1,10 +1,10 @@
-import React, { useState, useRef } from "react";
+import type React from "react";
+import { useState, useRef } from "react";
 import {
   View,
   StyleSheet,
   TouchableOpacity,
   Animated,
-  TouchableWithoutFeedback,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -54,34 +54,32 @@ const FloatingActionButtonMenu: React.FC<FloatingActionButtonMenuProps> = ({
     }
   };
 
-  const closeMenu = () => {
-    if (isOpen) {
-      toggleMenu();
-    }
-  };
-
   const handleButtonPress = (action: () => void) => {
-    closeMenu();
+    fadeAnim.stopAnimation();
+    translateYAnim.stopAnimation();
+    fadeAnim.setValue(0);
+    translateYAnim.setValue(0);
+    setIsOpen(false);
     action();
   };
 
   return (
-    <TouchableWithoutFeedback onPress={closeMenu}>
-      <View style={styles.container}>
+      <View pointerEvents="box-none" style={styles.container}>
         {/* Botones del menú */}
         {isOpen && (
-          <View style={styles.menuContainer}>
+          <>
             {/* Botón de ayuda */}
             <Animated.View
               style={[
                 styles.menuItem,
+                styles.helpItem,
                 {
                   opacity: fadeAnim,
                   transform: [
                     {
                       translateY: translateYAnim.interpolate({
                         inputRange: [0, 1],
-                        outputRange: [0, -140],
+                        outputRange: [12, 0],
                       }),
                     },
                   ],
@@ -100,13 +98,14 @@ const FloatingActionButtonMenu: React.FC<FloatingActionButtonMenuProps> = ({
             <Animated.View
               style={[
                 styles.menuItem,
+                styles.chatItem,
                 {
                   opacity: fadeAnim,
                   transform: [
                     {
                       translateY: translateYAnim.interpolate({
                         inputRange: [0, 1],
-                        outputRange: [0, -70],
+                        outputRange: [12, 0],
                       }),
                     },
                   ],
@@ -120,7 +119,7 @@ const FloatingActionButtonMenu: React.FC<FloatingActionButtonMenuProps> = ({
                 <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
               </TouchableOpacity>
             </Animated.View>
-          </View>
+          </>
         )}
 
         {/* Botón principal */}
@@ -128,7 +127,6 @@ const FloatingActionButtonMenu: React.FC<FloatingActionButtonMenuProps> = ({
           <Ionicons name={isOpen ? "close" : "menu"} size={28} color="#fff" />
         </TouchableOpacity>
       </View>
-    </TouchableWithoutFeedback>
   );
 };
 
@@ -137,17 +135,23 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 70,
     right: 10,
-  },
-  menuContainer: {
-    position: "absolute",
-    bottom: 55,
-    right: 0,
+    width: 56,
+    height: 205,
   },
   menuItem: {
     position: "absolute",
     right: 0,
   },
+  helpItem: {
+    bottom: 140,
+  },
+  chatItem: {
+    bottom: 72,
+  },
   mainButton: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
     backgroundColor: "#069eb3",
     width: 56,
     height: 56,

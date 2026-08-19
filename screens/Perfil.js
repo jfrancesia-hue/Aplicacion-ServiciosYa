@@ -293,7 +293,7 @@ export default function Perfil() {
       const updateData = {
         nombre: nombreVal,
         celular: celularVal,
-        edad: edadVal ? parseInt(edadVal) : null,
+        edad: edadVal ? Number.parseInt(edadVal) : null,
         dni: dniVal,
         provincia: provinciaVal,
         ciudad: ciudadVal,
@@ -505,8 +505,8 @@ export default function Perfil() {
             </View>
           ) : (
             <View style={styles.tagsContainer}>
-              {(userData.categoria || []).map((cat, i) => (
-                <View key={i} style={styles.tag}>
+              {(userData.categoria || []).map((cat) => (
+                <View key={cat} style={styles.tag}>
                   <Text style={styles.tagText}>{cat}</Text>
                 </View>
               ))}
@@ -541,7 +541,7 @@ export default function Perfil() {
               </View>
               <View style={styles.chipsRow}>
                 {matriculaArchivos.map((a, i) => (
-                  <View key={i} style={styles.fileChip}>
+                  <View key={a.uri || a.nombre} style={styles.fileChip}>
                     <Text numberOfLines={1} style={styles.fileChipText}>{a.nombre}</Text>
                     <TouchableOpacity
                       onPress={() => {
@@ -559,8 +559,8 @@ export default function Perfil() {
           ) : (
             <View style={styles.chipsRow}>
               {matriculaArchivos.length > 0
-                ? matriculaArchivos.map((a, i) => (
-                    <View key={i} style={styles.fileChipReadOnly}>
+                ? matriculaArchivos.map((a) => (
+                    <View key={a.uri || a.nombre} style={styles.fileChipReadOnly}>
                       <Text numberOfLines={1} style={styles.fileChipText}>{a.nombre}</Text>
                     </View>
                   ))

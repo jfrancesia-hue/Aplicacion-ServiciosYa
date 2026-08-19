@@ -31,6 +31,10 @@ import {
 } from "../lib/micaOrder";
 import { supabase } from "../lib/supabase";
 import { calculateServiceConfirmationFee } from "../lib/constants/billing";
+import {
+  asksForKnownLocation,
+  inferMicaLocation,
+} from "../lib/utils/micaLocation";
 import { resolveArgentineProvince } from "../lib/utils/geoSegmentation";
 import {
   pricingModeLabel,
@@ -204,7 +208,7 @@ const modeConfig: Record<
     intro:
       "Hola, buen día. Contame qué servicio querés ofrecer y en qué zona trabajás.",
     placeholder:
-      "Ej: soy electricista, trabajo en Córdoba capital y tengo 5 años de experiencia...",
+      "Ej: soy electricista, trabajo en mi ciudad y tengo 5 años de experiencia...",
   },
   b2b: {
     title: "SolucionesYa B2B",
@@ -228,13 +232,6 @@ function includesAny(text: string, words: string[]) {
 function inferService(text: string) {
   return serviceSignals.find((signal) => includesAny(text, signal.words))
     ?.label;
-}
-
-function inferLocation(text: string) {
-  const match = text.match(
-    /\b(?:en|por|zona|barrio)\s+([a-z0-9\s]+?)(?:,|\.| y | para | hoy| manana| urgente|$)/i,
-  );
-  return match?.[1]?.trim();
 }
 
 function inferUnits(text: string) {
@@ -292,7 +289,13 @@ function inferInsight(
 ): AgentInsight {
   const text = userText.toLowerCase();
   const service = inferService(text);
-  const location = inferLocation(text);
+  const expectsPlainLocation =
+    (mode === "buscar-servicio" && Boolean(previous.service) && !previous.location) ||
+    (mode === "ofrecer-servicio" &&
+      Boolean(previous.service) &&
+      !previous.coverage &&
+      !previous.location);
+  const location = inferMicaLocation(userText, expectsPlainLocation);
   const next: AgentInsight = { ...previous };
 
   if (userText.length > 6 && !next.issue) next.issue = userText.trim();
@@ -461,10 +464,14 @@ function getMissingQuestion(
   return "¿Quién aprueba presupuestos y por qué canal quieren recibir el seguimiento?";
 }
 
-function summarizeSignals(insight: AgentInsight) {
+function summarizeSignals(
+  insight: AgentInsight,
+  profileLocation?: string | null,
+) {
   const parts = [
     insight.service && `rubro ${insight.service}`,
-    insight.location && `zona ${insight.location}`,
+    (insight.location || profileLocation) &&
+      `zona ${insight.location || profileLocation}`,
     insight.urgency && `urgencia ${insight.urgency.toLowerCase()}`,
     insight.companyType?.toLowerCase(),
     insight.units,
@@ -477,7 +484,7 @@ function buildReply(
   insight: AgentInsight,
   profileLocation?: string | null,
 ) {
-  const signalSummary = summarizeSignals(insight);
+  const signalSummary = summarizeSignals(insight, profileLocation);
   const question = getMissingQuestion(mode, insight, profileLocation);
 
   if (mode === "buscar-servicio") {
@@ -491,7 +498,11 @@ function buildReply(
   return `Perfecto, te sigo: ${signalSummary}.\n\n${question}`;
 }
 
-function getSuggestions(mode: MicaChatMode, insight: AgentInsight) {
+function getSuggestions(
+  mode: MicaChatMode,
+  insight: AgentInsight,
+  profileLocation?: string | null,
+) {
   if (mode === "buscar-servicio") {
     if (!insight.service)
       return [
@@ -500,13 +511,8 @@ function getSuggestions(mode: MicaChatMode, insight: AgentInsight) {
         "Necesito limpieza",
         "Quiero reparar una puerta",
       ];
-    if (!insight.location)
-      return [
-        "Estoy en Córdoba capital",
-        "Zona Nueva Córdoba",
-        "Estoy en CABA",
-        "Barrio Centro",
-      ];
+    if (!insight.location && !profileLocation)
+      return ["Barrio Centro", "Zona céntrica"];
     if (!insight.urgency)
       return [
         "Es urgente para hoy",
@@ -525,7 +531,9 @@ function getSuggestions(mode: MicaChatMode, insight: AgentInsight) {
         "Hago reparaciones",
       ];
     if (!insight.coverage && !insight.location)
-      return ["Trabajo en Córdoba", "Zona norte", "Atiendo a domicilio"];
+      return profileLocation
+        ? [`Trabajo en ${profileLocation}`, "Zona norte", "Atiendo a domicilio"]
+        : ["Barrio Centro", "Zona norte", "Atiendo a domicilio"];
     if (!insight.experience)
       return [
         "Tengo 5 años de experiencia",
@@ -567,11 +575,13 @@ async function askMicaApi({
   message,
   insight,
   history,
+  knownLocation,
 }: {
   mode: MicaChatMode;
   message: string;
   insight: AgentInsight;
   history: Message[];
+  knownLocation?: string | null;
 }) {
   const { data, error } = await supabase.functions.invoke<MicaApiResponse>(
     "mica-chat",
@@ -580,6 +590,7 @@ async function askMicaApi({
         mode,
         message,
         insight,
+        knownLocation,
         history: history.map(({ author, text }) => ({ author, text })),
       },
     },
@@ -775,7 +786,7 @@ export default function MicaChat({ navigation, route }: Props) {
   );
   const checklist = getChecklist(mode, insight, profileLocation);
   const progress = getProgress(mode, insight, profileLocation);
-  const suggestions = getSuggestions(mode, insight);
+  const suggestions = getSuggestions(mode, insight, profileLocation);
 
   const addMicaMessage = useCallback((text: string) => {
     const timestamp = Date.now();
@@ -1072,8 +1083,13 @@ export default function MicaChat({ navigation, route }: Props) {
         message: cleanText,
         insight: nextInsight,
         history: messages,
+        knownLocation: profileLocation,
       });
       const apiInsight = { ...nextInsight, ...(apiAnswer.insightPatch ?? {}) };
+      const knownLocation = apiInsight.location || profileLocation || undefined;
+      const reply = asksForKnownLocation(apiAnswer.reply, knownLocation)
+        ? buildReply(mode, apiInsight, profileLocation)
+        : apiAnswer.reply ?? buildReply(mode, apiInsight, profileLocation);
 
       setInsight(apiInsight);
       setMessages((current) =>
@@ -1082,8 +1098,7 @@ export default function MicaChat({ navigation, route }: Props) {
             ? {
                 ...message,
                 id: `mica-${timestamp}`,
-                text:
-                  apiAnswer.reply ?? buildReply(mode, apiInsight, profileLocation),
+                text: reply,
               }
             : message,
         ),

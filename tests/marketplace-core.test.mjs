@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import test from "node:test";
 import {
   formatLocationScope,
@@ -16,6 +17,10 @@ import {
   getMicaSystemMessagePreview,
   parseMicaSystemMessage,
 } from "../lib/utils/micaMessage.ts";
+import {
+  asksForKnownLocation,
+  inferMicaLocation,
+} from "../lib/utils/micaLocation.ts";
 import {
   SERVICE_CONFIRMATION_COMMISSION_RATE,
   calculateServiceConfirmationFee,
@@ -155,4 +160,31 @@ test("interpreta una resolución de cancelación como evento del servicio", () =
   assert.equal(message?.kind, "cancellation_rejected");
   assert.equal(message?.eventId, "request-id");
   assert.equal(parseMicaSystemMessage(content), null);
+});
+
+test("MICA reconoce ciudades y barrios con tildes sin repetir la pregunta", () => {
+  assert.equal(inferMicaLocation("Zona Nueva Córdoba"), "Nueva Córdoba");
+  assert.equal(
+    inferMicaLocation("San Fernando del Valle de Catamarca", true),
+    "San Fernando del Valle de Catamarca",
+  );
+  assert.equal(
+    asksForKnownLocation(
+      "¿En qué ciudad o barrio hay que hacer el trabajo?",
+      "Nueva Córdoba",
+    ),
+    true,
+  );
+});
+
+test("MICA conserva un fallback remoto cuando no hay proveedor de IA", () => {
+  const functionSource = fs.readFileSync(
+    "supabase/functions/mica-chat/index.ts",
+    "utf8",
+  );
+
+  assert.match(functionSource, /buildLocalFallbackResponse/);
+  assert.match(functionSource, /if \(!apiKey\)/);
+  assert.match(functionSource, /knownLocation/);
+  assert.doesNotMatch(functionSource, /OPENAI_API_KEY is not configured/);
 });

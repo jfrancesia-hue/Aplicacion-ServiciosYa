@@ -1,6 +1,7 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 // import useAuthSession from '../lib/hooks/useAuthSession';
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import type { SignInResponse } from "@react-native-google-signin/google-signin";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as WebBrowser from "expo-web-browser";
 import type React from "react";
@@ -109,7 +110,7 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
 
   const handleLoginGoogle = async (
     errorResponse: string | null,
-    response: any,
+    response: SignInResponse | null,
   ) => {
     if (errorResponse) {
       setErrorMessage(errorResponse);
@@ -117,9 +118,15 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
     }
 
     // Iniciar sesión con el token de Google
+    const idToken = response?.data?.idToken;
+    if (!idToken) {
+      setErrorMessage("Google no devolviÃ³ un token de acceso vÃ¡lido.");
+      return;
+    }
+
     const { data, error } = await supabase.auth.signInWithIdToken({
       provider: "google",
-      token: response.data.idToken,
+      token: idToken,
     });
     if (error) {
       setErrorMessage("Error al iniciar sesión con Google.");
@@ -179,9 +186,9 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
       return;
     }
 
-    (navigation as any).reset({
+    navigation.reset({
       index: 0,
-      routes: [{ name: "InicioRouter" }],
+      routes: [{ name: "MainStack", params: { screen: "InicioRouter" } }],
     });
   };
 

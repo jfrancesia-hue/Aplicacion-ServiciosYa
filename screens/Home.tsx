@@ -46,9 +46,7 @@ type Props = NativeStackScreenProps<MainStackParamList, "Home">;
 function Home({ navigation, route }: Props) {
   usePrefetchData();
   const [busqueda, setBusqueda] = useState("");
-  const [showCountsOnly, setShowCountsOnly] = useState(false);
   const [chatVisible, setChatVisible] = useState(false);
-  const [videoVisible, setVideoVisible] = useState(false);
   const onboardingShown = useRef(false);
   const isGuest = useIsGuest()
   // Custom Hooks
@@ -144,7 +142,12 @@ function Home({ navigation, route }: Props) {
         <View style={styles.container}>
           <HomeHeader
             onSearch={setBusqueda}
-            onShowCountsOnlyChange={(value) => setShowCountsOnly(value)}
+            publishLabel={isWorker ? "Publicar servicio" : "Publicar trabajo"}
+            onPublishPress={() =>
+              navigation.navigate(
+                isWorker ? "OfrecerServicio" : "PublicarNecesidad",
+              )
+            }
           />
 
           {!isGuest && (isWorker ? askProviderProfileCompletion : askProfileCompletion) && (
@@ -170,7 +173,7 @@ function Home({ navigation, route }: Props) {
 
           {!isWorker && (
             <FloatingActionButtonMenu
-              onHelpPress={() => setVideoVisible(true)}
+              onHelpPress={() => navigation.navigate("Configuracion")}
               onChatPress={() => setChatVisible(true)}
             />
           )}
@@ -180,7 +183,7 @@ function Home({ navigation, route }: Props) {
               !isWorker ? () => navigation.navigate("PublicarNecesidad") : undefined
             }
             onBuscarServicioPress={() => handleMicaModePress("buscar-servicio")}
-            onOfrecerServicioPress={() => handleMicaModePress("ofrecer-servicio")}
+            onOfrecerServicioPress={() => navigation.navigate("OfrecerServicio")}
           />
           <ChatBotModal
             visible={chatVisible}

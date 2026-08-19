@@ -14,8 +14,25 @@ const FORCE_UPDATE_MESSAGE = {
   body: "Hay una nueva versión de ServiciosYa. Actualizá la app para seguir usándola."
 };
 
-function chunkArray(array: any[], chunkSize: number) {
-  const chunks = [];
+type MarketingCandidate = {
+  expo_token: string | null;
+};
+
+type ExpoPushNotification = {
+  to: string;
+  sound: "default";
+  title: string;
+  body: string;
+  data: { type: "force_update" };
+};
+
+type ExpoPushTicket = {
+  status: "ok" | "error";
+  details?: { error?: string };
+};
+
+function chunkArray<T>(array: T[], chunkSize: number): T[][] {
+  const chunks: T[][] = [];
   for (let i = 0; i < array.length; i += chunkSize) {
     chunks.push(array.slice(i, i + chunkSize));
   }
@@ -53,8 +70,10 @@ Deno.serve(async () => {
       return Response.json({ success: true, message: "No users to notify" });
     }
 
-    const validUsers = users.filter(
-      (u: any) => u.expo_token && u.expo_token.trim() !== ""
+    const candidates = users as MarketingCandidate[];
+    const validUsers = candidates.filter(
+      (user): user is { expo_token: string } =>
+        typeof user.expo_token === "string" && user.expo_token.trim() !== "",
     );
 
     if (validUsers.length === 0) {
@@ -64,7 +83,7 @@ Deno.serve(async () => {
     // ------------------------------------------------------------------
     // 2️⃣ ARMAR NOTIFICACIONES
     // ------------------------------------------------------------------
-    const notifications = validUsers.map((user: any) => ({
+    const notifications: ExpoPushNotification[] = validUsers.map((user) => ({
       to: user.expo_token,
       sound: "default",
       title: FORCE_UPDATE_MESSAGE.title,
@@ -98,9 +117,9 @@ Deno.serve(async () => {
         continue;
       }
 
-      const json = await res.json();
+      const json = (await res.json()) as { data?: ExpoPushTicket[] };
 
-      json.data.forEach((ticket: any, index: number) => {
+      (json.data ?? []).forEach((ticket, index) => {
         if (ticket.status === "ok") {
           sent++;
         } else {
@@ -124,15 +143,16 @@ Deno.serve(async () => {
 
     return Response.json({
       success: true,
-      total_users: users.length,
+      total_users: candidates.length,
       valid_tokens: validUsers.length,
       sent,
       failed,
     });
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("Force update error:", err);
+    const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json(
-      { success: false, error: err.message },
+      { success: false, error: message },
       { status: 500 }
     );
   }

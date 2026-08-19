@@ -1,6 +1,10 @@
 // components/BtnLoginGoogle.js
 import React from 'react';
-import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
+import {
+  GoogleSignin,
+  statusCodes,
+  type SignInResponse,
+} from "@react-native-google-signin/google-signin";
 import Ionicons from '@expo/vector-icons/Ionicons';
 import SocialButton from './SocialButton';
 
@@ -9,7 +13,14 @@ GoogleSignin.configure({
   iosClientId: '453761258131-6anu4ghpi4jv1df72490vo69vj23qq22.apps.googleusercontent.com'
 });
 
-export default function BtnLoginGoogle({ onLogin }:any) {
+type BtnLoginGoogleProps = {
+  onLogin: (
+    error: string | null,
+    response: SignInResponse | null,
+  ) => void | Promise<void>;
+};
+
+export default function BtnLoginGoogle({ onLogin }: BtnLoginGoogleProps) {
   const signIn = async () => {
     try {
       await GoogleSignin.hasPlayServices()
@@ -19,13 +30,17 @@ export default function BtnLoginGoogle({ onLogin }:any) {
       } else {
         onLogin('no ID token present!',null)
       }  
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('BtnLoginGoogle error', error);
-      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+      const errorCode =
+        error && typeof error === "object" && "code" in error
+          ? String(error.code)
+          : "";
+      if (errorCode === statusCodes.SIGN_IN_CANCELLED) {
         onLogin('user cancelled the login flow',null)
-      } else if (error.code === statusCodes.IN_PROGRESS) {
+      } else if (errorCode === statusCodes.IN_PROGRESS) {
         onLogin('operation (e.g. sign in) is in progress already',null)
-      } else if (error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+      } else if (errorCode === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
         onLogin('play services not available or outdated',null)
       } else {
         onLogin('Error al iniciar sesión con Google.',null)

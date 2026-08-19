@@ -133,9 +133,9 @@ function Configuracion({ navigation }: Props) {
 
             await supabase.auth.signOut();
             await removeCredentials();
-            (navigation as any).reset({
+            navigation.reset({
               index: 0,
-              routes: [{ name: "Login" }],
+              routes: [{ name: "AuthStack", params: { screen: "Login" } }],
             });
           },
         },

@@ -77,8 +77,12 @@ export default function AppleSignInButton() {
 
       Alert.alert("¡Sesión iniciada con Apple!");
 
-    } catch (error: any) {
-      if (error.code === "ERR_CANCELED") {
+    } catch (error: unknown) {
+      const errorCode =
+        error && typeof error === "object" && "code" in error
+          ? String(error.code)
+          : "";
+      if (errorCode === "ERR_CANCELED") {
         Alert.alert("Cancelado por el usuario");
       } else {
         console.error("Apple login error", error);

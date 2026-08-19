@@ -109,7 +109,7 @@ function InviteSheetView({
                     <Pressable
                         style={styles.copyButton}
                         onPress={handleCopyLink}
-                        android_ripple={{ color: colors.primaryLight + '40' }}
+                        android_ripple={{ color: `${colors.primaryLight}40` }}
                     >
                         <Ionicons name="copy-outline" size={16} color={colors.primary} />
                         <Text style={styles.copyButtonText}>Copiar enlace</Text>
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
         width: 48,
         height: 48,
         borderRadius: 12,
-        backgroundColor: colors.primaryLight + '20',
+        backgroundColor: `${colors.primaryLight}20`,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
@@ -198,10 +198,10 @@ const styles = StyleSheet.create({
     },
     descriptionCard: {
         padding: 16,
-        backgroundColor: colors.primaryLighter + '40',
+        backgroundColor: `${colors.primaryLighter}40`,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: colors.primaryLight + '60',
+        borderColor: `${colors.primaryLight}60`,
         marginBottom: 16,
     },
     descriptionText: {
@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         padding: 12,
-        backgroundColor: colors.primaryLight + '20',
+        backgroundColor: `${colors.primaryLight}20`,
         borderRadius: 8,
         gap: 8,
     },
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 8,
-        backgroundColor: colors.primaryLight + '20',
+        backgroundColor: `${colors.primaryLight}20`,
         alignItems: 'center',
         justifyContent: 'center',
     },

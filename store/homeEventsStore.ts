@@ -19,7 +19,7 @@ export const eventConfigSchema = z.object({
     delayAfterPrevious: z.number().int().nonnegative().optional(),
     expiresAt: z.number().int().nonnegative().optional(),
     requiresPreviousEvents: z.array(z.string()).optional(),
-    data: z.record(z.string(), z.any()).optional(),
+    data: z.record(z.string(), z.unknown()).optional(),
     blockOnDismiss: z.boolean().optional().default(true),
     blockOnComplete: z.boolean().optional().default(true),
 });
@@ -30,7 +30,7 @@ export interface HomeEventComponentProps {
     eventId: string;
     onDismiss: () => void;
     onComplete: () => void;
-    data?: Record<string, any>;
+    data?: Record<string, unknown>;
 }
 
 export interface HomeEvent extends HomeEventConfig {

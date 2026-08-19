@@ -42,10 +42,11 @@ export const useNotificationHandler = () => {
         return;
       }
 
-      (navigationRef.current.navigate as any)(
-        screen as keyof MainStackParamList,
-        params,
-      );
+      const navigate = navigationRef.current.navigate as unknown as (
+        routeName: keyof MainStackParamList,
+        routeParams?: unknown,
+      ) => void;
+      navigate(screen as keyof MainStackParamList, params);
     },
     [],
   );

@@ -98,7 +98,7 @@ export default function PerfilesPendientes() {
     <View style={styles.perfilCard}>
       <View style={styles.headerCard}>
         <Image
-          source={{ uri: item.foto_perfil || 'https://ui-avatars.com/api/?background=00B8A9&color=fff&name=' + (item.nombre || 'U') }}
+          source={{ uri: item.foto_perfil || `https://ui-avatars.com/api/?background=00B8A9&color=fff&name=${item.nombre || 'U'}` }}
           style={styles.avatar}
         />
         <View>

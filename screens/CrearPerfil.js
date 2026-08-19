@@ -155,8 +155,8 @@ try {
     .update({
       nombre,
       apellido,
-      edad: parseInt(edad),
-      dni: parseInt(dni),
+      edad: Number.parseInt(edad),
+      dni: Number.parseInt(dni),
       foto_perfil: urlPerfil,
       dni_frente: urlFrente,
       dni_dorso: urlDorso,
@@ -242,7 +242,7 @@ return (
       setEdad(text);
       setValidaciones((prev) => ({ 
   ...prev, 
-  edad: /^[0-9]+$/.test(text) && parseInt(text) >= 18
+  edad: /^[0-9]+$/.test(text) && Number.parseInt(text) >= 18
 }));
 
     }}

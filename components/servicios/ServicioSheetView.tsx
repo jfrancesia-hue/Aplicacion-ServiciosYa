@@ -53,9 +53,9 @@ function ServicioSheetView({
     const handleVisitProfile = () => {
         navigation.navigate('WorkerProfile', {
             id: String(servicio.user_id ?? ""),
-            name: (servicio as any).nombre ?? "",
-            profileImage: (servicio as any).user_foto_perfil ?? (servicio as any).foto_perfil ?? "",
-            isVerified: Boolean((servicio as any).verificado),
+            name: servicio.nombre ?? "",
+            profileImage: servicio.user_foto_perfil ?? servicio.foto_perfil ?? "",
+            isVerified: Boolean(servicio.verificado),
         });
     };
 
@@ -138,8 +138,8 @@ function ServicioSheetView({
                     <Suspense>
                         <ProviderInfoCard
                             user={String(servicio.user_id ?? "")}
-                            providerName={(servicio as any).nombre ?? ""}
-                            imageProfile={(servicio as any).user_foto_perfil ?? (servicio as any).foto_perfil ?? ""}
+                            providerName={servicio.nombre ?? ""}
+                            imageProfile={servicio.user_foto_perfil ?? servicio.foto_perfil ?? ""}
                             onPress={handleVisitProfile}
                         />
                     </Suspense>
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
         width: 40,
         height: 40,
         borderRadius: 12,
-        backgroundColor: colors.primaryLight + '20',
+        backgroundColor: `${colors.primaryLight}20`,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 12,
@@ -248,10 +248,10 @@ const styles = StyleSheet.create({
     priceCard: {
         flex: 2,
         padding: 16,
-        backgroundColor: colors.primaryLighter + '40',
+        backgroundColor: `${colors.primaryLighter}40`,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: colors.primaryLight + '60',
+        borderColor: `${colors.primaryLight}60`,
         alignItems: 'center',
     },
     priceAmount: {
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.lightGray,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: colors.primaryLight + '30',
+        borderColor: `${colors.primaryLight}30`,
         alignItems: 'center',
         justifyContent: 'center',
         gap: 4,
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
         backgroundColor: colors.lightGray,
         borderRadius: 12,
         borderWidth: 1,
-        borderColor: colors.primaryLight + '30',
+        borderColor: `${colors.primaryLight}30`,
         marginTop: 8,
     },
     creditsInfo: {

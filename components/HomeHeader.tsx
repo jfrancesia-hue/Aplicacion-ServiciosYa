@@ -13,9 +13,6 @@ import LocationChip from "./location/LocationChip";
 import { Ionicons } from "@expo/vector-icons";
 import { useMainNavigation } from "../lib/hooks/useNavigation";
 import OptionsButton from "./home/OptionsButton";
-import WorkerState from "./home/WorkerState";
-import OnlineFilterCheckBox from "./home/OnlineFilterCheckBox";
-import ProgressChip from "./home/ProgressChip";
 import { useIsGuest } from "../store/authStore";
 import { useNotificationStore } from "../store/notificationStore";
 import { useSuspenseQuery } from "@tanstack/react-query";
@@ -24,10 +21,11 @@ import { LinearGradient } from "expo-linear-gradient";
 
 interface HomeHeaderProps {
   onSearch: (query: string) => void;
-  onShowCountsOnlyChange: (value: boolean) => void;
+  onPublishPress: () => void;
+  publishLabel: string;
 }
 
-function HomeHeader({ onSearch, onShowCountsOnlyChange }: HomeHeaderProps) {
+function HomeHeader({ onSearch, onPublishPress, publishLabel }: HomeHeaderProps) {
   const navigation = useMainNavigation();
   const notificationsCount = useNotificationStore((state) => state.unreadCount);
   const isGuest = useIsGuest();
@@ -126,33 +124,26 @@ function HomeHeader({ onSearch, onShowCountsOnlyChange }: HomeHeaderProps) {
         </View>
 
         {!isGuest && (
-          <GuestContent onShowCountsOnlyChange={onShowCountsOnlyChange} />
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={publishLabel}
+            activeOpacity={0.85}
+            onPress={onPublishPress}
+            style={styles.publishButton}
+          >
+            <View style={styles.publishButtonCopy}>
+              <Ionicons name="megaphone-outline" size={20} color="#fff" />
+              <Text style={styles.publishButtonText}>{publishLabel}</Text>
+            </View>
+            <View style={styles.publishButtonIcon}>
+              <Ionicons name="chevron-forward" size={24} color="#fff" />
+            </View>
+          </TouchableOpacity>
         )}
       </View>
     </LinearGradient>
   );
 }
-
-const GuestContent = React.memo(
-  ({ onShowCountsOnlyChange }: { onShowCountsOnlyChange: (value: boolean) => void }) => {
-    const [soloConServicios, setSoloConServicios] = useState(false);
-
-    useEffect(() => {
-      onShowCountsOnlyChange(soloConServicios);
-    }, [soloConServicios, onShowCountsOnlyChange]);
-
-    return (
-      <>
-        {/* Botones "Servicios Online" y "Actualizar Disponibilidad" ocultos */}
-        {/* <View style={styles.filtroContainer}>
-          <OnlineFilterCheckBox style={styles.filtroColumn} />
-          <WorkerState style={styles.filtroColumn} />
-        </View> */}
-        <ProgressChip label="Mis Logros" />
-      </>
-    );
-  }
-);
 
 export default HomeHeader;
 
@@ -323,5 +314,33 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 12,
     gap: 8,
+  },
+  publishButton: {
+    minHeight: 50,
+    paddingLeft: 16,
+    paddingRight: 8,
+    borderRadius: 25,
+    backgroundColor: "rgba(0, 0, 0, 0.14)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  publishButtonCopy: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  publishButtonText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  publishButtonIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0, 0, 0, 0.18)",
+    alignItems: "center",
+    justifyContent: "center",
   },
 });

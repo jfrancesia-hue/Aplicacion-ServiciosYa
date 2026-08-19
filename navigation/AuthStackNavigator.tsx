@@ -12,11 +12,7 @@ import Register from "../screens/Register";
 import VerificacionPendiente from "../screens/VerificacionPendiente";
 import type { AuthStackParamList } from "../types/navigation";
 
-interface WithSafeAreaProps {
-  [key: string]: any;
-}
-
-function withSafeArea<P extends WithSafeAreaProps>(
+function withSafeArea<P extends object>(
   Component: React.ComponentType<P>,
 ) {
   return (props: P) => (

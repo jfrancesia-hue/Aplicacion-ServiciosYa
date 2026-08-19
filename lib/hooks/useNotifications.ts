@@ -147,14 +147,11 @@ export const useNotifications = () => {
   }, [registerForPushNotificationsAsync, saveTokenToSupabase]);
 
   useEffect(() => {
-    let notificationListener: Notifications.EventSubscription;
-    let responseListener: Notifications.EventSubscription;
-
     // Initialize notifications
     initializeNotifications();
 
     // Setup listeners
-    notificationListener = Notifications.addNotificationReceivedListener(
+    const notificationListener = Notifications.addNotificationReceivedListener(
       (notification) => {
         setNotification(notification);
         console.log("Notification received:", {
@@ -165,7 +162,7 @@ export const useNotifications = () => {
       },
     );
 
-    responseListener = Notifications.addNotificationResponseReceivedListener(
+    const responseListener = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         console.log("Notification interaction:", {
           actionIdentifier: response.actionIdentifier,

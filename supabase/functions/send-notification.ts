@@ -16,10 +16,14 @@ interface WebhookPayload {
   old_record: null | HiredService;
 }
 
-const supabase = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-);
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+if (!supabaseUrl || !serviceRoleKey) {
+  throw new Error("Missing Supabase credentials");
+}
+
+const supabase = createClient(supabaseUrl, serviceRoleKey);
 
 Deno.serve(async (req) => {
   const payload: WebhookPayload = await req.json();

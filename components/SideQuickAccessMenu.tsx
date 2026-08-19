@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   View,
 } from "react-native";
 
@@ -17,7 +16,7 @@ interface QuickAccessItem {
   subtitle: string;
   icon: keyof typeof Ionicons.glyphMap;
   gradient: [string, string, string];
-  badge: string;
+  badge?: string;
   onPress: () => void;
 }
 
@@ -130,11 +129,10 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
       onPress: () => onBuscarServicioPress?.(),
     },
     {
-      label: "Ofrecer trabajo",
-      subtitle: "Armá tu perfil de prestador",
+      label: "Publicar un servicio",
+      subtitle: "Mostrá tu trabajo a nuevos clientes",
       icon: "briefcase-outline",
       gradient: ["#ffb04a", "#fe971a", "#d86f00"],
-      badge: "PRO",
       onPress: () => onOfrecerServicioPress?.(),
     },
   ];
@@ -175,19 +173,11 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
     }
   };
 
-  const closeMenu = () => {
-    if (!isOpen) return;
-    Animated.timing(progress, {
-      toValue: 0,
-      duration: 200,
-      easing: Easing.in(Easing.cubic),
-      useNativeDriver: true,
-    }).start(() => setIsOpen(false));
-  };
-
   const handleItemPress = (action: () => void) => {
-    closeMenu();
-    setTimeout(action, 180);
+    progress.stopAnimation();
+    progress.setValue(0);
+    setIsOpen(false);
+    action();
   };
 
   const rotateInterpolate = progress.interpolate({
@@ -217,8 +207,10 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
   });
 
   return (
-    <TouchableWithoutFeedback onPress={closeMenu}>
-      <View style={styles.container}>
+      <View
+        pointerEvents="box-none"
+        style={[styles.container, { height: 96 + items.length * 78 }]}
+      >
         {isOpen &&
           items.map((item, index) => {
             const verticalOffset = -(84 + index * 78);
@@ -262,9 +254,11 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
                       <Ionicons name={item.icon} size={21} color="#fff" />
                     </View>
                     <View style={styles.itemCopy}>
-                      <View style={styles.itemHeader}>
-                        <Text style={styles.badgeText}>{item.badge}</Text>
-                      </View>
+                      {item.badge && (
+                        <View style={styles.itemHeader}>
+                          <Text style={styles.badgeText}>{item.badge}</Text>
+                        </View>
+                      )}
                       <Text style={styles.labelText} numberOfLines={1}>
                         {item.label}
                       </Text>
@@ -339,7 +333,6 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
           </TouchableOpacity>
         </Animated.View>
       </View>
-    </TouchableWithoutFeedback>
   );
 };
 
@@ -348,6 +341,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     bottom: 70,
     left: 10,
+    width: 270,
     overflow: "visible",
   },
   menuItem: {
@@ -416,12 +410,17 @@ const styles = StyleSheet.create({
   },
   glowHalo: {
     position: "absolute",
+    bottom: 0,
+    left: 0,
     width: 62,
     height: 62,
     borderRadius: 31,
     backgroundColor: "#1ed4e8",
   },
   mainButtonWrapper: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
     flexDirection: "row",
     alignItems: "center",
   },
