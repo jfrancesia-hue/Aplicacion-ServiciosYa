@@ -23,11 +23,11 @@ editen o borren publicaciones.
 ## 2. Configurar Resend en el backend
 
 La API key de Resend nunca se incluye en Expo ni en el APK/AAB. Primero hay que
-verificar `serviciosya.com` en Resend con los registros DNS que indique el
+verificar `serviciosya.site` en Resend con los registros DNS que indique el
 proveedor. Luego configurar en el Supabase de staging:
 
 ```powershell
-npx supabase secrets set RESEND_API_KEY="<resend-api-key>" RESEND_WEBHOOK_SECRET="<webhook-signing-secret>" PROVIDER_EMAIL_FROM="ServiciosYa <notificaciones@serviciosya.com>" PROVIDER_EMAIL_LEGAL_ADDRESS="<domicilio-legal>" EMAIL_UNSUBSCRIBE_SECRET="<secreto-aleatorio-largo>" PROVIDER_PROFILE_URL="solucionesya://completar-perfil" --project-ref <staging-project-ref>
+npx supabase secrets set RESEND_API_KEY="<resend-api-key>" RESEND_WEBHOOK_SECRET="<webhook-signing-secret>" PROVIDER_EMAIL_FROM="ServiciosYa <perfiles@serviciosya.site>" PROVIDER_EMAIL_LEGAL_ADDRESS="TORI SERVICIOS S.A.S. - Av. Republica de China 745, Mza. 7, Lote 1, Cordoba, Argentina" EMAIL_UNSUBSCRIBE_SECRET="<secreto-aleatorio-largo>" PROVIDER_PROFILE_URL="solucionesya://completar-perfil" --project-ref <staging-project-ref>
 ```
 
 Configurar en Resend el webhook:
