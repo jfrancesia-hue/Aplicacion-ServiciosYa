@@ -323,7 +323,7 @@ function WorkerDetailModal({
       Alert.alert("Error", "No se pudo identificar al profesional.");
       return;
     }
-    const url = `https://tooriserviciosya.com/PerfileProfesionales.php?ids=${encodeURIComponent(worker.id)}`;
+    const url = `https://serviciosya.site/PerfileProfesionales.php?ids=${encodeURIComponent(worker.id)}`;
     const nombre = worker.nombre?.trim();
     const message = nombre
       ? `Mirá el perfil de ${nombre} en Servicios Ya: ${url}`

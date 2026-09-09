@@ -165,10 +165,10 @@
       "@react-native-community/datetimepicker"
     ],
     "extra": {
-      "serviciosYaSyncBaseUrl": "https://tooriserviciosya.com",
+      "serviciosYaSyncBaseUrl": "https://serviciosya.site",
       "serviciosYaAppSyncToken": "",
       "serviciosYaBridge": {
-        "baseUrl": "https://tooriserviciosya.com/api/app"
+        "baseUrl": "https://serviciosya.site/api/app"
       },
       "eas": {
         "projectId": "aea4aff9-1e66-4a9c-a2e7-17402b7bc1f1"

@@ -3,7 +3,7 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const retiredBrand = ["too", "ri"].join("");
-const allowedWebOrigin = `https://${retiredBrand}serviciosya.com`;
+const allowedWebOrigin = "https://serviciosya.site";
 const legacySharedTokenName = [
   retiredBrand.toUpperCase(),
   "_APP_SYNC_TOKEN",

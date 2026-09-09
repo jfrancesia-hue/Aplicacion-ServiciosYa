@@ -16,7 +16,7 @@ type ServiciosYaBridgeExtra = {
 
 const extra = (Constants.expoConfig?.extra ?? {}) as ServiciosYaBridgeExtra;
 
-const DEFAULT_BASE_URL = "https://tooriserviciosya.com/api/app";
+const DEFAULT_BASE_URL = "https://serviciosya.site/api/app";
 
 export const SERVICIOSYA_BRIDGE_BASE_URL =
   process.env.EXPO_PUBLIC_SERVICIOSYA_APP_API_BASE_URL ||

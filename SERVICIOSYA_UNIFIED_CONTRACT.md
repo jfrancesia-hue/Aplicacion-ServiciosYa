@@ -55,15 +55,14 @@ Endpoints existentes en el repo web:
 
 La app usa `lib/serviciosYaBridge.ts` para estos endpoints.
 
-El hostname técnico continúa siendo `https://tooriserviciosya.com` por
-compatibilidad de infraestructura. Esa URL es la única excepción donde puede
-permanecer el nombre comercial retirado; módulos, variables y textos se nombran
-ServiciosYa.
+`https://serviciosya.site` es el hostname comercial y canónico. El hostname
+anterior continúa operativo temporalmente para no romper versiones ya
+instaladas; módulos, variables y textos se nombran ServiciosYa.
 
 Variables requeridas para build/app:
 
 ```env
-EXPO_PUBLIC_SERVICIOSYA_APP_API_BASE_URL=https://tooriserviciosya.com/api/app
+EXPO_PUBLIC_SERVICIOSYA_APP_API_BASE_URL=https://serviciosya.site/api/app
 # Fallback MVP opcional; la app intenta usar primero la sesión Supabase del usuario.
 EXPO_PUBLIC_SERVICIOSYA_APP_SYNC_TOKEN=<mismo token compartido del webhook/.env>
 ```

@@ -18,9 +18,9 @@ Edge Functions autenticadas y los flujos protegidos de la app.
 - `lib/serviciosYaBridge.ts`
 - `components/serviciosYa/PedidosMicaSection.tsx`
 
-El puente con la web se conserva bajo nombres ServiciosYa. Por compatibilidad,
-su hostname sigue siendo `https://tooriserviciosya.com`; esa URL es la única
-excepción donde permanece el nombre comercial retirado.
+El puente con la web se conserva bajo nombres ServiciosYa y usa
+`https://serviciosya.site` como hostname comercial. El hostname anterior
+continúa operativo temporalmente para versiones ya instaladas.
 
 ## Validación
 
