@@ -974,6 +974,7 @@ export default function MicaChat({ navigation, route }: Props) {
         servicioId: "",
         usuarioId1: selection.chat.participantA,
         usuarioId2: selection.chat.participantB,
+        providerId: selection.chat.providerId,
       });
     } catch (error) {
       addMicaMessage(

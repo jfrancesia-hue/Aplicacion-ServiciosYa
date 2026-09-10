@@ -69,6 +69,34 @@ const chatInputSource = await readFile(
   new URL("../components/chat/ChatInputBar.tsx", import.meta.url),
   "utf8",
 );
+const chatDeliveryMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260910144506_fix_provider_chat_message_delivery.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const chatContentGuardMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260910144901_fix_chat_content_guard_schema.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const canonicalChatFunctionsMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260910145638_repair_canonical_chat_function_definitions.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const chatFunctionPermissionsMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260910150006_lock_down_chat_function_permissions.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const cancellationMigration = await readFile(
   new URL(
     "../supabase/migrations/20260804150000_service_cancellation_refunds.sql",
@@ -303,11 +331,74 @@ test("la interacción distingue prestador, cliente y agenda posterior", () => {
   assert.match(chatInputSource, /canSendQuote/);
   assert.match(chatInputSource, /contentProtectionActive/);
   assert.match(chatInputSource, /Crear presupuesto/);
+  assert.match(chatSource, /providerId: conversationProviderId/);
+  assert.match(
+    chatSource,
+    /conversationProviderId\s*\?[\s\S]{0,80}conversationProviderId === user\.id/,
+  );
   assert.match(chatSource, /quoteState\.client_id === usuarioId/);
   assert.match(chatSource, /Aceptar y reservar/);
   assert.match(chatSource, /request_chat_quote_changes/);
   assert.match(chatSource, /propose_service_visit/);
   assert.match(chatSource, /respond_service_visit/);
+});
+
+test("el chat informa fallos y no depende de Realtime para mostrar el envío", () => {
+  assert.match(
+    chatInputSource,
+    /catch \(error\)[\s\S]{0,180}No se pudo enviar el mensaje/,
+  );
+  assert.match(chatSource, /data: insertedMessage[\s\S]{0,220}\.select\("\*"\)/);
+  assert.match(chatSource, /if \(insertedMessage\)[\s\S]{0,120}setMensajes/);
+});
+
+test("la métrica de respuesta usa únicamente columnas vigentes de mensajes", () => {
+  assert.match(chatDeliveryMigration, /message\.created_at/);
+  assert.doesNotMatch(chatDeliveryMigration, /message\.(?:creado_en|fecha_creacion)/);
+  assert.doesNotMatch(chatDeliveryMigration, /new\.(?:creado_en|fecha_creacion)/);
+  assert.match(chatDeliveryMigration, /servicio\.user_id = usuario\.id::text/);
+});
+
+test("la protección del chat calcula el desbloqueo con el esquema vigente", () => {
+  assert.doesNotMatch(chatContentGuardMigration, /c\.acceso_contratado/);
+  assert.match(
+    chatContentGuardMigration,
+    /from public\.service_confirmation_payments[\s\S]{0,100}status = 'approved'/,
+  );
+});
+
+test("presupuestos, pagos, reintegros y urgencias reparan referencias heredadas", () => {
+  for (const functionName of [
+    "send_chat_quote",
+    "confirm_service_reservation",
+    "reconcile_service_reservation_refund",
+    "select_urgent_service_provider_internal",
+  ]) {
+    assert.match(canonicalChatFunctionsMigration, new RegExp(functionName));
+  }
+  assert.match(canonicalChatFunctionsMigration, /LEGACY_CHAT_REFERENCE_REMAINS/);
+  assert.match(canonicalChatFunctionsMigration, /CANONICAL_CHAT_REPAIR_NOT_APPLIED/);
+});
+
+test("las funciones reparadas conservan privilegios mínimos", () => {
+  assert.match(
+    chatFunctionPermissionsMigration,
+    /revoke all on function public\.send_chat_quote[\s\S]{0,260}grant execute on function public\.send_chat_quote/,
+  );
+  assert.match(
+    chatFunctionPermissionsMigration,
+    /send_chat_quote[\s\S]{0,500}to authenticated, service_role/,
+  );
+  for (const functionName of [
+    "confirm_service_reservation",
+    "reconcile_service_reservation_refund",
+    "select_urgent_service_provider_internal",
+  ]) {
+    assert.match(
+      chatFunctionPermissionsMigration,
+      new RegExp(`grant execute on function public\\.${functionName}`),
+    );
+  }
 });
 
 test("la cancelación valida participantes y decide entre reintegro o revisión", () => {

@@ -61,8 +61,15 @@ const CHAT_PAGE_SIZE = 40;
 
 function ChatIndividual({ route }) {
   const navigation = useNavigation();
-  const { chatId, nombre, servicio, usuarioId1, usuarioId2, servicioId } =
-    route.params;
+  const {
+    chatId,
+    nombre,
+    servicio,
+    usuarioId1,
+    usuarioId2,
+    servicioId,
+    providerId: conversationProviderId,
+  } = route.params;
 
   const [mensajes, setMensajes] = useState([]);
   const [usuarioId, setUsuarioId] = useState(null);
@@ -306,9 +313,12 @@ function ChatIndividual({ route }) {
             .eq("id", user.id)
             .maybeSingle(),
         ]);
-      const currentUserIsProvider =
+      const hasProviderProfile =
         String(appProfile?.rol ?? "").toLowerCase() === "worker" ||
         String(marketplaceProfile?.rol ?? "").toLowerCase() === "prestador";
+      const currentUserIsProvider = conversationProviderId
+        ? conversationProviderId === user.id
+        : hasProviderProfile;
       setCanSendQuote(currentUserIsProvider);
       setIsProvider(currentUserIsProvider);
       await Promise.all([
@@ -328,7 +338,7 @@ function ChatIndividual({ route }) {
         messageChannelRef.current = null;
       }
     };
-  }, [chatId]);
+  }, [chatId, conversationProviderId]);
 
   // --- Cargar mensajes de la BD
   const cargarMensajes = async (userId) => {
@@ -501,11 +511,15 @@ function ChatIndividual({ route }) {
         return;
       }
 
-      const { error } = await supabase.from("mensajes").insert({
-        chat_id: chatId,
-        remitente_id: usuarioId,
-        contenido: cleanMessage,
-      });
+      const { data: insertedMessage, error } = await supabase
+        .from("mensajes")
+        .insert({
+          chat_id: chatId,
+          remitente_id: usuarioId,
+          contenido: cleanMessage,
+        })
+        .select("*")
+        .single();
 
       if (error) {
         console.error("Error al enviar mensaje:", error.message);
@@ -519,6 +533,18 @@ function ChatIndividual({ route }) {
                 : error.message?.includes("CHAT_BLOCKED")
                   ? "La conversación está bloqueada y no admite mensajes nuevos."
                   : "No se pudo enviar el mensaje. Intentá nuevamente.",
+        );
+      }
+
+      if (insertedMessage) {
+        setMensajes((previousMessages) =>
+          previousMessages.some((message) => message.id === insertedMessage.id)
+            ? previousMessages
+            : [...previousMessages, insertedMessage],
+        );
+        setTimeout(
+          () => flatListRef.current?.scrollToEnd({ animated: true }),
+          100,
         );
       }
 

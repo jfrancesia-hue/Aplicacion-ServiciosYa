@@ -239,7 +239,7 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
     const { data: servicio } = Number.isFinite(servicioIdNumber)
       ? await supabase
           .from("servicios")
-          .select("id, titulo, descripcion, categoria, horario")
+          .select("id, titulo, descripcion, categoria, horario, usuario_id, user_id")
           .eq("id", servicioIdNumber)
           .maybeSingle()
       : { data: null };
@@ -254,6 +254,7 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
       usuarioId1: participantA,
       usuarioId2: participantB,
       servicioId,
+      providerId: servicio?.usuario_id ?? servicio?.user_id ?? userId,
     });
   };
 

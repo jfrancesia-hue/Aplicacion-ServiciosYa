@@ -171,6 +171,7 @@ export default function UrgentRequestPanel({
         servicioId: "",
         usuarioId1: match.participantA,
         usuarioId2: match.participantB,
+        providerId: provider.provider_id,
       });
     } catch (error) {
       Alert.alert(

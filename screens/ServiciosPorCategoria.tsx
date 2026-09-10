@@ -426,6 +426,7 @@ function WorkerDetailModal({
         servicioId: "",
         usuarioId1: participantA,
         usuarioId2: participantB,
+        providerId: worker.id,
       });
     } catch (error: unknown) {
       console.error("[contactarChat] excepción:", error);

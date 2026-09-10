@@ -119,6 +119,7 @@ export default function PasarelaPagoWorker() {
       servicioId: notificacion.servicio_id ?? "",
       usuarioId1: participantA,
       usuarioId2: participantB,
+      providerId: trabajadorId,
     });
   };
 

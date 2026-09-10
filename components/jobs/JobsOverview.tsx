@@ -117,6 +117,7 @@ function JobCard({
           servicioId: job.paymentRecordId,
           usuarioId1: job.payerId,
           usuarioId2: job.providerId,
+          providerId: job.providerId,
         })
       }
     >

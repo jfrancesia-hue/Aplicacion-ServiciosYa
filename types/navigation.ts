@@ -41,6 +41,7 @@ export type MainStackParamList = {
     servicioId: string;
     usuarioId1: string;
     usuarioId2: string;
+    providerId?: string;
   };
   MisServicios: undefined;
   EditarServicio: { servicio: Partial<ServicioRow> & { id: number } };

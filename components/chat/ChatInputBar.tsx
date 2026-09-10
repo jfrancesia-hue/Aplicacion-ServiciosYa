@@ -224,6 +224,11 @@ function ChatInputBar({
     try {
       await onSend(message);
       setMessage("");
+    } catch (error) {
+      Alert.alert(
+        "No se pudo enviar el mensaje",
+        error instanceof Error ? error.message : "Intentá nuevamente.",
+      );
     } finally {
       setSending(false);
     }
