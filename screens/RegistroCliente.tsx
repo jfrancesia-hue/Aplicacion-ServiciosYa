@@ -145,9 +145,14 @@ export default function RegistroCliente() {
     if (!validarPaso()) return;
 
     try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuario no autenticado");
+
       // Subir imágenes del DNI al storage
       const subirImagen = async (uri: string, tipo: string) => {
-        const nombreArchivo = `${tipo}_${uuid.v4()}.jpg`;
+        const nombreArchivo = `${user.id}/${tipo}_${uuid.v4()}.jpg`;
         const { data, error } = await supabase.storage
           .from("fotos-perfil")
           .upload(nombreArchivo, {
@@ -168,11 +173,6 @@ export default function RegistroCliente() {
         : null;
 
       // Insertar en Supabase
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuario no autenticado");
-
       const { error: insertError } = await supabase
         .from("usuarios")
         .update({

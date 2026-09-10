@@ -99,7 +99,7 @@ export default function PasarelaPagoWorker() {
           chat_id: chatId,
           remitente_id: trabajadorId,
           contenido:
-            "IMPORTANTE\n\nEste chat fue creado exclusivamente para coordinar los detalles del servicio.\n\nSolucionesYa no se hace responsable por la ejecucion del servicio. Al finalizar, deja tu calificacion.",
+            "IMPORTANTE\n\nEste chat fue creado exclusivamente para coordinar los detalles del servicio.\n\nEl prestador es responsable por la ejecución técnica. Esto no limita tus derechos como consumidor ni las responsabilidades legales que correspondan a Servicios Ya. Al finalizar, dejá tu calificación.",
         },
         {
           chat_id: chatId,

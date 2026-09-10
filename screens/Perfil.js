@@ -215,7 +215,7 @@ export default function Perfil() {
       const response = await fetch(imagen.uri);
       const fileData = await response.arrayBuffer();
       const fileExt = imagen.uri.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `${userId}-perfil-${Date.now()}.${fileExt}`;
+      const fileName = `${userId}/perfil-${Date.now()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('imagenes')

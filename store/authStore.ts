@@ -10,6 +10,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { zustandStorage } from "../lib/storagev2";
 import { supabase } from "../lib/supabase";
+import { ensureUserProfile } from "../lib/utils/ensureUserProfile";
 import { useHomeEventsStore } from "./homeEventsStore";
 import { useNotificationStore } from "./notificationStore";
 
@@ -18,6 +19,15 @@ function identifyDeviceSafe(identifier: string | null) {
     identifyDevice(identifier);
   } catch (error) {
     console.warn("Vexo identifyDevice failed; auth continues", error);
+  }
+}
+
+async function ensureUserProfileSafe(user: User | null) {
+  if (!user) return;
+  try {
+    await ensureUserProfile(user);
+  } catch (error) {
+    console.warn("No se pudo asegurar el perfil público del usuario", error);
   }
 }
 
@@ -49,6 +59,7 @@ export const useAuthStore = create<AuthState>()(
       setSession: (session) => {
         const user = session?.user ?? null;
         const isGuest = user?.user_metadata?.email === "guest@example.com";
+        void ensureUserProfileSafe(user);
 
         // 2. Identify with Email
         if (user?.email) {
@@ -93,6 +104,7 @@ export const useAuthStore = create<AuthState>()(
               const user = session?.user ?? null;
               const isGuest =
                 user?.user_metadata?.email === "guest@example.com";
+              void ensureUserProfileSafe(user);
 
               if (user?.email) {
                 if (user.email === "guest@example.com") {
@@ -170,6 +182,7 @@ export const useAuthStore = create<AuthState>()(
 
           const user = session?.user ?? null;
           const isGuest = user?.user_metadata?.email === "guest@example.com";
+          void ensureUserProfileSafe(user);
 
           if (user?.email) {
             if (user.email === "guest@example.com") {

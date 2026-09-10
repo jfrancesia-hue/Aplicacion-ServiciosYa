@@ -143,14 +143,14 @@ const serviceSignals: Array<{ label: string; words: string[] }> = [
 serviceSignals.push(
   {
     label: "Traductor",
-    words: ["traductor", "traduccion", "traducciÃ³n", "ingles", "inglÃ©s"],
+    words: ["traductor", "traduccion", "traducción", "ingles", "inglés"],
   },
   {
     label: "Desarrollador web",
     words: [
       "web",
       "pagina",
-      "pÃ¡gina",
+      "página",
       "sitio",
       "programador",
       "software",
@@ -158,12 +158,12 @@ serviceSignals.push(
     ],
   },
   {
-    label: "AlbaÃ±ilerÃ­a",
-    words: ["albaÃ±il", "albanil", "obra", "revoque", "ladrillo", "techo"],
+    label: "Albañilería",
+    words: ["albañil", "albanil", "obra", "revoque", "ladrillo", "techo"],
   },
   {
-    label: "JardinerÃ­a",
-    words: ["jardin", "jardÃ­n", "pasto", "cesped", "cÃ©sped", "podar"],
+    label: "Jardinería",
+    words: ["jardin", "jardín", "pasto", "cesped", "césped", "podar"],
   },
 );
 
@@ -211,7 +211,7 @@ const modeConfig: Record<
       "Ej: soy electricista, trabajo en mi ciudad y tengo 5 años de experiencia...",
   },
   b2b: {
-    title: "SolucionesYa B2B",
+    title: "ServiciosYa B2B",
     subtitle:
       "Para inmobiliarias, consorcios y operaciones con muchos pedidos.",
     accent: "#344e7a",
@@ -429,7 +429,7 @@ function getMissingQuestion(
   if (mode === "buscar-servicio") {
     const readiness = getSearchReadiness(insight, profileLocation);
     if (!readiness.hasIssue)
-      return "Contame con tus palabras quÃ© problema hay que resolver o quÃ© necesitÃ¡s contratar.";
+      return "Contame con tus palabras qué problema hay que resolver o qué necesitás contratar.";
     if (!insight.service)
       return "¿Qué tipo de trabajo parece ser: plomería, electricidad, gas, limpieza u otro?";
     if (!readiness.hasLocation)
@@ -663,10 +663,10 @@ async function createMicaAppRequest({
     p_categoria: categoria,
     p_descripcion: descripcion || `Pedido de ${categoria} en ${zona}`,
     p_zona: zona,
-    p_nombre_cliente: profile?.nombre ?? null,
-    p_cliente_telefono: profile?.celular ? String(profile.celular) : null,
-    p_ciudad: requestCity,
-    p_provincia: requestProvince,
+    p_nombre_cliente: profile?.nombre ?? undefined,
+    p_cliente_telefono: profile?.celular ? String(profile.celular) : undefined,
+    p_ciudad: requestCity ?? undefined,
+    p_provincia: requestProvince ?? undefined,
     p_historial: history.map(({ author, text }) => ({ author, text })),
     p_metadata: {
       source_screen: "MicaChat",
@@ -890,7 +890,7 @@ export default function MicaChat({ navigation, route }: Props) {
         setCreatedOfertaId(request.oferta_id);
         setSearchStage("submitted");
         addMicaMessage(
-          `Listo, ya enviÃ© tu pedido a prestadores compatibles. Cuando respondan con presupuestos, vas a poder compararlos y confirmar el que prefieras.\n\nSeguimiento: ${request.oferta_id}`,
+          `Listo, ya envié tu pedido a prestadores compatibles. Cuando respondan con presupuestos, vas a poder compararlos y confirmar el que prefieras.\n\nSeguimiento: ${request.oferta_id}`,
         );
         await refreshOrderStatus(request.oferta_id, true);
       } catch (error) {
@@ -899,7 +899,7 @@ export default function MicaChat({ navigation, route }: Props) {
             ? error.message
             : "No se pudo crear el pedido.";
         addMicaMessage(
-          `Tengo los datos, pero todavÃ­a no pude crear el pedido real.\n\nDetalle: ${message}`,
+          `Tengo los datos, pero todavía no pude crear el pedido real.\n\nDetalle: ${message}`,
         );
       } finally {
         setIsCreatingRequest(false);

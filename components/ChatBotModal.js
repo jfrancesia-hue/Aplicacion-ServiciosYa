@@ -52,7 +52,7 @@ export default function ChatBotModal({ visible, onClose }) {
         <View style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.title}>Asistente de Soluciones Ya</Text>
+            <Text style={styles.title}>Asistente de Servicios Ya</Text>
             <TouchableOpacity onPress={onClose} style={styles.cerrarBtn}>
               <Text style={styles.cerrarTexto}>Cerrar</Text>
             </TouchableOpacity>

@@ -16,9 +16,9 @@ export interface LocationItem {
 }
 
 export interface LocationParams {
-  search_lat: number | null;
-  search_lon: number | null;
-  search_radius_meters: number | null;
+  search_lat?: number;
+  search_lon?: number;
+  search_radius_meters?: number;
 }
 
 export interface LocationIpInfo {

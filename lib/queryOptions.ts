@@ -1,8 +1,6 @@
-import type { Session } from "@supabase/supabase-js";
 import { queryOptions } from "@tanstack/react-query";
 import { getUserID } from "../store/authStore";
 import type { Coords } from "../types/location";
-import { query } from "./hooks/useUserSettings";
 import { supabase } from "./supabase";
 
 export const sessionQueryKey = ["session"];
@@ -56,23 +54,6 @@ export const notificationsQueryOptions = (userId: string) =>
         .from("notificaciones")
         .select("mensaje, leido")
         .eq("receptor_id", userId);
-
-      if (error) {
-        throw error;
-      }
-      return data;
-    },
-  });
-
-export const messagesQueryOptions = (userId: string) =>
-  queryOptions({
-    queryKey: ["user", "messages", userId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("mensajes")
-        .select("id")
-        .eq("receptor_id", userId)
-        .eq("leido_por_receptor", false);
 
       if (error) {
         throw error;
@@ -140,18 +121,25 @@ export const workerStatusQueryOptions = queryOptions({
 export const locationIpInfoQueryOptions = queryOptions<Coords>({
   queryKey: ["user", "location", "api"],
   queryFn: async () => {
-    const response = await fetch("http://ip-api.com/json/");
+    const response = await fetch("https://ipwho.is/");
     if (!response.ok) {
-      throw new Error(`ip-api.com returned ${response.status}`);
+      throw new Error(`ipwho.is returned ${response.status}`);
     }
     const data = await response.json();
+    if (
+      data.success !== true ||
+      typeof data.latitude !== "number" ||
+      typeof data.longitude !== "number"
+    ) {
+      throw new Error(data.message || "No se pudo estimar la ubicación por IP.");
+    }
     return {
-      latitude: data.lat,
-      longitude: data.lon,
+      latitude: data.latitude,
+      longitude: data.longitude,
       city: data.city || "N/A",
-      province: data.regionName || data.region || null,
+      province: data.region || null,
       locality: data.city || null,
-      country: data.countryCode || "N/A",
+      country: data.country_code || "N/A",
     };
   },
 

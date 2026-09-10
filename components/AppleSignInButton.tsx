@@ -3,6 +3,7 @@ import { Alert, Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import { supabase } from "../lib/supabase";
 import vexo from "../lib/vexo";
+import { ensureUserProfile } from "../lib/utils/ensureUserProfile";
 
 export default function AppleSignInButton() {
   const [loading, setLoading] = React.useState(false);
@@ -51,32 +52,11 @@ export default function AppleSignInButton() {
         return;
       }
 
-      const { data: existingUser, error: fetchError } = await supabase
-        .from("usuarios")
-        .select("id")
-        .eq("id", userId)
-        .single();
-
-      console.log('existingUser ', existingUser);
-
-      // Si no se encuentra, insertarlo
-      if (existingUser == null) {
-        console.log('registrar usuario ');
-        const { error: insertError } = await supabase
-          .from("usuarios")
-          .insert([{ id: userId, email: userEmail }]);
-
-        if (insertError) {
-          console.error("Error insertando nuevo usuario:", insertError);
-          Alert.alert("Error", "No se pudo registrar el usuario.");
-          return;
-        }
-      }
+      await ensureUserProfile({ id: userId, email: userEmail });
 
       vexo.login("apple");
 
       Alert.alert("¡Sesión iniciada con Apple!");
-
     } catch (error: unknown) {
       const errorCode =
         error && typeof error === "object" && "code" in error

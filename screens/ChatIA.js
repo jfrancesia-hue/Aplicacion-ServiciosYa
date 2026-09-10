@@ -59,7 +59,7 @@ export default function Chat() {
         const ultimoMensaje = mensajesOrdenados?.[mensajesOrdenados.length - 1]?.contenido || 'Entra para comenzar a chatear';
 
         const { data: usuario } = await supabase
-          .from('usuarios')
+          .from('user_public_profiles')
           .select('nombre, foto_perfil')
           .eq('id', otroUsuarioId)
           .single();
@@ -124,7 +124,7 @@ export default function Chat() {
                 // Traer datos del usuario
                 const otroUsuarioId = chat.participant_a === userId ? chat.participant_b : chat.participant_a;
                 const { data: usuario } = await supabase
-                  .from('usuarios')
+                  .from('user_public_profiles')
                   .select('nombre, foto_perfil')
                   .eq('id', otroUsuarioId)
                   .single();

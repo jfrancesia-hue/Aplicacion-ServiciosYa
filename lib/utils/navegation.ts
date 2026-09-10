@@ -6,12 +6,12 @@ import * as Notifications from "expo-notifications";
 
 export const navegationLinkin: LinkingOptions<MainStackParamList | AuthStackParamList> = {
   // This is the prefix for your deep links, e.g., myapp://
-  prefixes: ["solucionesya://", Linking.createURL("/"), "https://inicio.serviciosya.info"],
+  prefixes: ["solucionesya://", Linking.createURL("/"), "https://serviciosya.site"],
   config: {
     screens: {
       NotificacionesScreen: "NotificacionesScreen",
       Perfil: "completar-perfil",
-      Register: "invite/:referralCode",
+      Register: "invite/:referralCode?",
       "Nueva contraseña": "reset-password",
 
     },

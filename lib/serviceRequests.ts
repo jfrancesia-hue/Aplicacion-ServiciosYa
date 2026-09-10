@@ -55,8 +55,8 @@ export async function createManualServiceRequest(
     p_categoria: input.category,
     p_descripcion: input.description,
     p_zona: input.zone,
-    p_ciudad: input.city ?? null,
-    p_provincia: input.province ?? null,
+    p_ciudad: input.city ?? undefined,
+    p_provincia: input.province ?? undefined,
     p_urgencia: input.urgency,
     p_responsable_herramientas: input.toolsResponsibility,
     p_cantidad_personas: input.teamSize,
@@ -112,8 +112,8 @@ export async function getWorkerServiceRequests(input: {
     {
       p_app_user_id: input.userId,
       p_oficios: input.trades,
-      p_ciudad: input.city ?? null,
-      p_provincia: input.province ?? null,
+      p_ciudad: input.city ?? undefined,
+      p_provincia: input.province ?? undefined,
       p_limit: input.limit ?? 30,
     },
   );

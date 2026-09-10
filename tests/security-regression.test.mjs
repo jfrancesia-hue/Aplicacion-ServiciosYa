@@ -97,6 +97,13 @@ const chatFunctionPermissionsMigration = await readFile(
   ),
   "utf8",
 );
+const publicApiHardeningMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260910162731_comprehensive_public_api_hardening.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const cancellationMigration = await readFile(
   new URL(
     "../supabase/migrations/20260804150000_service_cancellation_refunds.sql",
@@ -210,6 +217,27 @@ const consumerRequestsMigration = await readFile(
   ),
   "utf8",
 );
+const urgentProcessorScheduleRepair = await readFile(
+  new URL(
+    "../supabase/migrations/20260910175022_restore_secure_urgent_processor_schedule.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const anonymousConsumerRequestsMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260910171238_allow_safe_anonymous_consumer_requests.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const anonymousConsumerResponseMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260910171409_fix_anonymous_consumer_request_response.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const privateVerificationMigration = await readFile(
   new URL(
     "../supabase/migrations/20260812190000_private_verification_documents.sql",
@@ -231,6 +259,14 @@ const registrationLegalSources = (
       "../screens/RegistroTrabajador.tsx",
       "../screens/CrearPerfil.js",
       "../screens/LoginSeleccion.tsx",
+    ].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
+  )
+).join("\n");
+const serviceNoticeSources = (
+  await Promise.all(
+    [
+      "../screens/NotificacionesScreen.tsx",
+      "../screens/PasarelaPagoWorker.tsx",
     ].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
   )
 ).join("\n");
@@ -525,6 +561,16 @@ test("los procesadores programados exigen un secreto de Vault o service role", (
     scheduledProcessorsSecurityMigration,
     /x-marketplace-cron-secret/,
   );
+  assert.match(
+    urgentProcessorScheduleRepair,
+    /process-urgent-work-alerts-every-minute/,
+  );
+  assert.match(urgentProcessorScheduleRepair, /vault\.decrypted_secrets/);
+  assert.doesNotMatch(publicApiHardeningMigration, /cron\.unschedule\(\s*\d+/);
+  assert.match(
+    supabaseConfig,
+    /\[functions\.process-urgent-work-alerts\][\s\S]*?enabled = true[\s\S]*?verify_jwt = false/,
+  );
   for (const processor of [
     transactionalNotificationsFunction,
     urgentProcessor,
@@ -663,7 +709,8 @@ test("el resumen operativo distingue la comisi\u00f3n del pago del trabajo", () 
 });
 
 test("los flujos de registro integran documentos legales versionados sin descargo absoluto", () => {
-  assert.match(legalConstants, /inicio\.serviciosya\.info/);
+  assert.match(legalConstants, /serviciosya\.site/);
+  assert.doesNotMatch(legalConstants, /serviciosya\.info/);
   assert.match(registrationLegalSources, /LegalDocument/);
   assert.match(registrationLegalSources, /document: ["']terms["']/);
   assert.match(registrationLegalSources, /document: ["']privacy["']/);
@@ -673,6 +720,8 @@ test("los flujos de registro integran documentos legales versionados sin descarg
     registrationLegalSources,
     /no asume responsabilidad alguna/i,
   );
+  assert.doesNotMatch(serviceNoticeSources, /no se hace responsable/i);
+  assert.match(serviceNoticeSources, /no limita tus derechos como consumidor/i);
 });
 
 test("arrepentimiento y baja pueden pedirse sin iniciar sesión y llegan al panel", () => {
@@ -682,6 +731,18 @@ test("arrepentimiento y baja pueden pedirse sin iniciar sesión y llegan al pane
   );
   assert.match(consumerRequestsMigration, /request_code/);
   assert.match(consumerRequestsMigration, /interval '24 hours'/);
+  assert.match(anonymousConsumerRequestsMigration, /security invoker/i);
+  assert.match(
+    anonymousConsumerRequestsMigration,
+    /grant execute on function public\.submit_consumer_right_request[\s\S]*to anon/i,
+  );
+  assert.match(anonymousConsumerRequestsMigration, /guard_consumer_right_request/i);
+  assert.match(anonymousConsumerRequestsMigration, /consumer_request_rate_limit/i);
+  assert.match(anonymousConsumerResponseMigration, /insert into public\.consumer_right_requests/i);
+  assert.doesNotMatch(
+    anonymousConsumerRequestsMigration,
+    /create or replace function public\.submit_consumer_right_request[\s\S]*?security definer/i,
+  );
   assert.match(operationalDashboard, /consumer-right-requests/);
   assert.match(registrationLegalSources, /BOTÓN DE ARREPENTIMIENTO/);
   assert.match(registrationLegalSources, /BOTÓN DE BAJA DE SERVICIO/);

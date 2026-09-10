@@ -1,7 +1,3 @@
-export const config = {
-  verify_jwt: false,
-};
-
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const EXPO_API_URL = "https://exp.host/--/api/v2/push/send";
@@ -39,13 +35,30 @@ function chunkArray<T>(array: T[], chunkSize: number): T[][] {
   return chunks;
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   const SUPABASE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
   const EXPO_ACCESS_TOKEN = Deno.env.get("EXPO_ACCESS_TOKEN");
 
-  if (!SUPABASE_URL || !SUPABASE_KEY || !EXPO_ACCESS_TOKEN) {
+  if (!SUPABASE_URL || !SUPABASE_KEY || !SUPABASE_ANON_KEY || !EXPO_ACCESS_TOKEN) {
     return new Response("Missing env vars", { status: 500 });
+  }
+
+  const authorization = req.headers.get("Authorization");
+  if (!authorization) {
+    return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  const caller = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false },
+    global: { headers: { Authorization: authorization } },
+  });
+  const { data: isAdmin, error: adminError } = await caller.rpc(
+    "is_operational_admin",
+  );
+  if (adminError || isAdmin !== true) {
+    return Response.json({ success: false, error: "Forbidden" }, { status: 403 });
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
@@ -136,7 +149,7 @@ Deno.serve(async () => {
     // ------------------------------------------------------------------
     if (tokensToDeactivate.length > 0) {
       await supabase
-        .from("users") // ⚠️ si esto ya estaba en la otra función, dejalo igual
+        .from("usuarios")
         .update({ expo_token: null })
         .in("expo_token", tokensToDeactivate);
     }

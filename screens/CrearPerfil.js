@@ -102,7 +102,7 @@ const subirImagen = async (uri, nombreBase, privada = false) => {
 const user = (await supabase.auth.getUser()).data.user;
 const nombreArchivo = privada
   ? `${user.id}/${nombreBase}-${Date.now()}.jpg`
-  : `${user.id}-${nombreBase}-${Date.now()}.jpg`;
+  : `${user.id}/${nombreBase}-${Date.now()}.jpg`;
 const bucket = privada ? VERIFICATION_DOCUMENTS_BUCKET : 'imagenes';
 
 const fileData = await FileSystem.readAsStringAsync(uri, {
@@ -156,7 +156,7 @@ try {
       nombre,
       apellido,
       edad: Number.parseInt(edad),
-      dni: Number.parseInt(dni),
+      dni: dni.trim(),
       foto_perfil: urlPerfil,
       dni_frente: urlFrente,
       dni_dorso: urlDorso,

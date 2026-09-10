@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,110 +6,66 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-} from 'react-native';
-import { supabase } from '../lib/supabase';
+} from "react-native";
+import { supabase } from "../lib/supabase";
 
-export default function VerificacionPendiente({ navigation }) {
-  const [verificado, setVerificado] = useState(false);
+export default function VerificacionPendiente({ navigation, route }) {
   const [cargando, setCargando] = useState(false);
-
-  useEffect(() => {
-    const intervalo = setInterval(async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (data?.user?.email_confirmed_at) {
-        setVerificado(true);
-        clearInterval(intervalo);
-      }
-    }, 3000); // verificar cada 3 segundos
-
-    return () => clearInterval(intervalo);
-  }, []);
-
-  const manejarContinuar = async () => {
-    setCargando(true);
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
-
-    if (userError || !user) {
-      Alert.alert('Error', 'No se pudo obtener el usuario.');
-      setCargando(false);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('usuarios')
-      .select('perfil_completo')
-      .eq('id', user.id)
-      .single();
-
-    if (error) {
-      Alert.alert('Error', 'No se pudo consultar el perfil.');
-      setCargando(false);
-      return;
-    }
-
-    if (data.perfil_completo === false) {
-      navigation.replace('Home'); // o la pantalla que corresponda
-    } else {
-      // En caso de tener ya el perfil completo
-      navigation.replace('Inicio'); // por si tenés otra pantalla
-    }
-
-    setCargando(false);
-  };
+  const email = route.params?.email?.trim().toLowerCase();
 
   const reenviarCorreoConfirmacion = async () => {
-    const {
-      data: { user },
-      error: userError,
-    } = await supabase.auth.getUser();
+    if (!email || cargando) return;
 
-    if (userError || !user) {
-      Alert.alert('Error', 'No se pudo obtener el usuario.');
-      return;
+    setCargando(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: "signup",
+        email,
+      });
+
+      if (error) throw error;
+      Alert.alert(
+        "Correo reenviado",
+        "Te enviamos un nuevo enlace de verificación.",
+      );
+    } catch (error) {
+      console.error("Error al reenviar la confirmación:", error);
+      Alert.alert(
+        "No se pudo reenviar",
+        "Esperá unos minutos y volvé a intentarlo.",
+      );
+    } finally {
+      setCargando(false);
     }
-
-    const { error } = await supabase.auth.resendConfirmationEmail(user.email);
-
-    if (error) {
-      Alert.alert('Error', 'No se pudo reenviar el correo de confirmación.');
-      return;
-    }
-
-    Alert.alert('Correo reenviado', 'Te hemos enviado un nuevo enlace de verificación.');
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Verifica tu correo</Text>
+      <Text style={styles.title}>Verificá tu correo</Text>
       <Text style={styles.text}>
-        Te enviamos un enlace de verificación a tu email. Una vez verificado, toca continuar.
+        Te enviamos un enlace de verificación a {email}. Después de confirmarlo,
+        volvé a iniciar sesión.
       </Text>
 
       <TouchableOpacity
-        style={[styles.button, !verificado && styles.disabledButton]}
-        onPress={manejarContinuar}
-        disabled={!verificado || cargando}
+        style={styles.button}
+        onPress={() => navigation.replace("Login")}
+      >
+        <Text style={styles.buttonText}>Volver a iniciar sesión</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.reenviarButton, cargando && styles.disabledButton]}
+        onPress={reenviarCorreoConfirmacion}
+        disabled={cargando || !email}
       >
         {cargando ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.buttonText}>Continuar</Text>
+          <Text style={styles.reenviarButtonText}>
+            Reenviar correo de verificación
+          </Text>
         )}
-      </TouchableOpacity>
-
-      {!verificado && (
-        <Text style={styles.textSmall}>Esperando verificación del email...</Text>
-      )}
-
-      <TouchableOpacity
-        style={styles.reenviarButton}
-        onPress={reenviarCorreoConfirmacion}
-      >
-        <Text style={styles.reenviarButtonText}>Reenviar correo de verificación</Text>
       </TouchableOpacity>
     </View>
   );
@@ -118,53 +74,50 @@ export default function VerificacionPendiente({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fefefe',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#fefefe",
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 30,
   },
   title: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: "700",
     marginBottom: 15,
-    textAlign: 'center',
+    textAlign: "center",
   },
   text: {
     fontSize: 16,
-    color: '#333',
+    color: "#333",
     marginBottom: 30,
-    textAlign: 'center',
+    textAlign: "center",
   },
   button: {
-    backgroundColor: '#4B9CD3',
+    backgroundColor: "#069eb3",
     paddingVertical: 15,
-    paddingHorizontal: 40,
+    paddingHorizontal: 32,
     borderRadius: 25,
     marginBottom: 15,
   },
   disabledButton: {
-    backgroundColor: '#aaa',
+    opacity: 0.6,
   },
   buttonText: {
-    color: '#fff',
-    fontWeight: '700',
+    color: "#fff",
+    fontWeight: "700",
     fontSize: 16,
   },
-  textSmall: {
-    fontSize: 14,
-    color: '#777',
-    marginTop: 10,
-  },
   reenviarButton: {
-    backgroundColor: '#ff9900',
+    backgroundColor: "#ff9900",
     paddingVertical: 15,
-    paddingHorizontal: 40,
+    paddingHorizontal: 28,
     borderRadius: 25,
-    marginTop: 15,
+    marginTop: 5,
+    minWidth: 260,
+    alignItems: "center",
   },
   reenviarButtonText: {
-    color: '#fff',
-    fontWeight: '700',
+    color: "#fff",
+    fontWeight: "700",
     fontSize: 16,
   },
 });

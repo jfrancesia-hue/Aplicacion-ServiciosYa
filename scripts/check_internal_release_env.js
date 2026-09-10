@@ -19,6 +19,13 @@ const missingVariables = requiredVariables.filter(
   (variableName) => !process.env[variableName]?.trim(),
 );
 
+if (missingVariables.length === 1) {
+  console.error(
+    "EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY deben configurarse juntas.",
+  );
+  process.exit(1);
+}
+
 if (missingVariables.length > 0 && !allowProductionForInternal) {
   console.error(
     "La build interna fue detenida para no usar Supabase de producción.",
@@ -27,7 +34,7 @@ if (missingVariables.length > 0 && !allowProductionForInternal) {
     `Configurá en el environment preview de EAS: ${missingVariables.join(", ")}`,
   );
   console.error(
-    "Si Jorge autoriza probar con datos reales, seteá EXPO_PUBLIC_INTERNAL_USES_PRODUCTION=true.",
+    "Para probar con datos reales, configurá EXPO_PUBLIC_INTERNAL_USES_PRODUCTION=true.",
   );
   process.exit(1);
 }

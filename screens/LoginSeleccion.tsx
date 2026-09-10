@@ -1,10 +1,8 @@
-import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 // import useAuthSession from '../lib/hooks/useAuthSession';
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import type { SignInResponse } from "@react-native-google-signin/google-signin";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import * as WebBrowser from "expo-web-browser";
-import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -13,7 +11,6 @@ import {
   ImageBackground,
   StyleSheet,
   Text,
-  ToastAndroid,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -25,6 +22,7 @@ import type { AuthStackParamList } from "../types/navigation";
 import AppleSignInButton from "../components/AppleSignInButton";
 import vexo from "../lib/vexo";
 import { useGoogleAuth } from "./useGoogleAuth";
+import { ensureUserProfile } from "../lib/utils/ensureUserProfile";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -32,34 +30,6 @@ type LoginSelectProps = NativeStackScreenProps<
   AuthStackParamList,
   "LoginSelect"
 >;
-
-const LoginButton = ({
-  icon,
-  label,
-  onPress,
-  style = {},
-}: {
-  icon: React.ComponentProps<typeof MaterialIcons>["name"];
-  label: string;
-  onPress: () => void;
-  style?: object;
-}) => (
-  <TouchableOpacity
-    style={[styles.loginButton, style]}
-    onPress={onPress}
-    accessibilityRole="button"
-    accessibilityLabel={label}
-    activeOpacity={0.85}
-  >
-    <MaterialIcons
-      name={icon}
-      size={22}
-      color="#faae4bff"
-      style={styles.loginButtonIcon}
-    />
-    <Text style={styles.loginButtonText}>{label}</Text>
-  </TouchableOpacity>
-);
 
 const ErrorBox = ({ message }: { message: string }) => (
   <View style={styles.errorBox}>
@@ -120,7 +90,7 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
     // Iniciar sesión con el token de Google
     const idToken = response?.data?.idToken;
     if (!idToken) {
-      setErrorMessage("Google no devolviÃ³ un token de acceso vÃ¡lido.");
+      setErrorMessage("Google no devolvió un token de acceso válido.");
       return;
     }
 
@@ -130,6 +100,7 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
     });
     if (error) {
       setErrorMessage("Error al iniciar sesión con Google.");
+      return;
     }
 
     // Verificar si el usuario existe en la tabla "usuarios"
@@ -142,27 +113,7 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
     }
 
     try {
-      const { data: existingUser, error: fetchError } = await supabase
-        .from("usuarios")
-        .select("id")
-        .eq("id", userId)
-        .single();
-
-      console.log("existingUser ", existingUser);
-
-      // Si no se encuentra, insertarlo
-      if (existingUser == null) {
-        console.log("registrar usuario ");
-        const { error: insertError } = await supabase
-          .from("usuarios")
-          .insert([{ id: userId, email: userEmail }]);
-
-        if (insertError) {
-          console.error("Error insertando nuevo usuario:", insertError);
-          setErrorMessage("Error al guardar información del usuario.");
-          return;
-        }
-      }
+      await ensureUserProfile({ id: userId, email: userEmail });
 
       vexo.login("google");
 
@@ -172,24 +123,6 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
       console.error("Error verificando/insertando usuario:", err);
       setErrorMessage("Error al procesar el usuario.");
     }
-  };
-
-  const handleGuestLogin = async () => {
-    vexo.login("guest");
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: "guest@example.com",
-      password: "guestpassword",
-    });
-
-    if (error) {
-      console.log("Error al loguear invitado:", error.message);
-      return;
-    }
-
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "MainStack", params: { screen: "InicioRouter" } }],
-    });
   };
 
   return (
@@ -267,12 +200,6 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
           </TouchableOpacity>
 
           <AppleSignInButton />
-          <LoginButton
-            icon="person-outline"
-            label="Entrar como invitado"
-            onPress={handleGuestLogin}
-            style={{ backgroundColor: "#F1F1F1", display: "none" }}
-          />
         </View>
 
         <TouchableOpacity onPress={() => navigation.navigate("Register", {})}>

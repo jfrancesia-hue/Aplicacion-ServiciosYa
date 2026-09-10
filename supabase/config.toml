@@ -11,7 +11,7 @@ entrypoint = "./functions/send_force_update_notification/index.ts"
 # static_files = [ "./functions/send_force_update_notification/*.html" ]
 
 [functions.process-urgent-work-alerts]
-enabled = false
+enabled = true
 verify_jwt = false
 entrypoint = "./functions/process-urgent-work-alerts/index.ts"
 
@@ -84,3 +84,29 @@ entrypoint = "./functions/operational-dashboard/index.ts"
 enabled = true
 verify_jwt = false
 entrypoint = "./functions/process-transactional-notifications/index.ts"
+
+[functions.send-message-notification]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/send-message-notification/index.ts"
+
+# Compatibility endpoints kept as authenticated 410 responses so old clients fail safely.
+[functions.app-update-notification]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/app-update-notification/index.ts"
+
+[functions.marketing-notification]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/marketing-notification/index.ts"
+
+[functions.push-hired-service]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/push-hired-service/index.ts"
+
+[functions.reminder-sender]
+enabled = true
+verify_jwt = true
+entrypoint = "./functions/reminder-sender/index.ts"

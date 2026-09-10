@@ -120,8 +120,14 @@ Deno.serve(async (req) => {
       .eq("id", payload.reminderId)
       .eq("user_id", payload.userId);
 
-    const profileUrl =
-      Deno.env.get("PROVIDER_PROFILE_URL") ?? "solucionesya://completar-perfil";
+    const canonicalProfileUrl =
+      "https://serviciosya.site/completar-perfil";
+    const configuredProfileUrl = Deno.env.get("PROVIDER_PROFILE_URL")?.trim();
+    const profileUrl = configuredProfileUrl?.startsWith(
+      "https://serviciosya.site/",
+    )
+      ? configuredProfileUrl
+      : canonicalProfileUrl;
     return new Response(null, {
       status: 302,
       headers: {

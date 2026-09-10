@@ -94,10 +94,10 @@ const CategoryList = ({
     }
 
     const { data } = await supabase
-      .from("usuarios")
+      .from("user_public_profiles")
       .select("categoria")
       .eq("rol", "worker")
-      .eq("perfilPublico", true);
+      .eq("perfil_publico", true);
     if (!data) return;
 
     const countsByKey: Record<string, number> = {};

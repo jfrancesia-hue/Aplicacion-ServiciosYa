@@ -15,7 +15,7 @@ export async function fetchUserNotifications() {
   const userIds = data.map((n) => n.emisor_id).filter((id) => id !== null);
 
   const { data: users } = await supabase
-    .from("usuarios")
+    .from("user_public_profiles")
     .select("id, foto_perfil")
     .in("id", userIds)
     .throwOnError();

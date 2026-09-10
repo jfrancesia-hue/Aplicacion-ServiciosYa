@@ -1,0 +1,7 @@
+<Files "assetlinks.json">
+  ForceType application/json
+</Files>
+
+<Files "apple-app-site-association">
+  ForceType application/json
+</Files>

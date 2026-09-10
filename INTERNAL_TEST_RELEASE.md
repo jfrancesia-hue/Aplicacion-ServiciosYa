@@ -3,37 +3,40 @@
 Esta guía prepara ServiciosYa para validar publicaciones, chat y el pago de la
 reserva del 10% antes de una publicación en producción.
 
-## 1. Separar los datos de prueba
+## 1. Entorno de datos de la prueba
 
 El perfil EAS `internal` genera un Android App Bundle para Google Play Internal
-Testing y se detiene si no encuentra un Supabase de pruebas configurado.
+Testing. Actualmente está autorizado de forma explícita a usar el proyecto
+Supabase de producción mediante `EXPO_PUBLIC_INTERNAL_USES_PRODUCTION=true`.
+Por eso las pruebas deben hacerse sólo con cuentas identificadas de QA y sin
+notificaciones masivas.
 
-Crear o elegir un proyecto Supabase de staging, aplicar allí las migraciones y
-funciones del repositorio y configurar estas variables en el environment
-`preview` de EAS:
+Si más adelante se crea un Supabase de staging, aplicar allí las migraciones y
+funciones del repositorio, configurar estas variables en el environment
+`preview` de EAS y cambiar `EXPO_PUBLIC_INTERNAL_USES_PRODUCTION` a `false`:
 
 ```powershell
 eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value "https://<project-ref>.supabase.co" --visibility plaintext
 eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value "<publishable-key>" --visibility plaintext
 ```
 
-No usar el proyecto `soluciones-ya` de producción para pruebas que creen,
-editen o borren publicaciones.
+Mientras se use producción, no editar ni borrar publicaciones de usuarios
+reales.
 
 ## 2. Configurar Resend en el backend
 
 La API key de Resend nunca se incluye en Expo ni en el APK/AAB. Primero hay que
 verificar `serviciosya.site` en Resend con los registros DNS que indique el
-proveedor. Luego configurar en el Supabase de staging:
+proveedor. Luego configurar en el proyecto Supabase que use la prueba interna:
 
 ```powershell
-npx supabase secrets set RESEND_API_KEY="<resend-api-key>" RESEND_WEBHOOK_SECRET="<webhook-signing-secret>" PROVIDER_EMAIL_FROM="ServiciosYa <perfiles@serviciosya.site>" PROVIDER_EMAIL_LEGAL_ADDRESS="TORI SERVICIOS S.A.S. - Av. Republica de China 745, Mza. 7, Lote 1, Cordoba, Argentina" EMAIL_UNSUBSCRIBE_SECRET="<secreto-aleatorio-largo>" PROVIDER_PROFILE_URL="solucionesya://completar-perfil" --project-ref <staging-project-ref>
+npx supabase secrets set RESEND_API_KEY="<resend-api-key>" RESEND_WEBHOOK_SECRET="<webhook-signing-secret>" PROVIDER_EMAIL_FROM="ServiciosYa <perfiles@serviciosya.site>" PROVIDER_EMAIL_LEGAL_ADDRESS="TORI SERVICIOS S.A.S. - Av. Republica de China 745, Mza. 7, Lote 1, Cordoba, Argentina" EMAIL_UNSUBSCRIBE_SECRET="<secreto-aleatorio-largo>" PROVIDER_PROFILE_URL="https://serviciosya.site/completar-perfil" --project-ref <project-ref>
 ```
 
 Configurar en Resend el webhook:
 
 ```text
-https://<staging-project-ref>.supabase.co/functions/v1/provider-email-webhook
+https://<project-ref>.supabase.co/functions/v1/provider-email-webhook
 ```
 
 ## 3. Verificaciones antes del build

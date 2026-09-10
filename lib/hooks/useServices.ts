@@ -98,7 +98,7 @@ export function useServicesCount() {
 
       const { data, error } = await supabase.rpc(
         "count_services_by_status_in_radius",
-        { ...locationParams, worker_status_filter: null, p_categoria: null }
+        { ...locationParams }
       );
 
       if (error) throw error;

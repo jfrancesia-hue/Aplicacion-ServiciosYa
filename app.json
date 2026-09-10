@@ -32,7 +32,7 @@
     "ios": {
       "buildNumber": "96",
       "associatedDomains": [
-        "applinks:inicio.serviciosya.info"
+        "applinks:serviciosya.site"
       ],
       "supportsTablet": false,
       "usesAppleSignIn": true,
@@ -62,13 +62,16 @@
       "package": "com.alex_6775.appTrabajo",
       "googleServicesFile": "./google-services.json",
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.RECORD_AUDIO",
         "android.permission.VIBRATE"
+      ],
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "intentFilters": [
         {
@@ -76,12 +79,12 @@
           "data": [
             {
               "scheme": "https",
-              "host": "inicio.serviciosya.info",
+              "host": "serviciosya.site",
               "pathPrefix": "/invite"
             },
             {
               "scheme": "https",
-              "host": "inicio.serviciosya.info",
+              "host": "serviciosya.site",
               "pathPrefix": "/completar-perfil"
             }
           ],
@@ -162,7 +165,18 @@
       ],
       "expo-web-browser",
       "expo-asset",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0",
+            "minSdkVersion": 24
+          }
+        }
+      ]
     ],
     "extra": {
       "serviciosYaSyncBaseUrl": "https://serviciosya.site",

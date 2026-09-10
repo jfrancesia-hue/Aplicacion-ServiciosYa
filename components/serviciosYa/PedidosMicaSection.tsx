@@ -87,8 +87,8 @@ async function getMicaAppFallbackPedidos(ctx: {
     {
       p_app_user_id: ctx.appUserId,
       p_oficios: ctx.oficios,
-      p_ciudad: ctx.ciudad ?? null,
-      p_provincia: ctx.provincia ?? null,
+      p_ciudad: ctx.ciudad,
+      p_provincia: ctx.provincia,
       p_limit: 10,
     },
   );

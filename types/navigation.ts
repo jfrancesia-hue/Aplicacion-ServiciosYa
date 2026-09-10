@@ -45,7 +45,6 @@ export type MainStackParamList = {
   };
   MisServicios: undefined;
   EditarServicio: { servicio: Partial<ServicioRow> & { id: number } };
-  VerificacionPendiente: undefined;
   NotificacionesScreen: undefined;
   DniPendiente: undefined;
   PerfilesPendientes: undefined;
@@ -66,7 +65,7 @@ export type AuthStackParamList = {
   LoginSelect: undefined;
   Login: undefined;
   Register: { referralCode?: string };
-  VerificacionPendiente: undefined;
+  VerificacionPendiente: { email: string };
   LegalDocument: { document: LegalDocumentKind };
   ConsumerRightRequest: {
     requestType: "withdrawal" | "service_cancellation";

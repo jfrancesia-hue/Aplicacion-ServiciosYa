@@ -85,7 +85,7 @@ async function fetchUserChats() {
     .filter((id) => id !== null);
 
   const { data: usuarios } = await supabase
-    .from("usuarios")
+    .from("user_public_profiles")
     .select("id, nombre, foto_perfil")
     .in("id", user_ids);
 
@@ -95,10 +95,13 @@ async function fetchUserChats() {
       getPartner(chat.participant_a, chat.participant_b, userId) ?? "";
     const user = (usuarios ?? []).find((item) => item.id === partnerID);
     if (!user) {
-      console.warn("[fetchUserChats] partner no encontrado en `usuarios`:", {
-        chatId: chat.id,
-        partnerID,
-      });
+      console.warn(
+        "[fetchUserChats] partner no encontrado en `user_public_profiles`:",
+        {
+          chatId: chat.id,
+          partnerID,
+        },
+      );
     }
 
     const lastMsg = chat.latest?.[0];

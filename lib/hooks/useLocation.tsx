@@ -22,8 +22,6 @@ export const fetchUserLocation = async (): Promise<LocationData> => {
     longitude,
   });
 
-  
-
   const city = addressResponse?.[0]?.city ?? null;
   const country = addressResponse?.[0]?.country ?? null;
 
@@ -37,36 +35,40 @@ export const fetchUserLocation = async (): Promise<LocationData> => {
 };
 
 export const fetchUserLocationFromIP = async (): Promise<LocationData> => {
-  const response = await fetch("http://ip-api.com/json/");
+  const response = await fetch("https://ipwho.is/");
   if (!response.ok) {
-    throw new Error(`${response.status} ${response.statusText}`);
+    throw new Error(`ipwho.is returned ${response.status}`);
   }
   const data = await response.json();
+  if (
+    data.success !== true ||
+    typeof data.latitude !== "number" ||
+    typeof data.longitude !== "number"
+  ) {
+    throw new Error(data.message || "No se pudo estimar la ubicación por IP.");
+  }
 
   return {
-    latitude: data.lat,
-    longitude: data.lon,
+    latitude: data.latitude,
+    longitude: data.longitude,
     city: data.city || "N/A",
-    country: data.countryCode || "N/A",
-    fullAddress: [], // No full address available from IP
+    country: data.country_code || "N/A",
+    fullAddress: [],
   };
 };
 
 export const userLocationQueryOptions = queryOptions({
   queryKey: ["user", "location"],
   queryFn: async () => {
-  try {
-    return await fetchUserLocation();
-  } catch (error) {
-    if (error instanceof Error && error.message === PERMISSION_DENIED_ERROR) {
-      return await fetchUserLocationFromIP();
+    try {
+      return await fetchUserLocation();
+    } catch (error) {
+      if (error instanceof Error && error.message === PERMISSION_DENIED_ERROR) {
+        return await fetchUserLocationFromIP();
+      }
+      throw error;
     }
-    throw error;
-  }
-},
-
-
-  
+  },
 
   // --- KEY CHANGE HERE ---
   // The data will never be considered stale. This prevents automatic refetches
@@ -100,7 +102,6 @@ export function useLocation() {
     // You can also get the status to differentiate initial loading from fetching
     isFetching,
   } = useQuery(userLocationQueryOptions);
-  
 
   return { location, isLoading, isError, error, refetch, isFetching };
 }

@@ -39,7 +39,7 @@ function InviteSheetView({
         }
     }, [referral_code]);
 
-    const inviteLink = `https://inicio.serviciosya.info/invite.html?referralCode=${userCode ?? ''}`;
+    const inviteLink = `https://serviciosya.site/invite/${encodeURIComponent(userCode ?? "")}`;
     const { dismiss } = useBottomSheetModal();
 
     const handleCopyLink = async () => {

@@ -970,12 +970,12 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
 
     try {
       const { data, error } = await supabase
-        .from("usuarios")
+        .from("user_public_profiles")
         .select(
           "id, nombre, edad, foto_perfil, provincia, ciudad, barrio, categoria, verificado, suscriptor, antiguedad",
         )
         .eq("rol", "worker")
-        .eq("perfilPublico", true)
+        .eq("perfil_publico", true)
         .order("creado_en", { ascending: false })
         .limit(1000);
 

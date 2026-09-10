@@ -16,6 +16,7 @@ const [
   preferencesFunction,
   emailWebhook,
   urgentMigration,
+  urgentScheduleRepair,
   urgentFunction,
   categoryScreen,
   contratarHook,
@@ -30,6 +31,9 @@ const [
   read("../supabase/functions/provider-email-webhook/index.ts"),
   read(
     "../supabase/migrations/20260804173000_secure_urgent_service_requests.sql",
+  ),
+  read(
+    "../supabase/migrations/20260910175022_restore_secure_urgent_processor_schedule.sql",
   ),
   read("../supabase/functions/urgent-service/index.ts"),
   read("../screens/ServiciosPorCategoria.tsx"),
@@ -110,6 +114,14 @@ test("el webhook de email verifica firma y ventana temporal", () => {
   assert.match(emailWebhook, /provider_message_id/);
 });
 
+test("el enlace de perfil del correo usa el dominio verificado", () => {
+  assert.match(
+    preferencesFunction,
+    /https:\/\/serviciosya\.site\/completar-perfil/,
+  );
+  assert.doesNotMatch(preferencesFunction, /solucionesya:\/\/completar-perfil/);
+});
+
 test("la urgencia es explícita, acotada por zona y operada desde servidor", () => {
   assert.match(
     config,
@@ -126,12 +138,20 @@ test("la urgencia es explícita, acotada por zona y operada desde servidor", () 
   assert.doesNotMatch(contratarHook, /createUrgentWorkAlert/);
 });
 
-test("el flujo urgente anterior y la repetición por chat quedan desactivados", () => {
+test("el flujo urgente heredado queda cerrado y el procesador seguro sigue activo", () => {
   assert.match(
     config,
-    /\[functions\.process-urgent-work-alerts\][\s\S]*?enabled = false/,
+    /\[functions\.process-urgent-work-alerts\][\s\S]*?enabled = true[\s\S]*?verify_jwt = false/,
   );
   assert.match(urgentMigration, /cron\.unschedule/);
+  assert.match(
+    urgentScheduleRepair,
+    /where jobname = 'process-urgent-work-alerts-every-minute'/,
+  );
+  assert.match(
+    urgentScheduleRepair,
+    /marketplace_scheduled_processors_secret/,
+  );
   assert.match(
     urgentMigration,
     /drop policy if exists "urgent_work_alerts_authenticated_insert"/,

@@ -189,7 +189,7 @@ export default function Notificaciones() {
 
 Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los detalles del servicio con el trabajador.
 
-⚠️ **Soluciones Ya no se hace responsable** por la calidad del servicio ofrecido ni por cualquier eventualidad durante su ejecución.
+⚠️ **Servicios Ya actúa como plataforma de intermediación.** El prestador es responsable por la ejecución técnica. Esto no limita tus derechos como consumidor ni las responsabilidades legales que correspondan a Servicios Ya.
 
 ⭐ **Al finalizar el servicio, desde este chat podrás dejar tu calificación y opinión sobre el trabajador para ayudar a otros usuarios.**
 
@@ -229,7 +229,7 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
 
     const otroUsuarioId = notificacion.emisor_id;
     const { data: usuario } = await supabase
-      .from("usuarios")
+      .from("user_public_profiles")
       .select("nombre, foto_perfil")
       .eq("id", otroUsuarioId)
       .single();

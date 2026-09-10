@@ -106,7 +106,7 @@ export async function getBlockedUsers() {
   if (blockedIds.length === 0) return [];
 
   const { data, error } = await supabase
-    .from("usuarios")
+    .from("user_public_profiles")
     .select("id,nombre,foto_perfil")
     .in("id", blockedIds);
 

@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.alex_6775.appTrabajo",
+      "sha256_cert_fingerprints": [
+        "06:A7:8B:F7:C0:78:86:A2:B9:08:80:27:32:67:BC:B4:E1:82:49:33:5B:16:77:F5:21:89:D5:86:00:76:13:1D",
+        "6D:A9:2F:A8:24:6F:47:36:93:85:F3:2A:4B:1B:4A:27:9F:41:01:B8:E0:6B:E2:5C:66:8F:D1:87:18:CC:FF:97"
+      ]
+    }
+  }
+]

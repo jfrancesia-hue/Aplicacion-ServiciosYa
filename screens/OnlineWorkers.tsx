@@ -5,7 +5,6 @@ import LoadingView from "../components/LoadingView";
 import ScreenContainer from "../components/ScreenContainer";
 import {
   useMutation,
-  useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { supabase } from "../lib/supabase";
@@ -16,7 +15,6 @@ import { BottomSheetModal, useBottomSheetModal } from "@gorhom/bottom-sheet";
 import SheetContainer from "../components/sheet/SheetContainer";
 import { useRef, useState } from "react";
 import { SheetButton } from "../components/sheet/SheetButton";
-import { getUserFromClient } from "../lib/utils/user";
 import showToast from "../lib/toast";
 import { getLocationParamsFromClient } from "../lib/utils/location";
 import BotonVolver from '../components/BotonVolver';
@@ -107,31 +105,16 @@ function OnlineWorkers() {
 }
 
 function SelectedServicioSheet({ servicio }: { servicio: Servicio | null }) {
-  const queryClient = useQueryClient();
   const { dismiss } = useBottomSheetModal();
   const { mutate, isPending } = useMutation({
     mutationFn: async () => {
       if (!servicio || !servicio.id || !servicio.user_id) {
         throw new Error("Servicio no definido");
       }
-      const user = getUserFromClient(queryClient);
-      await supabase
-        .from("servicios_contratados")
-        .insert({
-          servicio_id: servicio?.id,
-          contratante_id: user.id,
-          contratado_id: servicio?.user_id,
-        })
-        .throwOnError();
-      await supabase
-        .from("notificaciones")
-        .insert({
-          receptor_id: servicio?.user_id,
-          emisor_id: user.id,
-          mensaje: `Un usuario ha solicitado tu servicio: ${servicio.titulo}`,
-          servicio_id: `${servicio?.id}`
-        })
-        .throwOnError();
+      const { error } = await supabase.rpc("hire_service", {
+        p_service_id: servicio.id,
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       dismiss();

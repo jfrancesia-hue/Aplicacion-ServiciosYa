@@ -11,13 +11,24 @@ const releaseChannel =
 const configuredSupabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const configuredSupabaseKey =
   process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
+const allowProductionForInternal =
+  process.env.EXPO_PUBLIC_INTERNAL_USES_PRODUCTION === "true";
+const hasConfiguredUrl = Boolean(configuredSupabaseUrl);
+const hasConfiguredKey = Boolean(configuredSupabaseKey);
+
+if (hasConfiguredUrl !== hasConfiguredKey) {
+  throw new Error(
+    "EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY deben configurarse juntas.",
+  );
+}
 
 if (
   releaseChannel === "internal" &&
-  (!configuredSupabaseUrl || !configuredSupabaseKey)
+  !hasConfiguredUrl &&
+  !allowProductionForInternal
 ) {
   throw new Error(
-    "La build interna requiere EXPO_PUBLIC_SUPABASE_URL y EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY de un entorno de pruebas.",
+    "La build interna requiere Supabase de pruebas o EXPO_PUBLIC_INTERNAL_USES_PRODUCTION=true.",
   );
 }
 

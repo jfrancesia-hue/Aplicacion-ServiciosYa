@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "HHY5MJ22J3.com.alex-6775.appTrabajo",
+        "paths": [
+          "/invite",
+          "/invite/*",
+          "/completar-perfil",
+          "/completar-perfil/*"
+        ]
+      }
+    ]
+  }
+}

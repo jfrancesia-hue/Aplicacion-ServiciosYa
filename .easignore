@@ -38,8 +38,10 @@ yarn-error.*
 *.tsbuildinfo
 # Ignore files and directories that EAS Build doesn't need to build your app
 /docs
+/website
 
-# Ignore native directories (if you are using EAS Build)
+# EAS usa Continuous Native Generation; toda opción nativa necesaria debe
+# estar declarada en app.json/config plugins.
 /android
 /ios
 

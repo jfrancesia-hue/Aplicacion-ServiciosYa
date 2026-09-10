@@ -10,7 +10,7 @@ import { supabase } from '../lib/supabase';
 import BotonVolver from '../components/BotonVolver';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'
 import { useReferrer } from '../lib/hooks/useReferrer';
-import { useGrantAchievement } from '../lib/services/achievements.services';
+import { ensureUserProfile } from '../lib/utils/ensureUserProfile';
 
 export default function Register({ navigation }) {
   const [email, setEmail] = useState('');
@@ -18,6 +18,7 @@ export default function Register({ navigation }) {
   const [repeatPassword, setRepeatPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showMessage, setShowMessage] = useState(false);
+  const { getReferrer, setReferrer } = useReferrer({ capture: true });
 
   const validarPassword = (pass) => ({
     longitud: pass.length >= 8,
@@ -49,7 +50,18 @@ export default function Register({ navigation }) {
     return;
   }
 
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const normalizedEmail = email.trim().toLowerCase();
+  const referralCode = await getReferrer();
+  const { data, error } = await supabase.auth.signUp({
+    email: normalizedEmail,
+    password,
+    options: {
+      data: {
+        source_app: 'serviciosya',
+        referral_code: referralCode,
+      },
+    },
+  });
 
   if (error) {
     if (error.message.includes('already registered')) {
@@ -61,20 +73,10 @@ export default function Register({ navigation }) {
   }
 
   if (data.user) {
-    await supabase.from('usuarios').insert([{ id: data.user.id, email }]);
-
-    // ⬇️ IMPORTANTE: cargar los hooks recién ahora
-    const { getReferrer, setReferrer } = useReferrer({ capture: true });
-    const { refered } = useGrantAchievement();
-
-    // obtiene el codigo de referido
-    const code = await getReferrer();
-
-    // añade el referido al usuario si está disponible
-    await setReferrer(data.user.id);
-
-    // da el logro al usuario dueño del código
-    if (code) await refered(code);
+    if (data.session) {
+      await ensureUserProfile(data.user);
+      await setReferrer(data.user.id);
+    }
 
     setShowMessage(true);
   }

@@ -197,7 +197,7 @@ export default function RegistroTrabajadorSimplificado() {
     const user = (await supabase.auth.getUser()).data.user;
     const nombreArchivo = privada
       ? `${user?.id}/${nombre}-${Date.now()}`
-      : `${user?.id}-${nombre}-${Date.now()}`;
+      : `${user?.id}/${nombre}-${Date.now()}`;
     const bucket = privada ? VERIFICATION_DOCUMENTS_BUCKET : "imagenes";
     const base64 = await FileSystem.readAsStringAsync(uri, {
       encoding: FileSystem.EncodingType.Base64,

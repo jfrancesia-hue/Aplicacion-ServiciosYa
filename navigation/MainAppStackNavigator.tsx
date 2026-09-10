@@ -22,7 +22,6 @@ import Perfil from "../screens/Perfil";
 import PerfilPendienteDetalle from "../screens/PerfilPendienteDetalle";
 import PerfilesPendientes from "../screens/PerfilesPendientes";
 import ServiciosPorCategoria from "../screens/ServiciosPorCategoria";
-import VerificacionPendiente from "../screens/VerificacionPendiente";
 import pagoInicial from "../screens/pagoInicial";
 import type { MainStackParamList } from "../types/navigation";
 

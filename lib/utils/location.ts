@@ -14,6 +14,30 @@ import queryClient from "../reactQuery";
 import { useLocationStore } from "../../store/locationStore";
 import type { UserSettings } from "../hooks/useUserSettings";
 
+const LOCATION_TIMEOUT_MS = 10_000;
+
+function getCurrentPositionWithTimeout(): Promise<Location.LocationObject> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(
+      () => reject(new Error("La ubicación GPS demoró demasiado.")),
+      LOCATION_TIMEOUT_MS,
+    );
+
+    Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    }).then(
+      (position) => {
+        clearTimeout(timeout);
+        resolve(position);
+      },
+      (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
+
 export function locationQueryString(lat: number, lng: number): string {
   return `POINT(${lng} ${lat})`;
 }
@@ -71,7 +95,7 @@ export async function getLocationParamsFromClient(
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") {
       console.warn("Permiso de ubicación denegado");
-      return { search_lat: null, search_lon: null, search_radius_meters: null };
+      return {};
     }
 
     // 1️⃣ Si viene del AuthContext
@@ -97,13 +121,10 @@ export async function getLocationParamsFromClient(
         console.log("📍 Usando lastKnownPosition:", coords);
       }
     }
-    // TODO: Fix Slow Location
-    // 4️⃣ Si tampoco hay, pedir una nueva (más lenta)
+    // 4️⃣ Si tampoco hay, pedir una nueva con un límite para no trabar la app.
     if (!coords) {
       console.log("⏳ Obteniendo nueva ubicación GPS...");
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      const location = await getCurrentPositionWithTimeout();
       coords = location.coords;
     }
 
@@ -123,7 +144,7 @@ export async function getLocationParamsFromClient(
     };
   } catch (e) {
     console.warn("Error obteniendo ubicación:", e);
-    return { search_lat: null, search_lon: null, search_radius_meters: null };
+    return {};
   }
 }
 
@@ -200,10 +221,10 @@ export async function buildLocationParams(): Promise<LocationParams> {
 
   if (!location) {
     return {
-      search_lat: null,
-      search_lon: null,
+      search_lat: undefined,
+      search_lon: undefined,
       search_radius_meters: searchRadius,
-    }
+    };
   }
 
   return {

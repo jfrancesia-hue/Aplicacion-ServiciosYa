@@ -61,9 +61,9 @@ export async function createUrgentWorkAlert({
   const { data, error } = await supabase.rpc("create_urgent_work_alert", {
     p_worker_id: workerId,
     p_source: source,
-    p_category: category ?? null,
-    p_chat_id: chatId ?? null,
-    p_servicio_id: servicioId == null ? null : String(servicioId),
+    p_category: category ?? undefined,
+    p_chat_id: chatId ?? undefined,
+    p_servicio_id: servicioId == null ? undefined : String(servicioId),
     p_title: title,
     p_body: body,
     p_metadata: {

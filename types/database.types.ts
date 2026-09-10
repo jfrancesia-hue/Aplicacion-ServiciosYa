@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -11,31 +11,6 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
-  }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
   }
   public: {
     Tables: {
@@ -586,6 +561,103 @@ export type Database = {
             columns: ["chat_id"]
             isOneToOne: false
             referencedRelation: "chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_quotes: {
+        Row: {
+          accepted_at: string | null
+          amount_provider: number
+          chat_id: string
+          client_id: string
+          client_total: number
+          created_at: string
+          fee_amount: number
+          fee_rate: number
+          id: string
+          materials: string
+          message_id: string
+          notes: string | null
+          paid_at: string | null
+          provider_id: string
+          scope: string
+          status: string
+          supersedes_quote_id: string | null
+          timeframe: string
+          updated_at: string
+          validity_text: string
+          version: number
+          warranty: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          amount_provider: number
+          chat_id: string
+          client_id: string
+          client_total: number
+          created_at?: string
+          fee_amount: number
+          fee_rate?: number
+          id?: string
+          materials?: string
+          message_id: string
+          notes?: string | null
+          paid_at?: string | null
+          provider_id: string
+          scope: string
+          status?: string
+          supersedes_quote_id?: string | null
+          timeframe?: string
+          updated_at?: string
+          validity_text?: string
+          version: number
+          warranty?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          amount_provider?: number
+          chat_id?: string
+          client_id?: string
+          client_total?: number
+          created_at?: string
+          fee_amount?: number
+          fee_rate?: number
+          id?: string
+          materials?: string
+          message_id?: string
+          notes?: string | null
+          paid_at?: string | null
+          provider_id?: string
+          scope?: string
+          status?: string
+          supersedes_quote_id?: string | null
+          timeframe?: string
+          updated_at?: string
+          validity_text?: string
+          version?: number
+          warranty?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_quotes_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "chats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_quotes_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "mensajes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_quotes_supersedes_quote_id_fkey"
+            columns: ["supersedes_quote_id"]
+            isOneToOne: false
+            referencedRelation: "chat_quotes"
             referencedColumns: ["id"]
           },
         ]
@@ -1150,18 +1222,21 @@ export type Database = {
           cliente_id: string | null
           created_at: string
           estado: string | null
+          id: string
           servicio_id: number | null
         }
         Insert: {
           cliente_id?: string | null
           created_at?: string
           estado?: string | null
+          id?: string
           servicio_id?: number | null
         }
         Update: {
           cliente_id?: string | null
           created_at?: string
           estado?: string | null
+          id?: string
           servicio_id?: number | null
         }
         Relationships: []
@@ -2551,6 +2626,81 @@ export type Database = {
           },
         ]
       }
+      provider_communication_preferences: {
+        Row: {
+          marketing_email_enabled: boolean
+          unsubscribed_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          marketing_email_enabled?: boolean
+          unsubscribed_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          marketing_email_enabled?: boolean
+          unsubscribed_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      provider_profile_reminders: {
+        Row: {
+          clicked_at: string | null
+          created_at: string
+          delivered_at: string | null
+          error_message: string | null
+          id: string
+          missing_fields: string[]
+          opened_at: string | null
+          profile_score: number
+          provider_message_id: string | null
+          recipient_email: string
+          reminder_number: number
+          sent_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          clicked_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          missing_fields?: string[]
+          opened_at?: string | null
+          profile_score: number
+          provider_message_id?: string | null
+          recipient_email: string
+          reminder_number: number
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          clicked_at?: string | null
+          created_at?: string
+          delivered_at?: string | null
+          error_message?: string | null
+          id?: string
+          missing_fields?: string[]
+          opened_at?: string | null
+          profile_score?: number
+          provider_message_id?: string | null
+          recipient_email?: string
+          reminder_number?: number
+          sent_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ProviderTrade: {
         Row: {
           availableHours: Json
@@ -2759,19 +2909,107 @@ export type Database = {
           },
         ]
       }
+      service_cancellation_requests: {
+        Row: {
+          auto_refund: boolean
+          chat_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          payment_record_id: string
+          provider_status: string | null
+          reason_code: string
+          reason_detail: string | null
+          refund_amount: number | null
+          refund_id: string | null
+          request_code: string
+          requested_by: string
+          requester_role: string
+          resolution_note: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          auto_refund?: boolean
+          chat_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          payment_record_id: string
+          provider_status?: string | null
+          reason_code: string
+          reason_detail?: string | null
+          refund_amount?: number | null
+          refund_id?: string | null
+          request_code: string
+          requested_by: string
+          requester_role: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status: string
+          updated_at?: string
+        }
+        Update: {
+          auto_refund?: boolean
+          chat_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          payment_record_id?: string
+          provider_status?: string | null
+          reason_code?: string
+          reason_detail?: string | null
+          refund_amount?: number | null
+          refund_id?: string | null
+          request_code?: string
+          requested_by?: string
+          requester_role?: string
+          resolution_note?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_cancellation_requests_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "chats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_cancellation_requests_payment_record_id_fkey"
+            columns: ["payment_record_id"]
+            isOneToOne: false
+            referencedRelation: "service_confirmation_payments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       service_confirmation_payments: {
         Row: {
           amount_total: number
           approved_at: string | null
           budget_id: number | null
+          cancellation_reason: string | null
+          cancellation_request_id: string | null
+          cancellation_status: string
+          cancelled_by: string | null
           chat_id: string | null
+          chat_quote_id: string | null
           checkout_url: string | null
+          client_total: number | null
           commission_amount: number
           completed_at: string | null
           confirmation_message_id: string | null
           created_at: string
           currency: string
           estimated_units: number | null
+          fee_rate: number | null
           id: string
           job_status: string
           offer_id: number | null
@@ -2786,6 +3024,9 @@ export type Database = {
           provider_status: string | null
           quote_message_id: string | null
           reference_total_type: string | null
+          refund_amount: number | null
+          refund_id: string | null
+          refunded_at: string | null
           schedule_proposed_by: string | null
           schedule_round: number
           schedule_status: string
@@ -2796,19 +3037,31 @@ export type Database = {
           status: string
           unit_rate: number | null
           updated_at: string
+          visit_note: string | null
+          visit_proposed_by: string | null
+          visit_scheduled_for: string | null
+          visit_status: string
+          visit_updated_at: string | null
         }
         Insert: {
           amount_total: number
           approved_at?: string | null
           budget_id?: number | null
+          cancellation_reason?: string | null
+          cancellation_request_id?: string | null
+          cancellation_status?: string
+          cancelled_by?: string | null
           chat_id?: string | null
+          chat_quote_id?: string | null
           checkout_url?: string | null
+          client_total?: number | null
           commission_amount: number
           completed_at?: string | null
           confirmation_message_id?: string | null
           created_at?: string
           currency?: string
           estimated_units?: number | null
+          fee_rate?: number | null
           id?: string
           job_status?: string
           offer_id?: number | null
@@ -2823,6 +3076,9 @@ export type Database = {
           provider_status?: string | null
           quote_message_id?: string | null
           reference_total_type?: string | null
+          refund_amount?: number | null
+          refund_id?: string | null
+          refunded_at?: string | null
           schedule_proposed_by?: string | null
           schedule_round?: number
           schedule_status?: string
@@ -2833,19 +3089,31 @@ export type Database = {
           status?: string
           unit_rate?: number | null
           updated_at?: string
+          visit_note?: string | null
+          visit_proposed_by?: string | null
+          visit_scheduled_for?: string | null
+          visit_status?: string
+          visit_updated_at?: string | null
         }
         Update: {
           amount_total?: number
           approved_at?: string | null
           budget_id?: number | null
+          cancellation_reason?: string | null
+          cancellation_request_id?: string | null
+          cancellation_status?: string
+          cancelled_by?: string | null
           chat_id?: string | null
+          chat_quote_id?: string | null
           checkout_url?: string | null
+          client_total?: number | null
           commission_amount?: number
           completed_at?: string | null
           confirmation_message_id?: string | null
           created_at?: string
           currency?: string
           estimated_units?: number | null
+          fee_rate?: number | null
           id?: string
           job_status?: string
           offer_id?: number | null
@@ -2860,6 +3128,9 @@ export type Database = {
           provider_status?: string | null
           quote_message_id?: string | null
           reference_total_type?: string | null
+          refund_amount?: number | null
+          refund_id?: string | null
+          refunded_at?: string | null
           schedule_proposed_by?: string | null
           schedule_round?: number
           schedule_status?: string
@@ -2870,6 +3141,11 @@ export type Database = {
           status?: string
           unit_rate?: number | null
           updated_at?: string
+          visit_note?: string | null
+          visit_proposed_by?: string | null
+          visit_scheduled_for?: string | null
+          visit_status?: string
+          visit_updated_at?: string | null
         }
         Relationships: [
           {
@@ -2880,10 +3156,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "service_confirmation_payments_cancellation_request_id_fkey"
+            columns: ["cancellation_request_id"]
+            isOneToOne: false
+            referencedRelation: "service_cancellation_requests"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "service_confirmation_payments_chat_id_fkey"
             columns: ["chat_id"]
             isOneToOne: false
             referencedRelation: "chats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_confirmation_payments_chat_quote_id_fkey"
+            columns: ["chat_quote_id"]
+            isOneToOne: false
+            referencedRelation: "chat_quotes"
             referencedColumns: ["id"]
           },
           {
@@ -4042,6 +4332,109 @@ export type Database = {
           },
         ]
       }
+      urgent_service_candidates: {
+        Row: {
+          id: string
+          notified_at: string
+          provider_id: string
+          push_status: string | null
+          push_ticket_id: string | null
+          request_id: string
+          responded_at: string | null
+          status: string
+        }
+        Insert: {
+          id?: string
+          notified_at?: string
+          provider_id: string
+          push_status?: string | null
+          push_ticket_id?: string | null
+          request_id: string
+          responded_at?: string | null
+          status?: string
+        }
+        Update: {
+          id?: string
+          notified_at?: string
+          provider_id?: string
+          push_status?: string | null
+          push_ticket_id?: string | null
+          request_id?: string
+          responded_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "urgent_service_candidates_request_id_fkey"
+            columns: ["request_id"]
+            isOneToOne: false
+            referencedRelation: "urgent_service_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      urgent_service_requests: {
+        Row: {
+          category: string
+          chat_id: string | null
+          city: string
+          client_id: string
+          created_at: string
+          description: string
+          expires_at: string
+          id: string
+          matched_at: string | null
+          province: string
+          request_code: string
+          selected_provider_id: string | null
+          status: string
+          updated_at: string
+          urgency_window: string
+        }
+        Insert: {
+          category: string
+          chat_id?: string | null
+          city: string
+          client_id: string
+          created_at?: string
+          description: string
+          expires_at?: string
+          id?: string
+          matched_at?: string | null
+          province: string
+          request_code: string
+          selected_provider_id?: string | null
+          status?: string
+          updated_at?: string
+          urgency_window: string
+        }
+        Update: {
+          category?: string
+          chat_id?: string | null
+          city?: string
+          client_id?: string
+          created_at?: string
+          description?: string
+          expires_at?: string
+          id?: string
+          matched_at?: string | null
+          province?: string
+          request_code?: string
+          selected_provider_id?: string | null
+          status?: string
+          updated_at?: string
+          urgency_window?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "urgent_service_requests_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "chats"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       urgent_work_alerts: {
         Row: {
           assignment_round: number
@@ -4470,6 +4863,107 @@ export type Database = {
         }
         Relationships: []
       }
+      user_public_profiles: {
+        Row: {
+          antiguedad: number | null
+          apellido: string | null
+          barrio: string | null
+          categoria: string[] | null
+          ciudad: string | null
+          creado_en: string | null
+          descripcion: string | null
+          edad: number | null
+          experiencia: string | null
+          experiencia_academica: string | null
+          foto_perfil: string | null
+          horarios: string | null
+          id: string
+          nombre: string | null
+          perfil_publico: boolean
+          precio: string | null
+          provincia: string | null
+          rol: Database["public"]["Enums"]["user_role"]
+          suscriptor: boolean | null
+          updated_at: string
+          verificado: boolean | null
+        }
+        Insert: {
+          antiguedad?: number | null
+          apellido?: string | null
+          barrio?: string | null
+          categoria?: string[] | null
+          ciudad?: string | null
+          creado_en?: string | null
+          descripcion?: string | null
+          edad?: number | null
+          experiencia?: string | null
+          experiencia_academica?: string | null
+          foto_perfil?: string | null
+          horarios?: string | null
+          id: string
+          nombre?: string | null
+          perfil_publico?: boolean
+          precio?: string | null
+          provincia?: string | null
+          rol?: Database["public"]["Enums"]["user_role"]
+          suscriptor?: boolean | null
+          updated_at?: string
+          verificado?: boolean | null
+        }
+        Update: {
+          antiguedad?: number | null
+          apellido?: string | null
+          barrio?: string | null
+          categoria?: string[] | null
+          ciudad?: string | null
+          creado_en?: string | null
+          descripcion?: string | null
+          edad?: number | null
+          experiencia?: string | null
+          experiencia_academica?: string | null
+          foto_perfil?: string | null
+          horarios?: string | null
+          id?: string
+          nombre?: string | null
+          perfil_publico?: boolean
+          precio?: string | null
+          provincia?: string | null
+          rol?: Database["public"]["Enums"]["user_role"]
+          suscriptor?: boolean | null
+          updated_at?: string
+          verificado?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_public_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "client_trust_summary"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "user_public_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "provider_profile_completeness"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_public_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "provider_trust_summary"
+            referencedColumns: ["provider_id"]
+          },
+          {
+            foreignKeyName: "user_public_profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "usuarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_reminder_logs: {
         Row: {
           payload: Json | null
@@ -4501,7 +4995,7 @@ export type Database = {
           barrio: string | null
           calle: string | null
           categoria: string[] | null
-          celular: number | null
+          celular: string | null
           ci: string | null
           ciudad: string | null
           codigo: string | null
@@ -4558,7 +5052,7 @@ export type Database = {
           barrio?: string | null
           calle?: string | null
           categoria?: string[] | null
-          celular?: number | null
+          celular?: string | null
           ci?: string | null
           ciudad?: string | null
           codigo?: string | null
@@ -4615,7 +5109,7 @@ export type Database = {
           barrio?: string | null
           calle?: string | null
           categoria?: string[] | null
-          celular?: number | null
+          celular?: string | null
           ci?: string | null
           ciudad?: string | null
           codigo?: string | null
@@ -4801,6 +5295,20 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_profile_completeness: {
+        Row: {
+          email: string | null
+          email_due: boolean | null
+          last_reminder_at: string | null
+          marketing_email_enabled: boolean | null
+          missing_fields: string[] | null
+          nombre: string | null
+          profile_score: number | null
+          reminders_sent: number | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       provider_trust_summary: {
         Row: {
           average_rating: number | null
@@ -4921,6 +5429,10 @@ export type Database = {
         Returns: Json
       }
       cancel_service_request: { Args: { p_oferta_id: string }; Returns: Json }
+      cancel_urgent_service_request_internal: {
+        Args: { p_client_id: string; p_request_id: string }
+        Returns: Json
+      }
       check_hirer_achievements: { Args: never; Returns: Json }
       claim_due_urgent_work_alerts: {
         Args: { p_limit?: number }
@@ -4994,6 +5506,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      confirm_service_reservation: {
+        Args: {
+          p_payment_id: string
+          p_payment_record_id: string
+          p_provider_status?: string
+        }
+        Returns: Json
+      }
       count_active_by_category: {
         Args: never
         Returns: {
@@ -5062,6 +5582,17 @@ export type Database = {
           ok: boolean
         }[]
       }
+      create_urgent_service_request_internal: {
+        Args: {
+          p_category: string
+          p_city: string
+          p_client_id: string
+          p_description: string
+          p_province: string
+          p_urgency_window: string
+        }
+        Returns: Json
+      }
       create_urgent_work_alert: {
         Args: {
           p_body?: string
@@ -5090,8 +5621,24 @@ export type Database = {
         }
         Returns: string
       }
+      fail_service_reservation_refund: {
+        Args: {
+          p_error_message: string
+          p_provider_status?: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
       get_chat_job_status: { Args: { p_chat_id: string }; Returns: Json }
       get_chat_schedule: { Args: { p_chat_id: string }; Returns: Json }
+      get_client_urgent_request_internal: {
+        Args: {
+          p_category?: string
+          p_client_id: string
+          p_request_id?: string
+        }
+        Returns: Json
+      }
       get_inactive_users_for_reminders: {
         Args: { p_page_number?: number; p_page_size?: number }
         Returns: {
@@ -5113,7 +5660,7 @@ export type Database = {
               barrio: string | null
               calle: string | null
               categoria: string[] | null
-              celular: number | null
+              celular: string | null
               ci: string | null
               ciudad: string | null
               codigo: string | null
@@ -5179,7 +5726,7 @@ export type Database = {
               barrio: string | null
               calle: string | null
               categoria: string[] | null
-              celular: number | null
+              celular: string | null
               ci: string | null
               ciudad: string | null
               codigo: string | null
@@ -5322,6 +5869,10 @@ export type Database = {
           unlock_id: string
         }[]
       }
+      get_provider_urgent_requests_internal: {
+        Args: { p_provider_id: string }
+        Returns: Json
+      }
       get_services_by_category_in_radius: {
         Args: {
           categoria_filter?: string
@@ -5463,6 +6014,7 @@ export type Database = {
           worker_status: Database["public"]["Enums"]["worker_status"]
         }[]
       }
+      hire_service: { Args: { p_service_id: number }; Returns: string }
       incrementar_veces_contratado: {
         Args: { servicio_id_input: string }
         Returns: undefined
@@ -5483,8 +6035,39 @@ export type Database = {
         }
         Returns: string
       }
+      prepare_service_cancellation_refund_internal: {
+        Args: { p_request_id: string; p_resolved_by: string }
+        Returns: Json
+      }
       propose_service_schedule: {
         Args: { p_payment_record_id: string; p_reason?: string; p_slots: Json }
+        Returns: Json
+      }
+      propose_service_visit: {
+        Args: {
+          p_note?: string
+          p_payment_record_id: string
+          p_scheduled_for: string
+        }
+        Returns: Json
+      }
+      reconcile_service_reservation_refund: {
+        Args: {
+          p_payment_id: string
+          p_payment_record_id: string
+          p_provider_status?: string
+          p_refund_amount: number
+          p_refund_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      reject_service_cancellation_review_internal: {
+        Args: {
+          p_request_id: string
+          p_resolution_note?: string
+          p_resolved_by: string
+        }
         Returns: Json
       }
       report_service_job_incident: {
@@ -5495,13 +6078,65 @@ export type Database = {
         }
         Returns: Json
       }
+      request_chat_quote_changes: {
+        Args: { p_quote_id: string; p_reason?: string }
+        Returns: Json
+      }
+      request_service_cancellation_internal: {
+        Args: {
+          p_payment_record_id: string
+          p_reason_code: string
+          p_reason_detail?: string
+          p_requester_id: string
+        }
+        Returns: Json
+      }
+      respond_service_visit: {
+        Args: { p_accept: boolean; p_payment_record_id: string }
+        Returns: Json
+      }
       respond_to_urgent_work_alert: {
         Args: { p_alert_id: string; p_response: string }
+        Returns: Json
+      }
+      respond_urgent_service_request_internal: {
+        Args: {
+          p_interested: boolean
+          p_provider_id: string
+          p_request_id: string
+        }
         Returns: Json
       }
       safe_quote_scope: { Args: { p_content: string }; Returns: string }
       select_service_schedule_slot: {
         Args: { p_proposal_id: string; p_slot_id: string }
+        Returns: Json
+      }
+      select_urgent_service_provider_internal: {
+        Args: {
+          p_client_id: string
+          p_provider_id: string
+          p_request_id: string
+        }
+        Returns: Json
+      }
+      send_chat_quote: {
+        Args: {
+          p_amount: number
+          p_chat_id: string
+          p_estimated_units?: number
+          p_materials?: string
+          p_notes?: string
+          p_operational_notice_accepted_at?: string
+          p_operational_notice_version?: string
+          p_pricing_mode?: string
+          p_reference_type?: string
+          p_scope: string
+          p_timeframe?: string
+          p_unit_rate?: number
+          p_validity_text?: string
+          p_warranty?: string
+        }
         Returns: Json
       }
       set_stale_workers_offline: { Args: never; Returns: undefined }
@@ -5751,12 +6386,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5780,11 +6415,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5805,11 +6440,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5830,11 +6465,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5847,11 +6482,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -5861,9 +6496,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       AgentRole: ["USER", "ASSISTANT", "TOOL"],
