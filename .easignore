@@ -14,9 +14,10 @@ expo-env.d.ts
 .kotlin/
 *.orig.*
 *.jks
-*.p|
+*.p8
 *.p12
 *.key
+*.der
 *.mobileprovision
 
 # Metro
@@ -26,12 +27,16 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+*.log
+expo-web.*.log
 
 # macOS
 .DS_Store
 *.pem
 
 # local env files
+.env
+.env.*
 .env*.local
 
 # typescript
@@ -47,3 +52,18 @@ yarn-error.*
 
 # Ignore test coverage reports
 /coverage
+
+# Supabase local state
+/supabase/.temp
+
+# Local working folders, credentials and build artifacts
+/.omc
+/.tmp
+/_BACKUP_*
+/_FIXES
+/_seguridad_paso*
+/credentials.json
+/credentials
+/builds
+/android/keystore.properties
+/android/keystore.properties.*
