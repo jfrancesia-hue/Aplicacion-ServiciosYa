@@ -13,6 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import queryClient from "../reactQuery";
 import { useLocationStore } from "../../store/locationStore";
 import type { UserSettings } from "../hooks/useUserSettings";
+import { ARGENTINE_PROVINCE_BY_STATE_CODE } from "./geoSegmentation";
 
 const LOCATION_TIMEOUT_MS = 10_000;
 
@@ -57,7 +58,7 @@ async function saveLocation(coords: { latitude: number; longitude: number }) {
         latitude: coords.latitude,
         longitude: coords.longitude,
         timestamp: Date.now(),
-      })
+      }),
     );
   } catch (err) {
     console.warn("Error guardando ubicación:", err);
@@ -82,14 +83,12 @@ async function getSavedLocation() {
 
 export async function getLocationParamsFromClient(
   client: QueryClient,
-  authLocation?: { latitude: number; longitude: number } | null
+  authLocation?: { latitude: number; longitude: number } | null,
 ): Promise<LocationParams> {
   const settings = client.getQueryData<UserSettings>(query.queryKey);
   console.log("Solicitando ubicación al iniciar sesión...");
 
-  let coords:
-    | { latitude: number; longitude: number }
-    | null = null;
+  let coords: { latitude: number; longitude: number } | null = null;
 
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
@@ -139,8 +138,7 @@ export async function getLocationParamsFromClient(
     return {
       search_lat: coords.latitude,
       search_lon: coords.longitude,
-      search_radius_meters:
-        settings?.searchRadius ?? 5000,
+      search_radius_meters: settings?.searchRadius ?? 5000,
     };
   } catch (e) {
     console.warn("Error obteniendo ubicación:", e);
@@ -151,7 +149,7 @@ export async function getLocationParamsFromClient(
 async function updateClientWithCoords(
   client: QueryClient,
   settings: UserSettings | undefined,
-  coords: { latitude: number; longitude: number }
+  coords: { latitude: number; longitude: number },
 ) {
   if (!settings) return;
 
@@ -210,6 +208,9 @@ export function cityToLocationData(city: City): LocationData {
     latitude: city.latitude,
     longitude: city.longitude,
     city: city.name,
+    province:
+      ARGENTINE_PROVINCE_BY_STATE_CODE[city.state_code.toUpperCase()] ?? null,
+    locality: city.name,
     country,
     fullAddress: [],
   };
@@ -231,5 +232,5 @@ export async function buildLocationParams(): Promise<LocationParams> {
     search_lat: location.latitude,
     search_lon: location.longitude,
     search_radius_meters: searchRadius,
-  }
+  };
 }

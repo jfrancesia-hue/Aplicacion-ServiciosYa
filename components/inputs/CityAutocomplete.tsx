@@ -54,14 +54,24 @@ export const CityAutocomplete = ({
     queryFn: async () => {
       if (!countryCode) return [];
 
-      const { data, error } = await supabase
-        .from("cities")
-        .select("*")
-        .eq("country_code", countryCode)
-        .order("name", { ascending: true });
+      const allCities: City[] = [];
+      const pageSize = 1000;
 
-      if (error) throw new Error(error.message);
-      return data as City[];
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("cities")
+          .select("*")
+          .eq("country_code", countryCode)
+          .order("name", { ascending: true })
+          .range(from, from + pageSize - 1);
+
+        if (error) throw new Error(error.message);
+        const page = (data ?? []) as City[];
+        allCities.push(...page);
+        if (page.length < pageSize) break;
+      }
+
+      return allCities;
     },
     enabled: !!countryCode, // Only fetch when country code exists
     staleTime: 5 * 60 * 1000, // 5 minutes cache

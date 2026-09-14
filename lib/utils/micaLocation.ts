@@ -1,3 +1,10 @@
+import {
+  getArgentineProvinceCapital,
+  normalizeGeoText,
+  resolveArgentineProvince,
+  sameProvince,
+} from "./geoSegmentation.ts";
+
 function cleanLocation(value: string) {
   return value
     .trim()
@@ -21,12 +28,14 @@ export function inferMicaLocation(
     text.replace(/^(?:estoy|vivo|trabajo|ser[ií]a|es)\s+(?:en\s+)?/iu, ""),
   );
   const wordCount = candidate.split(/\s+/).length;
-  const isNonLocationReply = /^(?:s[ií]|no|dale|ok|bueno|urgente|hoy|ma(?:ñ|n)ana|esta semana)\b/iu.test(
-    candidate,
-  );
-  const describesAnotherNeed = /\b(?:quiero|necesito|busco|tengo|puede|horario|precio|presupuesto)\b/iu.test(
-    candidate,
-  );
+  const isNonLocationReply =
+    /^(?:s[ií]|no|dale|ok|bueno|urgente|hoy|ma(?:ñ|n)ana|esta semana)\b/iu.test(
+      candidate,
+    );
+  const describesAnotherNeed =
+    /\b(?:quiero|necesito|busco|tengo|puede|horario|precio|presupuesto)\b/iu.test(
+      candidate,
+    );
 
   if (
     wordCount > 7 ||
@@ -57,4 +66,55 @@ export function asksForKnownLocation(
       normalized,
     )
   );
+}
+
+export function resolveMicaRequestLocation(input: {
+  requestedZone?: string | null;
+  fallbackCity?: string | null;
+  fallbackProvince?: string | null;
+}) {
+  const zone = cleanLocation(input.requestedZone ?? "");
+  const fallbackCity = cleanLocation(input.fallbackCity ?? "") || null;
+  const fallbackProvince = resolveArgentineProvince(input.fallbackProvince);
+  const requestedProvince = resolveArgentineProvince(zone);
+  const province = requestedProvince || fallbackProvince;
+  const normalizedZone = normalizeGeoText(zone);
+  const normalizedProvince = normalizeGeoText(requestedProvince);
+  const fallbackIsSameProvince =
+    requestedProvince && fallbackProvince
+      ? sameProvince(requestedProvince, fallbackProvince)
+      : false;
+
+  if (!zone) {
+    return { city: fallbackCity, province: fallbackProvince };
+  }
+
+  if (normalizedZone === "capital" && fallbackProvince) {
+    return {
+      city: getArgentineProvinceCapital(fallbackProvince) || fallbackCity,
+      province: fallbackProvince,
+    };
+  }
+
+  if (requestedProvince) {
+    const asksForCapital =
+      /\bcapital\b/.test(normalizedZone) || /\bciudad\b/.test(normalizedZone);
+    const isOnlyProvince = normalizedZone === normalizedProvince;
+
+    return {
+      city: asksForCapital
+        ? getArgentineProvinceCapital(requestedProvince)
+        : isOnlyProvince
+          ? fallbackIsSameProvince
+            ? fallbackCity
+            : null
+          : zone,
+      province: requestedProvince,
+    };
+  }
+
+  return {
+    city: zone,
+    province: fallbackProvince,
+  };
 }

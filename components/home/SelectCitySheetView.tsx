@@ -5,8 +5,6 @@ import { type City, CityAutocomplete } from "../inputs/CityAutocomplete";
 import SheetContainer from "../sheet/SheetContainer";
 import { Text, StyleSheet, View, TouchableOpacity } from "react-native";
 import { cityToLocationData } from "../../lib/utils/location";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { locationIpInfoQueryOptions } from "../../lib/queryOptions";
 import { withSuspense } from "../withSuspense";
 import LoadingView from "../LoadingView";
 import { GenericButton } from "../GenericButtom";
@@ -15,16 +13,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useLocationStore } from "../../store/locationStore";
 
 function SelectCitySheetView() {
-  const { effectiveLocation, source, setCustomLocation, clearCustomLocation } = useLocationStore();
-  const [initialLocation, setInitialLocation] = useState(effectiveLocation);
-  const { updateSettings, settings } = useUserSettings();
-  const { data: locationInfo, error } = useSuspenseQuery(
-    locationIpInfoQueryOptions,
-  );
-
+  const {
+    effectiveLocation,
+    source,
+    setCustomLocation,
+    clearCustomLocation,
+    requestDeviceLocation,
+  } = useLocationStore();
+  const [initialLocation] = useState(effectiveLocation);
+  const { updateSettings } = useUserSettings();
   const [city, setCity] = useState<City | null>(null);
   const [loading, setLoading] = useState(false); // 🔹 estado loading
-  const country = error ? "AR" : locationInfo.country;
+  const country = "AR";
 
   const queryClient = useQueryClient();
 
@@ -35,7 +35,6 @@ function SelectCitySheetView() {
     if (!city) return;
     setLoading(true);
     try {
-
       const newLocation = cityToLocationData(city);
       await setCustomLocation(newLocation);
       await updateSettings({ customLocation: newLocation });
@@ -49,13 +48,13 @@ function SelectCitySheetView() {
     }
   };
 
-
   const handleClearCity = async () => {
     setLoading(true);
     try {
       await updateSettings({ customLocation: null });
       setCity(null);
       clearCustomLocation();
+      await requestDeviceLocation();
       queryClient.invalidateQueries({ queryKey: ["user", "services"] });
     } finally {
       setLoading(false);
@@ -78,7 +77,9 @@ function SelectCitySheetView() {
           <View style={styles.currentCityInfo}>
             <Text style={styles.currentCityTitle}>Ciudad actual</Text>
             <Text style={styles.currentCityText}>
-              {currentLocation?.city}, {currentLocation?.country}
+              {[currentLocation?.city, currentLocation?.province]
+                .filter(Boolean)
+                .join(", ") || "Ubicación por confirmar"}
             </Text>
           </View>
           {canClear && (
@@ -95,8 +96,8 @@ function SelectCitySheetView() {
 
       <Text style={styles.infoTextLong}>
         {source === "custom"
-          ? "Puedes cambiar tu ciudad personalizada o eliminarla para usar tu ubicación GPS automática."
-          : "Si no seleccionas una ciudad específica, utilizaremos tu ubicación GPS para mostrarte contenido relevante de tu área."}
+          ? "Podés cambiar la ciudad elegida o eliminarla para volver a usar el GPS."
+          : "Buscá cualquier localidad de Argentina o seguí usando tu ubicación GPS."}
       </Text>
 
       <View style={styles.autocompleteContainer}>
@@ -111,7 +112,6 @@ function SelectCitySheetView() {
           dropdownProps={{ direction: "down" }}
         />
       </View>
-
 
       <GenericButton
         title={loading ? "Cargando..." : "Actualizar"} // 🔹 cambia título si carga

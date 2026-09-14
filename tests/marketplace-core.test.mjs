@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import {
+  ARGENTINE_PROVINCE_BY_STATE_CODE,
   formatLocationScope,
+  getArgentineProvinceCapital,
   providerMatchesLocation,
   resolveArgentineProvince,
   sameProvince,
@@ -20,7 +22,9 @@ import {
 import {
   asksForKnownLocation,
   inferMicaLocation,
+  resolveMicaRequestLocation,
 } from "../lib/utils/micaLocation.ts";
+import { repairSpanishMojibake } from "../lib/utils/textEncoding.ts";
 import {
   SERVICE_CONFIRMATION_COMMISSION_RATE,
   calculateServiceConfirmationFee,
@@ -65,10 +69,7 @@ test("no mezcla CABA con provincia de Buenos Aires", () => {
 });
 
 test("mantiene resultados cuando todavía no existe una ubicación", () => {
-  assert.equal(
-    providerMatchesLocation({ provincia: "Catamarca" }, null),
-    true,
-  );
+  assert.equal(providerMatchesLocation({ provincia: "Catamarca" }, null), true);
   assert.equal(
     formatLocationScope({
       ciudad: "San Fernando del Valle de Catamarca",
@@ -89,10 +90,7 @@ test("serializa audios y conserva la transcripción corregida", () => {
 
   assert.equal(audio?.durationMs, 12_400);
   assert.equal(audio?.transcript, "Voy mañana a las nueve.");
-  assert.equal(
-    getChatMessagePreview(content),
-    "🎤 Voy mañana a las nueve.",
-  );
+  assert.equal(getChatMessagePreview(content), "🎤 Voy mañana a las nueve.");
 });
 
 test("identifica de forma segura los mensajes compartidos por MICA", () => {
@@ -174,6 +172,48 @@ test("MICA reconoce ciudades y barrios con tildes sin repetir la pregunta", () =
       "Nueva Córdoba",
     ),
     true,
+  );
+});
+
+test("MICA interpreta Catamarca y Capital usando la provincia detectada", () => {
+  assert.deepEqual(
+    resolveMicaRequestLocation({
+      requestedZone: "Catamarca",
+      fallbackCity: "San Fernando del Valle de Catamarca",
+      fallbackProvince: "Catamarca",
+    }),
+    {
+      city: "San Fernando del Valle de Catamarca",
+      province: "Catamarca",
+    },
+  );
+  assert.deepEqual(
+    resolveMicaRequestLocation({
+      requestedZone: "Capital",
+      fallbackProvince: "Catamarca",
+    }),
+    {
+      city: "San Fernando del Valle de Catamarca",
+      province: "Catamarca",
+    },
+  );
+});
+
+test("la segmentación contempla las 24 jurisdicciones argentinas", () => {
+  assert.equal(
+    new Set(Object.values(ARGENTINE_PROVINCE_BY_STATE_CODE)).size,
+    24,
+  );
+  assert.equal(
+    getArgentineProvinceCapital("Catamarca"),
+    "San Fernando del Valle de Catamarca",
+  );
+});
+
+test("repara texto español recibido con codificación incorrecta", () => {
+  assert.equal(
+    repairSpanishMojibake("Contame quÃ© necesitÃ¡s. Ya enviÃ© tu pedido."),
+    "Contame qué necesitás. Ya envié tu pedido.",
   );
 });
 
