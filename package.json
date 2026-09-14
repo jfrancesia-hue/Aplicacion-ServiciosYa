@@ -11,6 +11,7 @@
     "build:android:internal": "eas build --platform android --profile internal",
     "submit:android:internal": "eas submit --platform android --profile internal",
     "check:internal-release-env": "node scripts/check_internal_release_env.js",
+    "db:lint": "supabase db lint --linked --schema public,private --level warning",
     "eas-build-pre-install": "node scripts/check_internal_release_env.js",
     "check:serviciosya-contract": "node scripts/check_serviciosya_unified_contract.js",
     "legal:export-public": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/export_public_legal_documents.mjs",

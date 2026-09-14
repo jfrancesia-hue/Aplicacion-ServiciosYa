@@ -29,6 +29,10 @@ const environmentCheck = fs.readFileSync(
   "utf8",
 );
 const easIgnore = fs.readFileSync(".easignore", "utf8");
+const internalBetaGuide = fs.readFileSync(
+  "docs/GOOGLE_PLAY_INTERNAL_BETA.md",
+  "utf8",
+);
 
 test("la prueba interna genera un AAB y apunta al track internal", () => {
   assert.equal(eas.build.internal.distribution, "store");
@@ -64,6 +68,19 @@ test("la próxima compilación conserva la versión configurada 96", () => {
   assert.equal(app.expo.version, "96.0.0");
   assert.equal(app.expo.android.versionCode, 96);
   assert.equal(app.expo.ios.buildNumber, "96");
+});
+
+test("la guía interna usa el perfil correcto y aísla las pruebas QA", () => {
+  assert.match(
+    internalBetaGuide,
+    /npm run build:android:internal/,
+  );
+  assert.doesNotMatch(
+    internalBetaGuide,
+    /build --platform android --profile production/,
+  );
+  assert.match(internalBetaGuide, /Tester QA/);
+  assert.match(internalBetaGuide, /No ejecutar campañas ni acciones masivas/);
 });
 
 test("EAS excluye secretos y credenciales locales del contexto de build", () => {
