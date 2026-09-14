@@ -68,6 +68,28 @@ const incidentIntakeModal = await readFile(
   new URL("../components/chat/MicaIncidentIntakeModal.tsx", import.meta.url),
   "utf8",
 );
+const argentinaLocationMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260914145910_argentina_location_matching.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const workerScopeMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260914151108_harden_argentina_worker_request_scope.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const cityAutocomplete = await readFile(
+  new URL("../components/inputs/CityAutocomplete.tsx", import.meta.url),
+  "utf8",
+);
+const micaChat = await readFile(
+  new URL("../screens/MicaChat.tsx", import.meta.url),
+  "utf8",
+);
 
 test("las publicaciones manuales reutilizan nuevaOferta con un origen distinguible", () => {
   assert.match(migration, /create_manual_service_request/);
@@ -90,6 +112,30 @@ test("los prestadores reciben pedidos manuales y de MICA sin duplicarlos", () =>
   assert.match(workerHome, /getWorkerServiceRequests/);
   assert.match(workerHome, /new Map<string, WorkerOffer>/);
   assert.match(workerHome, /respondToMicaOrder/);
+});
+
+test("los pedidos funcionan en toda Argentina sin depender de tildes", () => {
+  assert.match(
+    argentinaLocationMigration,
+    /create extension if not exists unaccent/,
+  );
+  assert.match(argentinaLocationMigration, /extensions\.unaccent/);
+  assert.match(argentinaLocationMigration, /p_provincia/);
+  assert.match(cityAutocomplete, /for \(let from = 0; ; from \+= pageSize\)/);
+});
+
+test("el RPC obtiene zona y oficios del prestador autenticado", () => {
+  assert.match(workerScopeMigration, /u\.id = auth\.uid\(\)/);
+  assert.match(workerScopeMigration, /lower\(u\.rol::text\) = 'worker'/);
+  assert.match(workerScopeMigration, /caller_trades/);
+  assert.match(workerScopeMigration, /trim\(c\.provincia\)/);
+  assert.doesNotMatch(workerScopeMigration, /trim\(p_provincia\)/);
+});
+
+test("MICA muestra la ubicación y deja entrar a mis publicaciones", () => {
+  assert.match(micaChat, /Cambiar ciudad del pedido/);
+  assert.match(micaChat, /Ver mis publicaciones/);
+  assert.match(micaChat, /navigation\.navigate\("PublicarNecesidad"\)/);
 });
 
 test("calcula el total comisionable para proyecto, hora y día", () => {

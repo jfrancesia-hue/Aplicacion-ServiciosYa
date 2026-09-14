@@ -4,6 +4,8 @@ export interface LocationData {
   latitude: number;
   longitude: number;
   city: string | null;
+  province?: string | null;
+  locality?: string | null;
   country: string | null;
   fullAddress: LocationGeocodedAddress[];
 }
@@ -45,4 +47,3 @@ export type Coords = {
 };
 
 export type LocationSource = "device" | "custom" | "ip";
-

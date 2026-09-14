@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import React, {
   useCallback,
   useEffect,
@@ -22,6 +23,8 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import BotonVolver from "../components/BotonVolver";
+import SelectCitySheetView from "../components/home/SelectCitySheetView";
+import { withModalProvider } from "../components/sheet/withModalProvider";
 import {
   formatMicaOrderAmount,
   getMicaOrderStatus,
@@ -34,8 +37,9 @@ import { calculateServiceConfirmationFee } from "../lib/constants/billing";
 import {
   asksForKnownLocation,
   inferMicaLocation,
+  resolveMicaRequestLocation,
 } from "../lib/utils/micaLocation";
-import { resolveArgentineProvince } from "../lib/utils/geoSegmentation";
+import { repairSpanishMojibake } from "../lib/utils/textEncoding";
 import {
   pricingModeLabel,
   quotePricingSummary,
@@ -66,13 +70,15 @@ type AgentInsight = {
 };
 
 function micaQuotePricingSummary(quote: MicaOrderQuote) {
-  return `${pricingModeLabel(quote.pricingMode ?? "project")} · ${quotePricingSummary({
-    pricingMode: quote.pricingMode ?? "project",
-    unitRate: quote.unitRate ?? quote.amount,
-    estimatedUnits: quote.estimatedUnits ?? 1,
-    referenceType: quote.referenceType ?? "fixed",
-    amount: quote.amount,
-  })}`;
+  return `${pricingModeLabel(quote.pricingMode ?? "project")} · ${quotePricingSummary(
+    {
+      pricingMode: quote.pricingMode ?? "project",
+      unitRate: quote.unitRate ?? quote.amount,
+      estimatedUnits: quote.estimatedUnits ?? 1,
+      referenceType: quote.referenceType ?? "fixed",
+      amount: quote.amount,
+    },
+  )}`;
 }
 type MicaProfileFallback = {
   nombre?: string | null;
@@ -173,6 +179,8 @@ const searchFlowSteps = [
   { label: "Chat seguro", icon: "chatbubbles-outline" as const },
   { label: "Confirmación", icon: "shield-checkmark-outline" as const },
 ];
+
+const LOCATION_SHEET_SNAP_POINTS = ["70%"];
 
 const modeConfig: Record<
   MicaChatMode,
@@ -290,7 +298,9 @@ function inferInsight(
   const text = userText.toLowerCase();
   const service = inferService(text);
   const expectsPlainLocation =
-    (mode === "buscar-servicio" && Boolean(previous.service) && !previous.location) ||
+    (mode === "buscar-servicio" &&
+      Boolean(previous.service) &&
+      !previous.location) ||
     (mode === "ofrecer-servicio" &&
       Boolean(previous.service) &&
       !previous.coverage &&
@@ -631,18 +641,17 @@ async function createMicaAppRequest({
   const gpsLocationLabel = formatLocationFallback(locationFallback);
   const profileLocationLabel = formatProfileLocation(profile);
   const requestedZone = insight.location?.trim() || null;
-  const requestedProvince = resolveArgentineProvince(requestedZone);
-  const requestCity =
-    (requestedProvince ? requestedZone : null) ||
-    locationFallback?.city?.trim() ||
-    locationFallback?.locality?.trim() ||
-    profile?.ciudad?.trim() ||
-    null;
-  const requestProvince =
-    requestedProvince ||
-    locationFallback?.province?.trim() ||
-    profile?.provincia?.trim() ||
-    null;
+  const requestLocation = resolveMicaRequestLocation({
+    requestedZone,
+    fallbackCity:
+      locationFallback?.city?.trim() ||
+      locationFallback?.locality?.trim() ||
+      profile?.ciudad?.trim(),
+    fallbackProvince:
+      locationFallback?.province?.trim() || profile?.provincia?.trim(),
+  });
+  const requestCity = requestLocation.city;
+  const requestProvince = requestLocation.province;
 
   const categoria = insight.service?.trim() || "Servicio general";
   const zona =
@@ -673,10 +682,10 @@ async function createMicaAppRequest({
       location_source: insight.location
         ? "chat"
         : gpsLocationLabel
-            ? locationFallback?.source ?? "device"
-            : profileLocationLabel
-              ? "profile"
-              : "missing",
+          ? (locationFallback?.source ?? "device")
+          : profileLocationLabel
+            ? "profile"
+            : "missing",
       requested_province: requestProvince,
       insight,
     },
@@ -695,11 +704,12 @@ async function createMicaAppRequest({
   return result;
 }
 
-export default function MicaChat({ navigation, route }: Props) {
+function MicaChat({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const mode = route.params.mode;
   const config = modeConfig[mode];
   const scrollRef = useRef<ScrollView>(null);
+  const locationSheetRef = useRef<BottomSheetModal>(null);
   const [input, setInput] = useState("");
   const [insight, setInsight] = useState<AgentInsight>({});
   const [messages, setMessages] = useState<Message[]>(() =>
@@ -718,7 +728,9 @@ export default function MicaChat({ navigation, route }: Props) {
   const [orderError, setOrderError] = useState<string | null>(null);
   const [profileFallback, setProfileFallback] =
     useState<MicaProfileFallback | null>(null);
-  const effectiveLocation = useLocationStore((state) => state.effectiveLocation);
+  const effectiveLocation = useLocationStore(
+    (state) => state.effectiveLocation,
+  );
   const locationSource = useLocationStore((state) => state.source);
   const requestDeviceLocation = useLocationStore(
     (state) => state.requestDeviceLocation,
@@ -1000,18 +1012,17 @@ export default function MicaChat({ navigation, route }: Props) {
       }
 
       return {
-        label:
-          isCreatingRequest
-            ? "Enviando pedido..."
-            : isRefreshingQuotes
-              ? "Actualizando..."
-              : searchStage === "intake"
-            ? searchReadiness.canCreate
-              ? "Pedir presupuestos"
-              : "Completar pedido"
-            : searchStage === "quotes"
-              ? "Elegir un presupuesto"
-              : "Actualizar presupuestos",
+        label: isCreatingRequest
+          ? "Enviando pedido..."
+          : isRefreshingQuotes
+            ? "Actualizando..."
+            : searchStage === "intake"
+              ? searchReadiness.canCreate
+                ? "Pedir presupuestos"
+                : "Completar pedido"
+              : searchStage === "quotes"
+                ? "Elegir un presupuesto"
+                : "Actualizar presupuestos",
         icon:
           searchStage === "intake"
             ? ("receipt" as const)
@@ -1084,13 +1095,19 @@ export default function MicaChat({ navigation, route }: Props) {
         message: cleanText,
         insight: nextInsight,
         history: messages,
-        knownLocation: profileLocation,
+        knownLocation: nextInsight.location || profileLocation,
       });
-      const apiInsight = { ...nextInsight, ...(apiAnswer.insightPatch ?? {}) };
+      const repairedPatch = Object.fromEntries(
+        Object.entries(apiAnswer.insightPatch ?? {})
+          .filter(([, value]) => Boolean(value?.trim()))
+          .map(([key, value]) => [key, repairSpanishMojibake(value ?? "")]),
+      ) as Partial<AgentInsight>;
+      const apiInsight = { ...nextInsight, ...repairedPatch };
       const knownLocation = apiInsight.location || profileLocation || undefined;
-      const reply = asksForKnownLocation(apiAnswer.reply, knownLocation)
+      const apiReply = repairSpanishMojibake(apiAnswer.reply ?? "");
+      const reply = asksForKnownLocation(apiReply, knownLocation)
         ? buildReply(mode, apiInsight, profileLocation)
-        : apiAnswer.reply ?? buildReply(mode, apiInsight, profileLocation);
+        : apiReply || buildReply(mode, apiInsight, profileLocation);
 
       setInsight(apiInsight);
       setMessages((current) =>
@@ -1149,6 +1166,21 @@ export default function MicaChat({ navigation, route }: Props) {
             <Text style={styles.subtitle}>{config.subtitle}</Text>
           </View>
         </View>
+        {mode === "buscar-servicio" ? (
+          <TouchableOpacity
+            style={styles.locationControl}
+            activeOpacity={0.82}
+            accessibilityRole="button"
+            accessibilityLabel="Cambiar ciudad del pedido"
+            onPress={() => locationSheetRef.current?.present()}
+          >
+            <Ionicons name="location-outline" size={16} color="#ffffff" />
+            <Text style={styles.locationControlText} numberOfLines={1}>
+              {profileLocation || "Detectando tu ubicación"}
+            </Text>
+            <Text style={styles.locationControlAction}>Cambiar</Text>
+          </TouchableOpacity>
+        ) : null}
       </LinearGradient>
 
       <ScrollView
@@ -1265,7 +1297,11 @@ export default function MicaChat({ navigation, route }: Props) {
               {isRefreshingQuotes ? (
                 <ActivityIndicator size="small" color={config.accent} />
               ) : (
-                <Ionicons name="radio-outline" size={20} color={config.accent} />
+                <Ionicons
+                  name="radio-outline"
+                  size={20}
+                  color={config.accent}
+                />
               )}
               <View style={styles.requestStatusCopy}>
                 <Text style={styles.requestStatusTitle}>
@@ -1298,6 +1334,18 @@ export default function MicaChat({ navigation, route }: Props) {
                 {isRefreshingQuotes
                   ? "Actualizando propuestas..."
                   : "Actualizar ahora"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              activeOpacity={0.78}
+              onPress={() => navigation.navigate("PublicarNecesidad")}
+              style={styles.publicationsButton}
+              accessibilityRole="button"
+              accessibilityLabel="Ver mis publicaciones"
+            >
+              <Ionicons name="documents-outline" size={16} color="#315e67" />
+              <Text style={styles.publicationsButtonText}>
+                Ver mis publicaciones
               </Text>
             </TouchableOpacity>
           </View>
@@ -1412,7 +1460,8 @@ export default function MicaChat({ navigation, route }: Props) {
                 </Text>
                 <Text style={styles.paymentText}>
                   MICA enviará el presupuesto al chat. Podés pedir cambios o
-                  aclaraciones antes de aceptarlo, siempre dentro de Servicios Ya.
+                  aclaraciones antes de aceptarlo, siempre dentro de Servicios
+                  Ya.
                 </Text>
               </View>
             </View>
@@ -1433,9 +1482,14 @@ export default function MicaChat({ navigation, route }: Props) {
               </View>
               <View style={styles.selectionSummaryDivider} />
               <View style={styles.selectionSummaryCopy}>
-                <Text style={styles.selectionSummaryLabel}>Comisión al aceptar</Text>
+                <Text style={styles.selectionSummaryLabel}>
+                  Comisión al aceptar
+                </Text>
                 <Text style={styles.selectionSummaryText}>
-                  {formatMicaOrderAmount(calculateServiceConfirmationFee(selectedQuote.amount))} (10%)
+                  {formatMicaOrderAmount(
+                    calculateServiceConfirmationFee(selectedQuote.amount),
+                  )}{" "}
+                  (10%)
                 </Text>
               </View>
             </View>
@@ -1473,7 +1527,7 @@ export default function MicaChat({ navigation, route }: Props) {
                   message.author === "user" ? styles.userText : styles.micaText,
                 ]}
               >
-                {message.text}
+                {repairSpanishMojibake(message.text)}
               </Text>
             </View>
           </View>
@@ -1562,7 +1616,9 @@ export default function MicaChat({ navigation, route }: Props) {
               ]}
             >
               <Ionicons
-                name={isThinking || isCreatingRequest ? "hourglass-outline" : "send"}
+                name={
+                  isThinking || isCreatingRequest ? "hourglass-outline" : "send"
+                }
                 size={18}
                 color="#ffffff"
               />
@@ -1570,9 +1626,18 @@ export default function MicaChat({ navigation, route }: Props) {
           </TouchableOpacity>
         </View>
       </View>
+      <BottomSheetModal
+        ref={locationSheetRef}
+        snapPoints={LOCATION_SHEET_SNAP_POINTS}
+        enablePanDownToClose
+      >
+        <SelectCitySheetView />
+      </BottomSheetModal>
     </KeyboardAvoidingView>
   );
 }
+
+export default withModalProvider(MicaChat);
 
 const styles = StyleSheet.create({
   screen: {
@@ -1583,6 +1648,31 @@ const styles = StyleSheet.create({
     paddingTop: 72,
     paddingBottom: 18,
     paddingHorizontal: 16,
+  },
+  locationControl: {
+    alignSelf: "center",
+    maxWidth: "100%",
+    marginTop: 10,
+    minHeight: 38,
+    borderRadius: 19,
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "rgba(0,0,0,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
+  },
+  locationControlText: {
+    flexShrink: 1,
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  locationControlAction: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "900",
   },
   headerCard: {
     minHeight: 112,
@@ -1863,6 +1953,23 @@ const styles = StyleSheet.create({
     borderColor: "#cfecea",
   },
   refreshQuotesText: {
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  publicationsButton: {
+    minHeight: 40,
+    marginTop: 8,
+    borderRadius: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    borderColor: "#d9e6e3",
+  },
+  publicationsButtonText: {
+    color: "#315e67",
     fontSize: 12,
     fontWeight: "900",
   },

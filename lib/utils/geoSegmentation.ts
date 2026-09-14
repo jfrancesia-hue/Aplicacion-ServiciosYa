@@ -8,6 +8,7 @@ type LocationParts = {
 const ARGENTINE_PROVINCES = [
   {
     name: "Ciudad Autónoma de Buenos Aires",
+    capital: "Ciudad Autónoma de Buenos Aires",
     aliases: [
       "caba",
       "capital federal",
@@ -18,10 +19,12 @@ const ARGENTINE_PROVINCES = [
   },
   {
     name: "Buenos Aires",
+    capital: "La Plata",
     aliases: ["provincia de buenos aires", "buenos aires", "la plata"],
   },
   {
     name: "Catamarca",
+    capital: "San Fernando del Valle de Catamarca",
     aliases: [
       "catamarca",
       "san fernando del valle de catamarca",
@@ -29,30 +32,44 @@ const ARGENTINE_PROVINCES = [
       "valle viejo",
     ],
   },
-  { name: "Chaco", aliases: ["chaco", "resistencia"] },
-  { name: "Chubut", aliases: ["chubut", "rawson"] },
-  { name: "Córdoba", aliases: ["cordoba"] },
-  { name: "Corrientes", aliases: ["corrientes"] },
-  { name: "Entre Ríos", aliases: ["entre rios", "parana"] },
-  { name: "Formosa", aliases: ["formosa"] },
-  { name: "Jujuy", aliases: ["jujuy", "san salvador de jujuy"] },
-  { name: "La Pampa", aliases: ["la pampa", "santa rosa"] },
-  { name: "La Rioja", aliases: ["la rioja"] },
-  { name: "Mendoza", aliases: ["mendoza"] },
-  { name: "Misiones", aliases: ["misiones", "posadas"] },
-  { name: "Neuquén", aliases: ["neuquen"] },
-  { name: "Río Negro", aliases: ["rio negro", "viedma"] },
-  { name: "Salta", aliases: ["salta"] },
-  { name: "San Juan", aliases: ["san juan"] },
-  { name: "San Luis", aliases: ["san luis"] },
-  { name: "Santa Cruz", aliases: ["santa cruz", "rio gallegos"] },
-  { name: "Santa Fe", aliases: ["santa fe"] },
+  { name: "Chaco", capital: "Resistencia", aliases: ["chaco", "resistencia"] },
+  { name: "Chubut", capital: "Rawson", aliases: ["chubut", "rawson"] },
+  { name: "Córdoba", capital: "Córdoba", aliases: ["cordoba"] },
+  { name: "Corrientes", capital: "Corrientes", aliases: ["corrientes"] },
+  { name: "Entre Ríos", capital: "Paraná", aliases: ["entre rios", "parana"] },
+  { name: "Formosa", capital: "Formosa", aliases: ["formosa"] },
+  {
+    name: "Jujuy",
+    capital: "San Salvador de Jujuy",
+    aliases: ["jujuy", "san salvador de jujuy"],
+  },
+  {
+    name: "La Pampa",
+    capital: "Santa Rosa",
+    aliases: ["la pampa", "santa rosa"],
+  },
+  { name: "La Rioja", capital: "La Rioja", aliases: ["la rioja"] },
+  { name: "Mendoza", capital: "Mendoza", aliases: ["mendoza"] },
+  { name: "Misiones", capital: "Posadas", aliases: ["misiones", "posadas"] },
+  { name: "Neuquén", capital: "Neuquén", aliases: ["neuquen"] },
+  { name: "Río Negro", capital: "Viedma", aliases: ["rio negro", "viedma"] },
+  { name: "Salta", capital: "Salta", aliases: ["salta"] },
+  { name: "San Juan", capital: "San Juan", aliases: ["san juan"] },
+  { name: "San Luis", capital: "San Luis", aliases: ["san luis"] },
+  {
+    name: "Santa Cruz",
+    capital: "Río Gallegos",
+    aliases: ["santa cruz", "rio gallegos"],
+  },
+  { name: "Santa Fe", capital: "Santa Fe", aliases: ["santa fe"] },
   {
     name: "Santiago del Estero",
+    capital: "Santiago del Estero",
     aliases: ["santiago del estero"],
   },
   {
     name: "Tierra del Fuego",
+    capital: "Ushuaia",
     aliases: [
       "tierra del fuego",
       "tierra del fuego antartida e islas del atlantico sur",
@@ -61,9 +78,38 @@ const ARGENTINE_PROVINCES = [
   },
   {
     name: "Tucumán",
+    capital: "San Miguel de Tucumán",
     aliases: ["tucuman", "san miguel de tucuman"],
   },
 ] as const;
+
+export const ARGENTINE_PROVINCE_BY_STATE_CODE: Record<string, string> = {
+  A: "Salta",
+  B: "Buenos Aires",
+  BA: "Buenos Aires",
+  C: "Ciudad Autónoma de Buenos Aires",
+  D: "San Luis",
+  E: "Entre Ríos",
+  F: "La Rioja",
+  G: "Santiago del Estero",
+  H: "Chaco",
+  J: "San Juan",
+  K: "Catamarca",
+  L: "La Pampa",
+  M: "Mendoza",
+  N: "Misiones",
+  P: "Formosa",
+  Q: "Neuquén",
+  R: "Río Negro",
+  S: "Santa Fe",
+  T: "Tucumán",
+  U: "Chubut",
+  V: "Tierra del Fuego",
+  W: "Corrientes",
+  X: "Córdoba",
+  Y: "Jujuy",
+  Z: "Santa Cruz",
+};
 
 export function normalizeGeoText(value?: string | null) {
   return String(value ?? "")
@@ -99,6 +145,13 @@ export function resolveArgentineProvince(value?: string | null) {
   }
 
   return null;
+}
+
+export function getArgentineProvinceCapital(value?: string | null) {
+  const province = resolveArgentineProvince(value);
+  return (
+    ARGENTINE_PROVINCES.find((item) => item.name === province)?.capital ?? null
+  );
 }
 
 export function sameProvince(

@@ -2,7 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -27,6 +33,7 @@ import {
 } from "../lib/serviceRequests";
 import { supabase } from "../lib/supabase";
 import type { MainStackParamList } from "../types/navigation";
+import { useLocationStore } from "../store/locationStore";
 
 type Props = NativeStackScreenProps<MainStackParamList, "PublicarNecesidad">;
 
@@ -63,6 +70,10 @@ function statusCopy(request: MyServiceRequest) {
 }
 
 export default function PublicarNecesidad({ navigation }: Props) {
+  const effectiveLocation = useLocationStore(
+    (state) => state.effectiveLocation,
+  );
+  const automaticZoneRef = useRef("");
   const [categories, setCategories] = useState<string[]>([]);
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
@@ -100,16 +111,39 @@ export default function PublicarNecesidad({ navigation }: Props) {
       setCategories(values);
       if (values.length > 0) setCategory((current) => current || values[0]);
 
-      const location = [profile?.ciudad, profile?.provincia]
+      const detectedLocation = useLocationStore.getState().effectiveLocation;
+      const detectedCity =
+        detectedLocation?.city ?? detectedLocation?.locality ?? profile?.ciudad;
+      const detectedProvince = detectedLocation?.province ?? profile?.provincia;
+      const location = [detectedCity, detectedProvince]
         .filter(Boolean)
         .join(", ");
-      setCity(profile?.ciudad ?? null);
-      setProvince(profile?.provincia ?? null);
+      setCity(detectedCity ?? null);
+      setProvince(detectedProvince ?? null);
       setZone((current) => current || location);
     };
 
     loadInitialData().catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    const currentCity =
+      effectiveLocation?.city ?? effectiveLocation?.locality ?? null;
+    const currentProvince = effectiveLocation?.province ?? null;
+    if (!currentCity && !currentProvince) return;
+
+    const automaticZone = [currentCity, currentProvince]
+      .filter(Boolean)
+      .join(", ");
+    setCity(currentCity);
+    setProvince(currentProvince);
+    setZone((current) =>
+      !current.trim() || current === automaticZoneRef.current
+        ? automaticZone
+        : current,
+    );
+    automaticZoneRef.current = automaticZone;
+  }, [effectiveLocation]);
 
   const loadRequests = useCallback(async () => {
     try {

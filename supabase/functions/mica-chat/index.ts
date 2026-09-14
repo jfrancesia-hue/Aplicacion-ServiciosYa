@@ -29,6 +29,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+const jsonHeaders = {
+  ...corsHeaders,
+  "Content-Type": "application/json; charset=utf-8",
+};
+
 const modeInstructions: Record<MicaMode, string> = {
   "buscar-servicio":
     "Ayudas a clientes a describir un problema del hogar o empresa y conseguir presupuestos. Tenes que sonar humano, directo y calido, como un buen operador experto. No digas que sos bot ni repitas tu nombre. Junta rubro, problema, zona, urgencia, disponibilidad y fotos si sirven. No inventes profesionales ni precios reales.",
@@ -138,7 +143,7 @@ function buildLocalFallbackResponse(body: MicaRequest) {
   const insightPatch: Record<string, string> = {};
   const insight = body.insight ?? {};
   const knownLocation =
-    body.knownLocation?.trim() || insight.location?.trim() || "";
+    insight.location?.trim() || body.knownLocation?.trim() || "";
 
   if (knownLocation && !insight.location?.trim()) {
     insightPatch.location = knownLocation;
@@ -199,8 +204,9 @@ function buildLocalFallbackResponse(body: MicaRequest) {
     ],
   };
 
-  const pending = pendingByMode[body.mode as Exclude<MicaMode, "intermediar-chat">]
-    .find(({ field }) => !has(field));
+  const pending = pendingByMode[
+    body.mode as Exclude<MicaMode, "intermediar-chat">
+  ].find(({ field }) => !has(field));
   const readyForNextStep = !pending;
   const locationAcknowledgement = knownLocation
     ? `Perfecto, tomo ${knownLocation} como ubicación. `
@@ -224,7 +230,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       status: 405,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: jsonHeaders,
     });
   }
 
@@ -235,7 +241,7 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Missing mode or message" }),
         {
           status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: jsonHeaders,
         },
       );
     }
@@ -248,13 +254,13 @@ Deno.serve(async (req) => {
           fallback: true,
         }),
         {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: jsonHeaders,
         },
       );
     }
     if (!apiKey) {
       return new Response(JSON.stringify(buildLocalFallbackResponse(body)), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       });
     }
 
@@ -292,7 +298,7 @@ Deno.serve(async (req) => {
         }),
         {
           status: 502,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: jsonHeaders,
         },
       );
     }
@@ -306,19 +312,29 @@ Deno.serve(async (req) => {
           reply: text || "Dale, contame un poco mas para ayudarte mejor.",
         }),
         {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          headers: jsonHeaders,
         },
       );
+    }
+
+    const insightPatch: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed.insightPatch ?? {})) {
+      if (typeof value === "string" && value.trim()) {
+        insightPatch[key] = value.trim();
+      }
+    }
+    if (body.insight?.location?.trim()) {
+      insightPatch.location = body.insight.location.trim();
     }
 
     return new Response(
       JSON.stringify({
         reply: parsed.reply,
-        insightPatch: parsed.insightPatch ?? {},
+        insightPatch,
         readyForNextStep: Boolean(parsed.readyForNextStep),
       }),
       {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       },
     );
   } catch (error) {
@@ -328,7 +344,7 @@ Deno.serve(async (req) => {
       }),
       {
         status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        headers: jsonHeaders,
       },
     );
   }
