@@ -13,6 +13,8 @@
     "check:internal-release-env": "node scripts/check_internal_release_env.js",
     "eas-build-pre-install": "node scripts/check_internal_release_env.js",
     "check:serviciosya-contract": "node scripts/check_serviciosya_unified_contract.js",
+    "legal:export-public": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/export_public_legal_documents.mjs",
+    "legal:check-public": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/export_public_legal_documents.mjs --check",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/*.test.mjs"
