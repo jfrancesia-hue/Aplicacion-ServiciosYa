@@ -82,6 +82,13 @@ const workerScopeMigration = await readFile(
   ),
   "utf8",
 );
+const categoryAliasMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260914203000_match_worker_request_category_aliases.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const cityAutocomplete = await readFile(
   new URL("../components/inputs/CityAutocomplete.tsx", import.meta.url),
   "utf8",
@@ -130,6 +137,15 @@ test("el RPC obtiene zona y oficios del prestador autenticado", () => {
   assert.match(workerScopeMigration, /caller_trades/);
   assert.match(workerScopeMigration, /trim\(c\.provincia\)/);
   assert.doesNotMatch(workerScopeMigration, /trim\(p_provincia\)/);
+});
+
+test("las publicaciones relacionan oficios equivalentes", () => {
+  assert.match(categoryAliasMigration, /service_category_key/);
+  assert.match(categoryAliasMigration, /like '%plom%'/);
+  assert.match(
+    categoryAliasMigration,
+    /service_category_key\(o\.categoria\).*service_category_key\(ct\.trade\)/s,
+  );
 });
 
 test("MICA muestra la ubicación y deja entrar a mis publicaciones", () => {

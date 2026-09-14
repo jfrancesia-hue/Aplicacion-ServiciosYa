@@ -947,17 +947,7 @@ function ChatIndividual({ route }) {
   };
 
   const confirmarReserva = (messageId, amount, feeAmount, clientTotal) => {
-    Alert.alert(
-      "Aceptar y reservar",
-      `Precio del trabajo: ${formatQuoteAmount(amount)}\nCargo de reserva ServiciosYa: ${formatQuoteAmount(feeAmount)}\nCosto total: ${formatQuoteAmount(clientTotal)}\n\nAhora pagás solamente la reserva. El trabajo se paga directamente al prestador al finalizar.`,
-      [
-        { text: "Seguir conversando", style: "cancel" },
-        {
-          text: `Pagar ${formatQuoteAmount(feeAmount)}`,
-          onPress: () => pagarPresupuesto(messageId),
-        },
-      ],
-    );
+    setPendingPaymentQuote({ messageId, amount, feeAmount, clientTotal });
   };
 
   const abrirAgendaVisita = () => {

@@ -732,6 +732,14 @@ function providerMatchesLocation(
   },
   target: LocationInput,
 ) {
+  const explicitProvince = cleanText(provider.provincia);
+  // If a profile explicitly says "Lima", "Caracas", etc., do not scan its
+  // free-form location for an Argentine province name that might merely be a
+  // neighbourhood (for example "Santa Cruz" in Lima). Only fall back to the
+  // city/location text when the province field is genuinely empty.
+  const providerProvince = explicitProvince
+    ? resolveProvince(explicitProvince)
+    : resolveProvince(provider.ciudad) || resolveProvince(provider.locationText);
   const targetProvince =
     resolveProvince(target.province) ||
     resolveProvince(target.city) ||
@@ -739,10 +747,6 @@ function providerMatchesLocation(
   const targetCity = cleanText(target.city) || cleanText(target.locality);
 
   if (targetProvince) {
-    const providerProvince =
-      resolveProvince(provider.provincia) ||
-      resolveProvince(provider.locationText) ||
-      resolveProvince(provider.ciudad);
     return providerProvince === targetProvince;
   }
 
@@ -752,7 +756,10 @@ function providerMatchesLocation(
     );
   }
 
-  return true;
+  // ServiciosYa opera en Argentina. Si todavía no conocemos la ciudad del
+  // cliente, el listado general sigue siendo nacional y nunca incorpora
+  // perfiles cuya ubicación pertenece a otro país o no puede validarse.
+  return Boolean(providerProvince);
 }
 
 Deno.serve(async (req) => {

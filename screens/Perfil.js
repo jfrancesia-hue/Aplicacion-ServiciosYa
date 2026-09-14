@@ -12,6 +12,7 @@ import BotonVolver from '../components/BotonVolver';
 import { useQuery } from '@tanstack/react-query';
 import { perfilQueryOptions } from '../lib/queryOptions';
 import { VERIFICATION_DOCUMENTS_BUCKET } from '../lib/legal/verificationDocuments';
+import { uniqueCategoryNames } from '../lib/utils/categoryNames';
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -134,7 +135,7 @@ export default function Perfil() {
         .from('categorias')
         .select('nombre')
         .order('nombre', { ascending: true });
-      if (!error && data) setCategorias(data.map((c) => c.nombre));
+      if (!error && data) setCategorias(uniqueCategoryNames(data.map((c) => c.nombre)));
     })();
   }, []);
 

@@ -14,7 +14,6 @@ import LoadingView from "../../components/LoadingView";
 import { categoriasPorSeccion } from "../../lib/utils/categorias";
 
 // Hooks
-import { useServicesCount } from "../../lib/hooks/useServices";
 import { useUserSettings } from "../../lib/hooks/useUserSettings";
 import { withSuspense } from "../withSuspense";
 import { useHomeEventsStore } from "../../store/homeEventsStore";
@@ -50,7 +49,6 @@ const CategoryList = ({
   isUserRestricted,
 }: CategoryListProps) => {
   // 1. Hooks & State
-  const { servicios: servicesQuery } = useServicesCount();
   const { settings } = useUserSettings();
   const [isPullingToRefresh, setIsPullingToRefresh] = useState(false);
   const setHomeDataReady = useHomeEventsStore(s => s.setHomeDataReady);
@@ -139,17 +137,7 @@ const CategoryList = ({
     loadWorkerCounts();
   }, [loadWorkerCounts]);
 
-  // 2. Data Destructuring
-  const {
-    data: conteosData,
-    isLoading,
-    error,
-    refetch,
-    isRefetching
-  } = servicesQuery || {};
-
   const showAllCategories = settings?.showAllCategories ?? true;
-  const isRefreshing = (isRefetching ?? false) && isPullingToRefresh;
 
   // 3. Derived State (Memoization)
 
@@ -203,36 +191,22 @@ const CategoryList = ({
 
   // 4. Handlers
   const handleOnRefresh = useCallback(async () => {
-    if (!refetch) return;
     try {
       setIsPullingToRefresh(true);
-      await Promise.all([refetch(), loadWorkerCounts()]);
+      await loadWorkerCounts();
     } catch (e) {
       console.error("Refresh failed:", e);
     } finally {
       setIsPullingToRefresh(false);
     }
-  }, [loadWorkerCounts, refetch]);
+  }, [loadWorkerCounts]);
 
-  // 5. Render Logic
-  if (isLoading) {
-    return <LoadingView withNavBarMargin />;
-  }
-
-  if (error) {
-    const errorMessage = error instanceof Error ? error.message : "Error desconocido";
-    return (
-      <View style={styles.centerContainer}>
-        <Text style={styles.errorText}>
-          Error al cargar las categorías: {errorMessage}
-        </Text>
-      </View>
-    );
-  }
-
+  // Este hook debe ejecutarse en todos los renders. Antes estaba debajo de
+  // retornos condicionales y React terminaba la pantalla al cambiar la ciudad
+  // (la consulta pasaba de loading a success y cambiaba la cantidad de hooks).
   useEffect(() => {
     setHomeDataReady(true);
-  }, []);
+  }, [setHomeDataReady]);
 
   return (
     <SectionList
@@ -258,7 +232,7 @@ const CategoryList = ({
       refreshControl={
         <RefreshControl
           colors={["#00B8A9", "#fe971a"]}
-          refreshing={isRefreshing}
+          refreshing={isPullingToRefresh}
           onRefresh={handleOnRefresh}
         />
       }

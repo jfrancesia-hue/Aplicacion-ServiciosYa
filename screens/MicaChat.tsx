@@ -40,6 +40,7 @@ import {
   resolveMicaRequestLocation,
 } from "../lib/utils/micaLocation";
 import { repairSpanishMojibake } from "../lib/utils/textEncoding";
+import { inferMicaSearchTiming } from "../lib/utils/micaConversation";
 import {
   pricingModeLabel,
   quotePricingSummary,
@@ -311,34 +312,9 @@ function inferInsight(
   if (userText.length > 6 && !next.issue) next.issue = userText.trim();
   if (service) next.service = service;
   if (location) next.location = location;
-  if (
-    includesAny(text, [
-      "urgente",
-      "emergencia",
-      "ahora",
-      "inund",
-      "sin luz",
-      "sin agua",
-    ])
-  ) {
-    next.urgency = "Alta";
-  } else if (includesAny(text, ["hoy", "rápido", "rapido", "esta tarde"])) {
-    next.urgency = "Media";
-  }
-  if (
-    includesAny(text, [
-      "hoy",
-      "esta tarde",
-      "mañana",
-      "manana",
-      "semana",
-      "fin de semana",
-    ])
-  ) {
-    next.timeframe = includesAny(text, ["hoy", "esta tarde"])
-      ? "Hoy"
-      : "Flexible";
-  }
+  const timing = inferMicaSearchTiming(userText);
+  if (timing.urgency) next.urgency = timing.urgency;
+  if (timing.timeframe) next.timeframe = timing.timeframe;
   if (includesAny(text, ["foto", "imagen", "video"]))
     next.media = "Quiere sumar evidencia";
 
@@ -732,6 +708,7 @@ function MicaChat({ navigation, route }: Props) {
     (state) => state.effectiveLocation,
   );
   const locationSource = useLocationStore((state) => state.source);
+  const locationIsLoading = useLocationStore((state) => state.isLoading);
   const requestDeviceLocation = useLocationStore(
     (state) => state.requestDeviceLocation,
   );
@@ -1176,7 +1153,11 @@ function MicaChat({ navigation, route }: Props) {
           >
             <Ionicons name="location-outline" size={16} color="#ffffff" />
             <Text style={styles.locationControlText} numberOfLines={1}>
-              {profileLocation || "Detectando tu ubicación"}
+              {insight.location ||
+                profileLocation ||
+                (locationIsLoading
+                  ? "Detectando tu ubicación"
+                  : "Elegí tu ciudad")}
             </Text>
             <Text style={styles.locationControlAction}>Cambiar</Text>
           </TouchableOpacity>

@@ -31,6 +31,7 @@ import { syncPrestadorConServiciosYa } from "../lib/serviciosYaApi";
 import vexo from "../lib/vexo";
 import type { UserUpdate } from "../types/db.overrides.types";
 import type { MainStackParamList } from "../types/navigation";
+import { uniqueCategoryNames } from "../lib/utils/categoryNames";
 
 type NavigationProp = NativeStackNavigationProp<MainStackParamList>;
 type SelectedFile = {
@@ -93,7 +94,9 @@ export default function RegistroTrabajadorSimplificado() {
         .from("categorias")
         .select("nombre")
         .order("nombre", { ascending: true });
-      if (!error && data) setCategorias(data.map((c) => c.nombre));
+      if (!error && data) {
+        setCategorias(uniqueCategoryNames(data.map((c) => c.nombre)));
+      }
     })();
   }, []);
 
@@ -235,7 +238,6 @@ export default function RegistroTrabajadorSimplificado() {
   const handleSubmit = async () => {
     if (
       !nombre.trim() ||
-      !edad.trim() ||
       !numeroCelular.trim() ||
       categoriasSeleccionadas.length === 0 ||
       !ciudad.trim() ||
@@ -243,12 +245,15 @@ export default function RegistroTrabajadorSimplificado() {
     ) {
       Alert.alert(
         "Faltan datos básicos",
-        "Completá nombre, edad, celular, especialidad, provincia y ciudad.",
+        "Completá nombre, celular, especialidad, provincia y ciudad.",
       );
       return;
     }
-    const edadNum = Number.parseInt(edad, 10);
-    if (Number.isNaN(edadNum) || edadNum < 18 || edadNum > 100) {
+    const edadNum = edad.trim() ? Number.parseInt(edad, 10) : null;
+    if (
+      edadNum !== null &&
+      (Number.isNaN(edadNum) || edadNum < 18 || edadNum > 100)
+    ) {
       Alert.alert("Edad inválida", "Debes ser mayor de 18 años.");
       return;
     }
@@ -324,7 +329,7 @@ export default function RegistroTrabajadorSimplificado() {
         creditos: 0,
       };
 
-      updateData.edad = edadNum;
+      if (edadNum !== null) updateData.edad = edadNum;
       if (dni.trim()) updateData.dni = dni.trim();
       if (antiguedadNum !== null) updateData.antiguedad = antiguedadNum;
       if (matriculaUrls.length > 0) updateData.matricula = matriculaUrls[0];

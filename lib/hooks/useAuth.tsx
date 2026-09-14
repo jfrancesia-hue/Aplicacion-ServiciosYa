@@ -81,6 +81,14 @@ export function useAuth(queryClient: QueryClient) {
   // Configurar listeners para el estado de autenticación y deep linking
   useEffect(() => {
     // 1. Comprobación inicial de deep link para cuando la app se inicia desde una URL
+    // Some legacy user queries do not include the user id in their key. Track
+    // which identity owns the current cache so another account can never reuse
+    // a previous account's profile, role or private data.
+    let queryCacheUserId =
+      queryClient.getQueryData<Session | null>(sessionQueryKey)?.user.id ??
+      useAuthStore.getState().session?.user.id ??
+      null;
+
     Linking.getInitialURL().then((url) => {
       if (url) handleDeepLink({ url });
     });
@@ -89,9 +97,16 @@ export function useAuth(queryClient: QueryClient) {
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      const nextUserId = newSession?.user.id ?? null;
+
+      if (queryCacheUserId !== nextUserId) {
+        queryClient.clear();
+      }
+
       // Actualizar manualmente la caché de consultas cuando cambia el estado de autenticación.
       // Este es el modelo "push" que mantiene nuestros datos actualizados.
       queryClient.setQueryData(sessionQueryKey, newSession);
+      queryCacheUserId = nextUserId;
       if (_event === "SIGNED_IN" && newSession)
         onSignedIn(newSession, queryClient);
     });

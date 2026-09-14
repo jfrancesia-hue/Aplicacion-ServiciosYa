@@ -163,8 +163,9 @@ export default function Login({ navigation }: Props) {
           await supabase.auth.setSession(data.session);
         }
 
-        // Redirigir al MainStack y abrir Home
-        navigation.replace("MainStack", { screen: "Home" });
+        // App cambia automáticamente al stack principal cuando Supabase
+        // publica la nueva sesión. Forzar un replace desde el stack de acceso
+        // apunta a una ruta inexistente y deja un warning/error de navegación.
       }
 
     } catch (error) {
