@@ -1,8 +1,6 @@
 import type React from "react";
 import { Text, StyleSheet, View, Pressable } from "react-native";
-import { useEffect, useState } from "react";
 import Ionicons from "@expo/vector-icons/Ionicons";
-import type { LocationData } from "../../types/location";
 import { useBottomSheetModal } from "../../lib/hooks/useBottomSheetModal";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import SelectCitySheetView from "../home/SelectCitySheetView";
@@ -10,15 +8,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { clearServicesCache } from "../../lib/hooks/useServices";
 import { useLocationStore } from "../../store/locationStore";
 
-interface LocationChipProps {
-  location: LocationData | null;
-}
-
 const LocationChip = () => {
   const { isLoading, error, effectiveLocation } = useLocationStore();
   const client = useQueryClient();
-  const [locationText, setLocationText] =
-    useState<string>("Cargando ubicación");
   const { present, modalProps } = useBottomSheetModal({
     snapPoints: ["60%"],
     onClose: () => {
@@ -26,11 +18,18 @@ const LocationChip = () => {
     },
   });
 
-  useEffect(() => {
-    if (effectiveLocation) {
-      setLocationText(`${effectiveLocation.city}, ${effectiveLocation.country}`)
-    }
-  }, [effectiveLocation]);
+  const locationText = effectiveLocation
+    ? [
+        effectiveLocation.city || effectiveLocation.locality,
+        effectiveLocation.province,
+      ]
+        .filter(Boolean)
+        .join(", ") || "Ubicación elegida"
+    : isLoading
+      ? "Cargando ubicación"
+      : error
+        ? "Elegí tu ciudad"
+        : "Ubicación por confirmar";
 
   const handleOnPress = () => {
     present();

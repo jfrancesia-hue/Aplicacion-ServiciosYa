@@ -119,8 +119,9 @@ function Home({ navigation, route }: Props) {
             }
           })
         });
-      } catch (error) {
-        console.error("Error al registrar actividad:", error);
+      } catch {
+        // La telemetría heredada no debe afectar ni ensuciar el recorrido
+        // principal cuando el servicio externo no responde.
       }
     };
 

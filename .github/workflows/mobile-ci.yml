@@ -43,5 +43,8 @@ jobs:
       - name: Expo project health
         run: npx expo-doctor
 
+      - name: Android JavaScript bundle
+        run: npm run bundle:android:check
+
       - name: Critical production vulnerabilities
         run: npm audit --omit=dev --audit-level=critical

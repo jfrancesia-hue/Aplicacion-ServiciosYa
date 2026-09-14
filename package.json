@@ -16,6 +16,8 @@
     "check:serviciosya-contract": "node scripts/check_serviciosya_unified_contract.js",
     "legal:export-public": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/export_public_legal_documents.mjs",
     "legal:check-public": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/export_public_legal_documents.mjs --check",
+    "bundle:android:check": "expo export --platform android --output-dir dist/qa-android",
+    "qa:release": "npm run typecheck && npm test && npm run check:serviciosya-contract && npm run legal:check-public && npx expo-doctor && npm run bundle:android:check",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/*.test.mjs"

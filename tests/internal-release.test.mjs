@@ -64,10 +64,10 @@ test("la build interna exige una selección explícita del entorno de datos", ()
   );
 });
 
-test("la próxima compilación conserva la versión configurada 96", () => {
-  assert.equal(app.expo.version, "96.0.0");
-  assert.equal(app.expo.android.versionCode, 96);
-  assert.equal(app.expo.ios.buildNumber, "96");
+test("la próxima compilación conserva la versión configurada 97", () => {
+  assert.equal(app.expo.version, "97.0.0");
+  assert.equal(app.expo.android.versionCode, 97);
+  assert.equal(app.expo.ios.buildNumber, "97");
 });
 
 test("la guía interna usa el perfil correcto y aísla las pruebas QA", () => {

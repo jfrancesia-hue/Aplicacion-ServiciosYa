@@ -5,6 +5,7 @@ import { zustandStorage } from "../lib/storagev2";
 import type { Coords, LocationSource } from "../types/location";
 import queryClient from "../lib/reactQuery";
 import { locationIpInfoQueryOptions } from "../lib/queryOptions";
+import { resolveArgentineProvince } from "../lib/utils/geoSegmentation";
 
 type LocationState = {
   source: LocationSource; // "device" | "custom" | "ip"
@@ -25,16 +26,42 @@ type LocationState = {
   clearCustomLocation: () => void;
 };
 
+function normalizeArgentineLocation(coords: Coords): Coords {
+  const country = String(coords.country ?? "")
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .trim()
+    .toLowerCase();
+  const insideArgentina =
+    coords.latitude >= -56 &&
+    coords.latitude <= -21 &&
+    coords.longitude >= -74 &&
+    coords.longitude <= -53;
+  const isArgentina =
+    insideArgentina || ["ar", "arg", "argentina"].includes(country);
+  const canonicalProvince = isArgentina
+    ? resolveArgentineProvince(coords.province) ||
+      resolveArgentineProvince(coords.city) ||
+      resolveArgentineProvince(coords.locality)
+    : null;
+
+  return {
+    ...coords,
+    province: canonicalProvince ?? coords.province ?? null,
+    locality: coords.locality ?? coords.city ?? null,
+  };
+}
+
 /**
  * Reverse-geocode GPS coordinates → city & country
  */
 async function resolveLocationFromCoords(coords: Coords): Promise<Coords> {
   if (coords.city && coords.province) {
-    return {
+    return normalizeArgentineLocation({
       ...coords,
       locality: coords.locality ?? coords.city,
       country: coords.country ?? "Argentina",
-    };
+    });
   }
 
   try {
@@ -43,7 +70,7 @@ async function resolveLocationFromCoords(coords: Coords): Promise<Coords> {
       longitude: coords.longitude,
     });
 
-    return {
+    return normalizeArgentineLocation({
       latitude: coords.latitude,
       longitude: coords.longitude,
       accuracy: coords.accuracy ?? null,
@@ -51,9 +78,9 @@ async function resolveLocationFromCoords(coords: Coords): Promise<Coords> {
       province: coords.province ?? place?.region ?? null,
       locality: coords.locality ?? place?.subregion ?? place?.city ?? null,
       country: coords.country ?? place?.country ?? null,
-    };
+    });
   } catch {
-    return {
+    return normalizeArgentineLocation({
       latitude: coords.latitude,
       longitude: coords.longitude,
       accuracy: coords.accuracy ?? null,
@@ -61,7 +88,7 @@ async function resolveLocationFromCoords(coords: Coords): Promise<Coords> {
       province: coords.province ?? null,
       locality: coords.locality ?? null,
       country: coords.country ?? null,
-    };
+    });
   }
 }
 
@@ -72,7 +99,7 @@ async function resolveLocationFromIP(): Promise<Coords> {
   const { latitude, longitude, city, province, locality, country } =
     await queryClient.ensureQueryData(locationIpInfoQueryOptions);
 
-  return {
+  return normalizeArgentineLocation({
     latitude,
     longitude,
     accuracy: null,
@@ -80,7 +107,7 @@ async function resolveLocationFromIP(): Promise<Coords> {
     province,
     locality,
     country,
-  };
+  });
 }
 
 export const useLocationStore = create<LocationState>()(

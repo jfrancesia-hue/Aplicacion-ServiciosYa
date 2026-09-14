@@ -278,6 +278,12 @@ async function loadQuotes(
       warranty: String(metadata.warranty ?? "7 días"),
       validUntil: String(metadata.validUntil ?? "24 horas"),
       notes: metadata.notes ? String(metadata.notes) : undefined,
+      operationalNoticeVersion: metadata.operationalNoticeVersion
+        ? String(metadata.operationalNoticeVersion)
+        : null,
+      operationalNoticeAcceptedAt: metadata.operationalNoticeAcceptedAt
+        ? String(metadata.operationalNoticeAcceptedAt)
+        : null,
       verified: Boolean(profile?.verificado || marketplaceProfile?.verificado),
       avatar: profile?.foto_perfil || marketplaceProfile?.foto_url || null,
       selected: String(selectedBudgetId ?? "") === String(budget.id),
@@ -630,9 +636,73 @@ Deno.serve(async (req) => {
         .eq("oferta_id", offer.id);
       if (budgetUpdateError) throw budgetUpdateError;
 
+      const existingQuoteMessages = await admin
+        .from("mensajes")
+        .select("id,contenido")
+        .eq("chat_id", chat.id)
+        .eq("remitente_id", quote.workerId)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (existingQuoteMessages.error) throw existingQuoteMessages.error;
+      let quoteMessageId = existingQuoteMessages.data?.find(
+        (message: { id: string; contenido: string | null }) =>
+          String(message.contenido ?? "").includes(
+            `\"sourceBudgetId\":\"${quote.id}\"`,
+          ),
+      )?.id;
+
+      const existingChatQuote = quoteMessageId
+        ? await admin
+            .from("chat_quotes")
+            .select("id,version")
+            .eq("message_id", quoteMessageId)
+            .maybeSingle()
+        : { data: null, error: null };
+      if (existingChatQuote.error) throw existingChatQuote.error;
+
+      let chatQuoteId = existingChatQuote.data?.id ?? null;
+      let quoteVersion = Number(existingChatQuote.data?.version ?? 0);
+      let supersedesQuoteId: string | null = null;
+
+      if (
+        !chatQuoteId &&
+        quote.operationalNoticeVersion &&
+        quote.operationalNoticeAcceptedAt
+      ) {
+        const [latestVersionResult, previousQuoteResult] = await Promise.all([
+          admin
+            .from("chat_quotes")
+            .select("version")
+            .eq("chat_id", chat.id)
+            .eq("provider_id", quote.workerId)
+            .order("version", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          admin
+            .from("chat_quotes")
+            .select("id")
+            .eq("chat_id", chat.id)
+            .eq("provider_id", quote.workerId)
+            .in("status", ["pending", "changes_requested"])
+            .order("version", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
+        if (latestVersionResult.error) throw latestVersionResult.error;
+        if (previousQuoteResult.error) throw previousQuoteResult.error;
+
+        quoteVersion = Number(latestVersionResult.data?.version ?? 0) + 1;
+        chatQuoteId = crypto.randomUUID();
+        supersedesQuoteId = previousQuoteResult.data?.id ?? null;
+      }
+
       const quoteContent = `${QUOTE_PREFIX}${JSON.stringify({
         type: "quote",
+        ...(chatQuoteId ? { quoteId: chatQuoteId, version: quoteVersion } : {}),
         amount: quote.amount,
+        feeRate: 0.1,
+        feeAmount: commission,
+        clientTotal: quote.amount + commission,
         pricingMode: quote.pricingMode,
         unitRate: quote.unitRate,
         estimatedUnits: quote.estimatedUnits,
@@ -643,23 +713,13 @@ Deno.serve(async (req) => {
         warranty: quote.warranty,
         validUntil: quote.validUntil,
         notes: quote.notes,
+        operationalNoticeVersion: quote.operationalNoticeVersion,
+        operationalNoticeAcceptedAt: quote.operationalNoticeAcceptedAt,
         source: "mica",
         sourceBudgetId: quote.id,
         createdAt: now,
       })}`;
-      const existingQuoteMessages = await admin
-        .from("mensajes")
-        .select("id,contenido")
-        .eq("chat_id", chat.id)
-        .eq("remitente_id", quote.workerId)
-        .order("created_at", { ascending: false })
-        .limit(50);
-      let quoteMessageId = existingQuoteMessages.data?.find(
-        (message: { id: string; contenido: string | null }) =>
-          String(message.contenido ?? "").includes(
-            `\"sourceBudgetId\":\"${quote.id}\"`,
-          ),
-      )?.id;
+
       if (!quoteMessageId) {
         const insertedQuote = await admin
           .from("mensajes")
@@ -673,6 +733,43 @@ Deno.serve(async (req) => {
         if (insertedQuote.error || !insertedQuote.data)
           throw insertedQuote.error;
         quoteMessageId = insertedQuote.data.id;
+      } else {
+        const updatedQuoteMessage = await admin
+          .from("mensajes")
+          .update({ contenido: quoteContent })
+          .eq("id", quoteMessageId);
+        if (updatedQuoteMessage.error) throw updatedQuoteMessage.error;
+      }
+
+      if (chatQuoteId && !existingChatQuote.data) {
+        if (supersedesQuoteId) {
+          const superseded = await admin
+            .from("chat_quotes")
+            .update({ status: "superseded" })
+            .eq("id", supersedesQuoteId);
+          if (superseded.error) throw superseded.error;
+        }
+
+        const insertedChatQuote = await admin.from("chat_quotes").insert({
+          id: chatQuoteId,
+          chat_id: chat.id,
+          message_id: quoteMessageId,
+          provider_id: quote.workerId,
+          client_id: user.id,
+          version: quoteVersion,
+          amount_provider: quote.amount,
+          fee_rate: 0.1,
+          fee_amount: commission,
+          client_total: quote.amount + commission,
+          scope: quote.description,
+          materials: quote.materials,
+          timeframe: quote.availability,
+          warranty: quote.warranty,
+          validity_text: quote.validUntil,
+          notes: quote.notes ?? null,
+          supersedes_quote_id: supersedesQuoteId,
+        });
+        if (insertedChatQuote.error) throw insertedChatQuote.error;
       }
 
       const handoffText = [

@@ -34,6 +34,7 @@ import {
 import { supabase } from "../lib/supabase";
 import type { MainStackParamList } from "../types/navigation";
 import { useLocationStore } from "../store/locationStore";
+import { uniqueCategoryNames } from "../lib/utils/categoryNames";
 
 type Props = NativeStackScreenProps<MainStackParamList, "PublicarNecesidad">;
 
@@ -105,9 +106,9 @@ export default function PublicarNecesidad({ navigation }: Props) {
           .maybeSingle(),
       ]);
 
-      const values = (categoryRows ?? [])
-        .map((item) => item.nombre?.trim())
-        .filter((item): item is string => Boolean(item));
+      const values = uniqueCategoryNames(
+        (categoryRows ?? []).map((item) => item.nombre),
+      );
       setCategories(values);
       if (values.length > 0) setCategory((current) => current || values[0]);
 
