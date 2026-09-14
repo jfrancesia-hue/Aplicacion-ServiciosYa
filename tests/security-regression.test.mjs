@@ -245,6 +245,13 @@ const privateVerificationMigration = await readFile(
   ),
   "utf8",
 );
+const postgres17PreflightMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260914184911_postgres17_preflight_and_legacy_rpc.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const availableProvidersFunction = await readFile(
   new URL(
     "../supabase/functions/available-providers/index.ts",
@@ -772,6 +779,17 @@ test("la reputación es bilateral sin sanciones automáticas por reseña", () =>
   assert.match(bilateralReviewsMigration, /job_status <> 'completed'/);
   assert.match(bilateralReviewsMigration, /client_trust_summary/);
   assert.doesNotMatch(bilateralReviewsMigration, /suspend|ban|block/i);
+});
+
+test("la base queda preparada para PostgreSQL 17 sin romper la RPC heredada", () => {
+  assert.match(postgres17PreflightMigration, /drop extension if exists pgjwt/i);
+  assert.match(
+    postgres17PreflightMigration,
+    /incrementar_veces_contratado\(servicio_id_input bigint\)/i,
+  );
+  assert.match(postgres17PreflightMigration, /to service_role/i);
+  assert.match(postgres17PreflightMigration, /interval '30 days'/i);
+  assert.match(postgres17PreflightMigration, /cleanup-pg-cron-history/i);
 });
 
 test("interpreta el retorno aprobado de Mercado Pago", () => {

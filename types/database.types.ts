@@ -6016,7 +6016,7 @@ export type Database = {
       }
       hire_service: { Args: { p_service_id: number }; Returns: string }
       incrementar_veces_contratado: {
-        Args: { servicio_id_input: string }
+        Args: { servicio_id_input: number }
         Returns: undefined
       }
       is_operational_admin: { Args: never; Returns: boolean }

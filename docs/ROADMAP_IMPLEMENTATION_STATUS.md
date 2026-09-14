@@ -43,6 +43,13 @@
 - Corrección desplegada de participantes canónicos del chat en mensajes,
   urgencias y confirmación de pagos.
 - Android alineado en versión `96.0.0` / `versionCode 96` y perfil EAS para pista interna.
+- Protección contra contraseñas filtradas activada en Supabase Auth.
+- Base actualizada a PostgreSQL `17.6.1.166` estable: `pgjwt` retirada sin
+  dependencias, RPC heredada corregida a `bigint` y retención de 30 días para
+  el historial de `pg_cron`.
+- Data API recuperada después de la actualización eliminando la referencia
+  histórica a un esquema retirado e inexistente; REST y Auth volvieron a
+  responder correctamente.
 
 ## Acciones manuales de Agustín
 
@@ -51,14 +58,21 @@ Agustín. El correo transaccional ya no requiere configuración adicional.
 
 ## Evidencia de cierre técnico
 
-- `npm test`: 80 pruebas aprobadas.
+- `npm test`: 82 pruebas aprobadas.
 - `npm run typecheck`: sin errores.
-- Migraciones remotas alineadas hasta `20260914151108`.
+- Migraciones remotas alineadas hasta `20260914184911`.
 - Funciones `operational-dashboard`, `create-payment-preference`,
   `process-transactional-notifications` y `process-urgent-work-alerts`
   desplegadas.
 - Funciones `available-providers` versión 9 y `operational-dashboard` versión 8
   desplegadas para la protección documental y la nueva cola de consumidores.
-- El linter remoto ya no informa referencias inválidas en el flujo de chat o
-  urgencias. Conserva advertencias heredadas de la extensión GIS y una RPC
-  antigua no utilizada por la app (`incrementar_veces_contratado`).
+- El linter de los esquemas propios ya no informa referencias inválidas. Los
+  diagnósticos restantes al incluir `gis` pertenecen a funciones internas de
+  PostGIS y no a código de la aplicación.
+- El advisor conserva una advertencia informativa sobre
+  `get_mica_app_requests_for_worker`: su uso de `SECURITY DEFINER` es deliberado
+  porque las tablas base niegan acceso directo; la RPC valida `auth.uid()`, rol,
+  rubro y ubicación antes de devolver pedidos compatibles.
+- La beta interna contra producción tiene un procedimiento QA explícito con la
+  categoría aislada `Tester QA`; no debe generar pedidos ni avisos para
+  prestadores reales.
