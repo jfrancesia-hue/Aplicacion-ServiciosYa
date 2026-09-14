@@ -1,6 +1,6 @@
 # Estado de implementación · llamada con Facundo
 
-Última actualización: 12 de agosto de 2026.
+Última actualización: 14 de septiembre de 2026.
 
 ## Desplegado
 
@@ -14,7 +14,9 @@
 - Panel global de trabajos y acciones pendientes.
 - MICA como intake guiado de reclamos y derivación a la bandeja operativa de Agustín.
 - Notificaciones in-app y push para pago, agenda, recordatorios, reprogramaciones y reclamos.
-- Outbox de correo transaccional idempotente; conserva los eventos si el proveedor todavía no está configurado.
+- Outbox de correo transaccional idempotente con Resend configurado para enviar
+  desde `Servicios Ya <notificaciones@serviciosya.site>`; conserva los eventos
+  ante fallos temporales del proveedor.
 - Estado de correo y push visible en el panel operativo, incluyendo eventos en
   espera y fallos definitivos, sin exponer secretos.
 - Procesadores automáticos de correo y urgencias autenticados con un secreto
@@ -28,8 +30,9 @@
   20 minutos.
 - Calificación bilateral sobre trabajos confirmados. Una reseña aislada no sanciona automáticamente.
 - Resumen operativo antes de enviar y aceptar presupuestos, con versión y hora registradas al iniciar el pago.
-- Enlaces legales existentes conservados como copia web y eliminación del
-  descargo absoluto que figuraba en el registro del cliente.
+- Enlaces legales sincronizados en producción con los documentos vigentes de
+  la app y eliminación del descargo absoluto que figuraba en el registro del
+  cliente.
 - Términos y Política de Privacidad consolidados dentro de la app, con copia web
   complementaria, versión y aceptación electrónica auditables.
 - Botones públicos de arrepentimiento y baja desde el primer acceso, código de
@@ -39,28 +42,18 @@
   antecedentes penales.
 - Corrección desplegada de participantes canónicos del chat en mensajes,
   urgencias y confirmación de pagos.
-- Android alineado en versión `95.0.0` / `versionCode 95` y perfil EAS para pista interna.
+- Android alineado en versión `96.0.0` / `versionCode 96` y perfil EAS para pista interna.
 
-## Accesos externos necesarios
-
-1. Correo transaccional: una cuenta Resend, dominio/remitente verificado y los secretos `RESEND_API_KEY` y `TRANSACTIONAL_EMAIL_FROM` en Supabase.
+## Acciones manuales de Agustín
 
 Expo/EAS, Google Play Console y el alta manual de Facundo quedan a cargo de
-Agustín y fuera de esta ejecución.
-
-## Comandos de cierre
-
-Configurar el correo sin compartir la clave por chat:
-
-```powershell
-npx supabase secrets set RESEND_API_KEY="..." TRANSACTIONAL_EMAIL_FROM="Servicios Ya <avisos@dominio-verificado>"
-```
+Agustín. El correo transaccional ya no requiere configuración adicional.
 
 ## Evidencia de cierre técnico
 
-- `npm test`: 42 pruebas aprobadas.
+- `npm test`: 80 pruebas aprobadas.
 - `npm run typecheck`: sin errores.
-- Migraciones remotas alineadas hasta `20260812191000`.
+- Migraciones remotas alineadas hasta `20260914151108`.
 - Funciones `operational-dashboard`, `create-payment-preference`,
   `process-transactional-notifications` y `process-urgent-work-alerts`
   desplegadas.
