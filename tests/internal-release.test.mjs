@@ -28,6 +28,7 @@ const environmentCheck = fs.readFileSync(
   "scripts/check_internal_release_env.js",
   "utf8",
 );
+const easIgnore = fs.readFileSync(".easignore", "utf8");
 
 test("la prueba interna genera un AAB y apunta al track internal", () => {
   assert.equal(eas.build.internal.distribution, "store");
@@ -63,6 +64,17 @@ test("la próxima compilación conserva la versión configurada 96", () => {
   assert.equal(app.expo.version, "96.0.0");
   assert.equal(app.expo.android.versionCode, 96);
   assert.equal(app.expo.ios.buildNumber, "96");
+});
+
+test("EAS excluye secretos y credenciales locales del contexto de build", () => {
+  assert.match(easIgnore, /^\.env$/m);
+  assert.match(easIgnore, /^\.env\.\*$/m);
+  assert.match(easIgnore, /^\*\.p8$/m);
+  assert.match(easIgnore, /^\*\.p12$/m);
+  assert.match(easIgnore, /^\*\.key$/m);
+  assert.match(easIgnore, /^\/credentials\.json$/m);
+  assert.match(easIgnore, /^\/credentials$/m);
+  assert.doesNotMatch(easIgnore, /^\*\.p\|$/m);
 });
 
 test("Android 36 y los enlaces verificados usan serviciosya.site", () => {
