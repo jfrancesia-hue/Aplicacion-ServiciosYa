@@ -12,6 +12,23 @@ const providers = fs.readFileSync(
   "supabase/functions/available-providers/index.ts",
   "utf8",
 );
+const notificationsHook = fs.readFileSync(
+  "lib/hooks/useNotifications.ts",
+  "utf8",
+);
+const notificationHandler = fs.readFileSync(
+  "lib/hooks/useNotificationHandler.ts",
+  "utf8",
+);
+const notificationsData = fs.readFileSync(
+  "lib/utils/notificationes.ts",
+  "utf8",
+);
+const micaChat = fs.readFileSync("screens/MicaChat.tsx", "utf8");
+const legalExport = fs.readFileSync(
+  "scripts/export_public_legal_documents.mjs",
+  "utf8",
+);
 
 test("un cambio de cuenta elimina la caché privada antes de renderizar", () => {
   assert.match(authHook, /queryCacheUserId !== nextUserId/);
@@ -41,4 +58,39 @@ test("el listado nacional rechaza provincias extranjeras explícitas", () => {
   assert.match(providers, /const explicitProvince = cleanText/);
   assert.match(providers, /explicitProvince\s*\? resolveProvince/);
   assert.match(providers, /return Boolean\(providerProvince\)/);
+});
+
+test("un toque de notificación tiene un solo manejador de navegación", () => {
+  assert.doesNotMatch(
+    notificationsHook,
+    /addNotificationResponseReceivedListener/,
+  );
+  assert.match(notificationHandler, /addNotificationResponseReceivedListener/);
+  assert.doesNotMatch(notificationsHook, /setNotificationHandler/);
+  assert.match(notificationHandler, /setNotificationHandler/);
+  assert.doesNotMatch(notificationsHook, /Linking\.openURL/);
+});
+
+test("las notificaciones sin foto no inventan un avatar remoto", () => {
+  assert.match(notificationsData, /foto_perfil: user\?\.foto_perfil \?\? null/);
+  assert.doesNotMatch(notificationsData, /picsum/);
+});
+
+test("un pedido cerrado no se muestra activo ni permite elegir presupuesto", () => {
+  assert.match(micaChat, /type SearchStage =[^;]+"closed"/);
+  assert.match(micaChat, /Este pedido ya no recibe presupuestos/);
+  const selectFlow = micaOrder.slice(
+    micaOrder.indexOf('if (action === "select")'),
+    micaOrder.indexOf("const chat = await findOrCreateChat"),
+  );
+  assert.match(
+    selectFlow,
+    /\["cancelado", "cancelada", "finalizado", "finalizada"\]/,
+  );
+  assert.match(selectFlow, /El pedido ya no est/);
+});
+
+test("el control legal compara contenido y no falla solo por CRLF de Windows", () => {
+  assert.match(legalExport, /normalizeLineEndings/);
+  assert.match(legalExport, /replace\(\/\\r\\n\?\/g, "\\n"\)/);
 });

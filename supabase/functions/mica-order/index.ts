@@ -150,7 +150,7 @@ async function loadOwnedOffer(
   let query = admin
     .from("nuevaOferta")
     .select(
-      "id,app_cliente_id,categoria,zona,descripcion,estado,paso,presupuesto_seleccionado_id,app_chat_id,created_at",
+      "id,app_cliente_id,categoria,zona,descripcion,estado,paso,presupuesto_seleccionado_id,app_chat_id,created_at,historial_conversacion,metadata",
     )
     .eq("app_cliente_id", userId);
 
@@ -159,7 +159,11 @@ async function loadOwnedOffer(
   } else {
     query = query
       .eq("source", "mica_app")
-      .not("estado", "in", '("cancelado","cancelada","finalizada")')
+      .not(
+        "estado",
+        "in",
+        '("cancelado","cancelada","finalizado","finalizada")',
+      )
       .order("created_at", { ascending: false })
       .limit(1);
   }
@@ -403,7 +407,7 @@ Deno.serve(async (req) => {
         );
       }
       if (
-        ["cancelado", "cancelada", "finalizada"].includes(
+        ["cancelado", "cancelada", "finalizado", "finalizada"].includes(
           String(offer.estado ?? "").toLowerCase(),
         )
       ) {
@@ -556,6 +560,35 @@ Deno.serve(async (req) => {
       const offer = await loadOwnedOffer(admin, user.id, offerId);
       if (!offer) return json({ order: null, quotes: [] });
 
+      let history: unknown = offer.historial_conversacion ?? [];
+      if (typeof history === "string") {
+        try {
+          history = JSON.parse(history);
+        } catch {
+          history = [];
+        }
+      }
+      const safeHistory = Array.isArray(history)
+        ? history
+            .filter(
+              (item) =>
+                item &&
+                typeof item === "object" &&
+                (item.author === "mica" || item.author === "user") &&
+                typeof item.text === "string",
+            )
+            .slice(-40)
+            .map((item) => ({ author: item.author, text: item.text }))
+        : [];
+      const metadata =
+        offer.metadata && typeof offer.metadata === "object"
+          ? offer.metadata
+          : {};
+      const insight =
+        metadata.insight && typeof metadata.insight === "object"
+          ? metadata.insight
+          : null;
+
       const quotes = await loadQuotes(
         admin,
         String(offer.id),
@@ -579,8 +612,11 @@ Deno.serve(async (req) => {
             ? String(offer.presupuesto_seleccionado_id)
             : null,
           chatId: offer.app_chat_id ?? null,
+          createdAt: offer.created_at ?? null,
         },
         quotes,
+        history: safeHistory,
+        insight,
       });
     }
 
@@ -595,6 +631,13 @@ Deno.serve(async (req) => {
 
       const offer = await loadOwnedOffer(admin, user.id, offerId);
       if (!offer) return json({ error: "Pedido no encontrado." }, 404);
+      if (
+        ["cancelado", "cancelada", "finalizado", "finalizada"].includes(
+          String(offer.estado ?? "").toLowerCase(),
+        )
+      ) {
+        return json({ error: "El pedido ya no está disponible." }, 409);
+      }
 
       const quotes = await loadQuotes(
         admin,

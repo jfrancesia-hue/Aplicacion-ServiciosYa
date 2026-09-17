@@ -1,27 +1,17 @@
-// hooks/useNotifications.ts
-import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
-import * as Linking from "expo-linking";
-import Constants from "expo-constants";
+// hooks/useNotifications.ts
+import { useCallback, useEffect, useState } from "react";
 import { Alert, Platform } from "react-native";
-import { supabase } from "../supabase";
-import { useQueryClient } from "@tanstack/react-query";
-import { useNotificationsCount } from "./useNotificationsCount";
 import { getUserID } from "../../store/authStore";
+import { supabase } from "../supabase";
 import {
   URGENT_WORK_CHANNEL_ID,
   URGENT_WORK_SOUND,
 } from "../utils/urgentWorkNotification";
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+import { useNotificationsCount } from "./useNotificationsCount";
 
 export const useNotifications = () => {
   useNotificationsCount();
@@ -77,14 +67,18 @@ export const useNotifications = () => {
           lightColor: "#FF231F7C",
         });
 
-        await Notifications.setNotificationChannelAsync(URGENT_WORK_CHANNEL_ID, {
-          name: "Trabajos urgentes",
-          importance: Notifications.AndroidImportance.MAX,
-          sound: URGENT_WORK_SOUND,
-          vibrationPattern: [0, 900, 250, 900, 250, 1200, 350, 1200],
-          lightColor: "#FF3B30",
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-        });
+        await Notifications.setNotificationChannelAsync(
+          URGENT_WORK_CHANNEL_ID,
+          {
+            name: "Trabajos urgentes",
+            importance: Notifications.AndroidImportance.MAX,
+            sound: URGENT_WORK_SOUND,
+            vibrationPattern: [0, 900, 250, 900, 250, 1200, 350, 1200],
+            lightColor: "#FF3B30",
+            lockscreenVisibility:
+              Notifications.AndroidNotificationVisibility.PUBLIC,
+          },
+        );
       }
 
       // Check/request permissions
@@ -162,47 +156,10 @@ export const useNotifications = () => {
       },
     );
 
-    const responseListener = Notifications.addNotificationResponseReceivedListener(
-      (response) => {
-        console.log("Notification interaction:", {
-          actionIdentifier: response.actionIdentifier,
-          data: response.notification.request.content.data,
-        });
-
-        // Handle notification tap/interaction
-        // You can add navigation logic here based on response.notification.request.content.data
-        const { screen, params } = response.notification.request.content.data;
-
-        // 🔴 Si es ChatIndividual, NO usar Linking
-        if (screen === "ChatIndividual") {
-          return;
-        }
-
-        if (typeof screen === "string") {
-          const queryParams =
-            params && typeof params === "object"
-              ? Object.fromEntries(
-                  Object.entries(params as Record<string, unknown>)
-                    .filter(([, value]) => value != null)
-                    .map(([key, value]) => [key, String(value)]),
-                )
-              : undefined;
-          // Create a URL from the notification data
-          // e.g., "service/uuid-123" -> becomes "myapp://service/uuid-123"
-          const url = Linking.createURL(screen, { queryParams });
-          // Use Expo's Linking to navigate
-          Linking.openURL(url);
-        }
-      },
-    );
-
     // Cleanup function
     return () => {
       if (notificationListener) {
         notificationListener.remove();
-      }
-      if (responseListener) {
-        responseListener.remove();
       }
     };
   }, [initializeNotifications]);

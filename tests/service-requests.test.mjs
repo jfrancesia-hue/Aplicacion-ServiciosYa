@@ -97,6 +97,17 @@ const micaChat = await readFile(
   new URL("../screens/MicaChat.tsx", import.meta.url),
   "utf8",
 );
+const confirmedLocationMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260917142144_require_confirmed_request_location_and_rank_city.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const micaWorkerPanel = await readFile(
+  new URL("../components/serviciosYa/PedidosMicaSection.tsx", import.meta.url),
+  "utf8",
+);
 
 test("las publicaciones manuales reutilizan nuevaOferta con un origen distinguible", () => {
   assert.match(migration, /create_manual_service_request/);
@@ -151,7 +162,54 @@ test("las publicaciones relacionan oficios equivalentes", () => {
 test("MICA muestra la ubicación y deja entrar a mis publicaciones", () => {
   assert.match(micaChat, /Cambiar ciudad del pedido/);
   assert.match(micaChat, /Ver mis publicaciones/);
-  assert.match(micaChat, /navigation\.navigate\("PublicarNecesidad"\)/);
+  assert.match(
+    micaChat,
+    /navigation\.navigate\("PublicarNecesidad", \{ view: "history" \}\)/,
+  );
+  assert.match(micaChat, /Conversación de esta búsqueda/);
+  assert.match(micaChat, /locationSource !== "ip"/);
+});
+
+test("el cliente tiene un historial visible y separado de una publicación nueva", () => {
+  assert.match(publicationScreen, /Mis búsquedas/);
+  assert.match(publicationScreen, /Todas tus búsquedas/);
+  assert.match(publicationScreen, /Nueva publicación/);
+  assert.match(publicationScreen, /Falta confirmar la ubicación/);
+  assert.match(publicationScreen, /locationState\.source === "ip"/);
+  assert.match(publicationScreen, /"finalizada"/);
+  assert.doesNotMatch(publicationScreen, /disabled=\{cancelled\}/);
+});
+
+test("el backend rechaza pedidos móviles sin ciudad o provincia confirmadas", () => {
+  assert.match(confirmedLocationMigration, /REQUEST_CITY_REQUIRED/);
+  assert.match(confirmedLocationMigration, /REQUEST_PROVINCE_REQUIRED/);
+  assert.match(confirmedLocationMigration, /private\.create_mica_app_request/);
+  assert.match(
+    confirmedLocationMigration,
+    /private\.create_manual_service_request/,
+  );
+});
+
+test("los prestadores ven primero pedidos de su ciudad sin perder alcance provincial", () => {
+  assert.match(
+    confirmedLocationMigration,
+    /extensions\.unaccent\(lower\(coalesce\(o\.provincia, ''\)\)\)/,
+  );
+  assert.match(confirmedLocationMigration, /order by\s+case/s);
+  assert.match(confirmedLocationMigration, /coalesce\(o\.ciudad, ''\)/);
+  assert.match(
+    confirmedLocationMigration,
+    /private\.get_mica_app_requests_for_worker/,
+  );
+  assert.match(confirmedLocationMigration, /security invoker/);
+});
+
+test("un prestador sin ubicación recibe una acción clara y no un listado vacío", () => {
+  assert.match(micaWorkerPanel, /missingWorkerLocation/);
+  assert.match(micaWorkerPanel, /Completar ubicación/);
+  assert.match(micaWorkerPanel, /navigation\.navigate\("Perfil"\)/);
+  assert.match(micaWorkerPanel, /!ctx\.ciudad\?\.trim\(\)/);
+  assert.match(micaWorkerPanel, /!ctx\.provincia\?\.trim\(\)/);
 });
 
 test("calcula el total comisionable para proyecto, hora y día", () => {

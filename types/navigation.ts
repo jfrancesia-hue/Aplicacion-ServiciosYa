@@ -16,7 +16,7 @@ export type MainStackParamList = {
   CrearPerfil: undefined;
   Perfil: undefined;
   OfrecerServicio: undefined;
-  PublicarNecesidad: undefined;
+  PublicarNecesidad: { view?: "history" | "new" } | undefined;
   TrabajosPendientes: undefined;
   Configuracion: undefined;
   ServiciosPorCategoria: { categoria: string };

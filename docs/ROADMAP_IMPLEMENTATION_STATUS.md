@@ -42,7 +42,7 @@
   antecedentes penales.
 - Corrección desplegada de participantes canónicos del chat en mensajes,
   urgencias y confirmación de pagos.
-- Android alineado en versión `96.0.0` / `versionCode 96` y perfil EAS para pista interna.
+- Android alineado en versión `97.0.0` / `versionCode 97` y perfil EAS para pista interna.
 - Protección contra contraseñas filtradas activada en Supabase Auth.
 - Base actualizada a PostgreSQL `17.6.1.166` estable: `pgjwt` retirada sin
   dependencias, RPC heredada corregida a `bigint` y retención de 30 días para

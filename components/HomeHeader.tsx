@@ -1,31 +1,37 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { LinearGradient } from "expo-linear-gradient";
 import React, { useEffect, useState } from "react";
+import { Suspense } from "react";
 import {
-  TouchableOpacity,
-  View,
+  Alert,
+  Image,
   StyleSheet,
   Text,
   TextInput,
-  Image,
-  Alert,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { Suspense } from "react";
-import LocationChip from "./location/LocationChip";
-import { Ionicons } from "@expo/vector-icons";
 import { useMainNavigation } from "../lib/hooks/useNavigation";
-import OptionsButton from "./home/OptionsButton";
+import { perfilQueryOptions } from "../lib/queryOptions";
 import { useIsGuest } from "../store/authStore";
 import { useNotificationStore } from "../store/notificationStore";
-import { useSuspenseQuery } from "@tanstack/react-query";
-import { perfilQueryOptions } from "../lib/queryOptions";
-import { LinearGradient } from "expo-linear-gradient";
+import OptionsButton from "./home/OptionsButton";
+import LocationChip from "./location/LocationChip";
 
 interface HomeHeaderProps {
   onSearch: (query: string) => void;
   onPublishPress: () => void;
+  onRequestsPress?: () => void;
   publishLabel: string;
 }
 
-function HomeHeader({ onSearch, onPublishPress, publishLabel }: HomeHeaderProps) {
+function HomeHeader({
+  onSearch,
+  onPublishPress,
+  onRequestsPress,
+  publishLabel,
+}: HomeHeaderProps) {
   const navigation = useMainNavigation();
   const notificationsCount = useNotificationStore((state) => state.unreadCount);
   const isGuest = useIsGuest();
@@ -39,9 +45,10 @@ function HomeHeader({ onSearch, onPublishPress, publishLabel }: HomeHeaderProps)
         { text: "Cancelar", style: "cancel" },
         {
           text: "Registrarme",
-          onPress: () => navigation.navigate("AuthStack", { screen: "LoginSelect" }),
+          onPress: () =>
+            navigation.navigate("AuthStack", { screen: "LoginSelect" }),
         },
-      ]
+      ],
     );
   }, [navigation]);
 
@@ -54,10 +61,7 @@ function HomeHeader({ onSearch, onPublishPress, publishLabel }: HomeHeaderProps)
   }, [busqueda, onSearch]);
 
   return (
-    <LinearGradient
-      colors={["#069eb3", "#047a8f"]}
-      style={styles.header}
-    >
+    <LinearGradient colors={["#069eb3", "#047a8f"]} style={styles.header}>
       <View style={styles.container}>
         <View style={styles.headerTop}>
           <View style={styles.logoAndTextContainer}>
@@ -95,7 +99,11 @@ function HomeHeader({ onSearch, onPublishPress, publishLabel }: HomeHeaderProps)
               <Suspense
                 fallback={
                   <View style={styles.iconButton}>
-                    <Ionicons name="person-circle-outline" size={36} color="#fff" />
+                    <Ionicons
+                      name="person-circle-outline"
+                      size={36}
+                      color="#fff"
+                    />
                   </View>
                 }
               >
@@ -111,7 +119,12 @@ function HomeHeader({ onSearch, onPublishPress, publishLabel }: HomeHeaderProps)
 
         <View style={styles.searchBarContainer}>
           <View style={styles.buscadorContainer}>
-            <Ionicons name="search" size={22} color="#333" style={styles.searchIcon} />
+            <Ionicons
+              name="search"
+              size={22}
+              color="#333"
+              style={styles.searchIcon}
+            />
             <TextInput
               placeholder="Buscar categoría..."
               placeholderTextColor="#333"
@@ -124,21 +137,35 @@ function HomeHeader({ onSearch, onPublishPress, publishLabel }: HomeHeaderProps)
         </View>
 
         {!isGuest && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={publishLabel}
-            activeOpacity={0.85}
-            onPress={onPublishPress}
-            style={styles.publishButton}
-          >
-            <View style={styles.publishButtonCopy}>
-              <Ionicons name="megaphone-outline" size={20} color="#fff" />
-              <Text style={styles.publishButtonText}>{publishLabel}</Text>
-            </View>
-            <View style={styles.publishButtonIcon}>
-              <Ionicons name="chevron-forward" size={24} color="#fff" />
-            </View>
-          </TouchableOpacity>
+          <View style={styles.requestActions}>
+            {onRequestsPress ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Ver mis búsquedas"
+                activeOpacity={0.85}
+                onPress={onRequestsPress}
+                style={styles.requestsButton}
+              >
+                <Ionicons name="documents-outline" size={19} color="#fff" />
+                <Text style={styles.requestsButtonText}>Mis búsquedas</Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={publishLabel}
+              activeOpacity={0.85}
+              onPress={onPublishPress}
+              style={styles.publishButton}
+            >
+              <View style={styles.publishButtonCopy}>
+                <Ionicons name="megaphone-outline" size={20} color="#fff" />
+                <Text style={styles.publishButtonText}>{publishLabel}</Text>
+              </View>
+              <View style={styles.publishButtonIcon}>
+                <Ionicons name="chevron-forward" size={22} color="#fff" />
+              </View>
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </LinearGradient>
@@ -147,16 +174,17 @@ function HomeHeader({ onSearch, onPublishPress, publishLabel }: HomeHeaderProps)
 
 export default HomeHeader;
 
-
 function ProfileAvatar() {
   const navigation = useMainNavigation();
   const { data: perfil } = useSuspenseQuery(perfilQueryOptions);
 
   const handlePress = React.useCallback(() => {
     if (!perfil?.perfil_completo) {
-      Alert.alert("Perfil incompleto", "Completa tu perfil antes de continuar.", [
-        { text: "OK" },
-      ]);
+      Alert.alert(
+        "Perfil incompleto",
+        "Completa tu perfil antes de continuar.",
+        [{ text: "OK" }],
+      );
       return;
     }
     navigation.navigate("Perfil");
@@ -172,7 +200,6 @@ function ProfileAvatar() {
     </TouchableOpacity>
   );
 }
-
 
 const styles2 = StyleSheet.create({
   iconButton: {
@@ -316,6 +343,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   publishButton: {
+    flex: 1,
     minHeight: 50,
     paddingLeft: 16,
     paddingRight: 8,
@@ -324,6 +352,28 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+  },
+  requestActions: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 8,
+  },
+  requestsButton: {
+    minHeight: 50,
+    borderRadius: 25,
+    paddingHorizontal: 14,
+    backgroundColor: "rgba(255, 255, 255, 0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.35)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+  },
+  requestsButtonText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "800",
   },
   publishButtonCopy: {
     flexDirection: "row",

@@ -1,16 +1,16 @@
-import { useState } from "react";
-import colors from "../../lib/constants/colors";
-import { useUserSettings } from "../../lib/hooks/useUserSettings";
-import { type City, CityAutocomplete } from "../inputs/CityAutocomplete";
-import SheetContainer from "../sheet/SheetContainer";
-import { Text, StyleSheet, View, TouchableOpacity } from "react-native";
-import { cityToLocationData } from "../../lib/utils/location";
-import { withSuspense } from "../withSuspense";
-import LoadingView from "../LoadingView";
-import { GenericButton } from "../GenericButtom";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import colors from "../../lib/constants/colors";
+import { useUserSettings } from "../../lib/hooks/useUserSettings";
+import { cityToLocationData } from "../../lib/utils/location";
 import { useLocationStore } from "../../store/locationStore";
+import { GenericButton } from "../GenericButtom";
+import LoadingView from "../LoadingView";
+import { type City, CityAutocomplete } from "../inputs/CityAutocomplete";
+import SheetContainer from "../sheet/SheetContainer";
+import { withSuspense } from "../withSuspense";
 
 function SelectCitySheetView() {
   const {
@@ -61,6 +61,19 @@ function SelectCitySheetView() {
     }
   };
 
+  const handleUseDeviceLocation = async () => {
+    setLoading(true);
+    try {
+      await updateSettings({ customLocation: null });
+      clearCustomLocation();
+      await requestDeviceLocation();
+      setCurrentLocation(useLocationStore.getState().effectiveLocation);
+      queryClient.invalidateQueries({ queryKey: ["user", "services"] });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SheetContainer style={styles.sheetContainer}>
       <Text style={styles.sheetTitle}>Selecciona tu ciudad</Text>
@@ -81,6 +94,11 @@ function SelectCitySheetView() {
                 .filter(Boolean)
                 .join(", ") || "Ubicación por confirmar"}
             </Text>
+            {source === "ip" ? (
+              <Text style={styles.approximateText}>
+                Aproximada por internet: requiere confirmación
+              </Text>
+            ) : null}
           </View>
           {canClear && (
             <TouchableOpacity
@@ -99,6 +117,23 @@ function SelectCitySheetView() {
           ? "Podés cambiar la ciudad elegida o eliminarla para volver a usar el GPS."
           : "Buscá cualquier localidad de Argentina o seguí usando tu ubicación GPS."}
       </Text>
+
+      <TouchableOpacity
+        activeOpacity={0.82}
+        disabled={loading}
+        onPress={handleUseDeviceLocation}
+        style={styles.deviceLocationButton}
+      >
+        <MaterialIcons name="my-location" size={19} color="#087d8d" />
+        <View style={styles.deviceLocationCopy}>
+          <Text style={styles.deviceLocationTitle}>Usar mi ubicación GPS</Text>
+          <Text style={styles.deviceLocationText}>
+            Android te pedirá permiso antes de acceder.
+          </Text>
+        </View>
+      </TouchableOpacity>
+
+      <Text style={styles.manualDivider}>O elegí la ciudad manualmente</Text>
 
       <View style={styles.autocompleteContainer}>
         <CityAutocomplete
@@ -217,6 +252,34 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.text,
     lineHeight: 20,
+  },
+  approximateText: {
+    color: "#9a6000",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  deviceLocationButton: {
+    minHeight: 58,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bcdde1",
+    backgroundColor: "#effafb",
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 12,
+  },
+  deviceLocationCopy: { flex: 1 },
+  deviceLocationTitle: { color: "#17515c", fontSize: 13, fontWeight: "900" },
+  deviceLocationText: { color: "#70878c", fontSize: 10, marginTop: 2 },
+  manualDivider: {
+    color: "#5f777c",
+    fontSize: 11,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 10,
   },
   gpsLocationText: {
     fontSize: 16,

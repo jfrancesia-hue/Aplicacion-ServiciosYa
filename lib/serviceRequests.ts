@@ -48,6 +48,19 @@ export type WorkerServiceRequest = {
   metadata: Json;
 };
 
+function serviceRequestError(error: { message?: string }) {
+  const message = error.message ?? "";
+  if (
+    message.includes("REQUEST_CITY_REQUIRED") ||
+    message.includes("REQUEST_PROVINCE_REQUIRED")
+  ) {
+    return new Error(
+      "Confirmá la ciudad y la provincia antes de publicar el trabajo.",
+    );
+  }
+  return error;
+}
+
 export async function createManualServiceRequest(
   input: ManualServiceRequestInput,
 ) {
@@ -63,7 +76,7 @@ export async function createManualServiceRequest(
     p_modalidad_preferida: input.preferredBudgetMode,
   });
 
-  if (error) throw error;
+  if (error) throw serviceRequestError(error);
   const result = Array.isArray(data) ? data[0] : data;
   if (!result?.oferta_id) throw new Error("No se pudo crear la publicación.");
   return String(result.oferta_id);

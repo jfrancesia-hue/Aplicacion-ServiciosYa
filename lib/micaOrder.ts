@@ -37,8 +37,11 @@ export type MicaOrderStatus = {
     description: string;
     selectedBudgetId?: string | null;
     chatId?: string | null;
+    createdAt?: string | null;
   } | null;
   quotes: MicaOrderQuote[];
+  history?: Array<{ author: "mica" | "user"; text: string }>;
+  insight?: Record<string, string> | null;
 };
 
 export type MicaOrderSelection = {

@@ -1,4 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import React, { useMemo, useState } from "react";
 import {
@@ -9,21 +11,22 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { supabase } from "../../lib/supabase";
-import showToast from "../../lib/toast";
+import { QUOTE_OPERATIONAL_NOTICE_VERSION } from "../../lib/constants/billing";
+import { respondToMicaOrder } from "../../lib/micaOrder";
 import {
   getPedidosDisponibles,
   isServiciosYaBridgeConfigured,
 } from "../../lib/serviciosYaBridge";
-import { respondToMicaOrder } from "../../lib/micaOrder";
+import { supabase } from "../../lib/supabase";
+import showToast from "../../lib/toast";
 import {
-  buildQuotePricing,
-  pricingModeLabel,
   type QuotePricingMode,
   type QuoteReferenceType,
+  buildQuotePricing,
+  pricingModeLabel,
 } from "../../lib/utils/quotePricing";
 import { getUserID } from "../../store/authStore";
-import { QUOTE_OPERATIONAL_NOTICE_VERSION } from "../../lib/constants/billing";
+import type { MainStackParamList } from "../../types/navigation";
 import type { ServiciosYaBridgePedido } from "../../types/serviciosYaBridge";
 import QuoteOperationalNoticeModal from "../quotes/QuoteOperationalNoticeModal";
 
@@ -111,6 +114,8 @@ async function getMicaAppFallbackPedidos(ctx: {
 }
 
 export default function PedidosMicaSection() {
+  const navigation =
+    useNavigation<NativeStackNavigationProp<MainStackParamList>>();
   const queryClient = useQueryClient();
   const [selectedPedido, setSelectedPedido] =
     useState<ServiciosYaBridgePedido | null>(null);
@@ -158,6 +163,7 @@ export default function PedidosMicaSection() {
       const ctx = contextQuery.data;
       if (!ctx) throw new Error("Prestador no disponible");
       if (ctx.oficios.length === 0) return [];
+      if (!ctx.ciudad?.trim() || !ctx.provincia?.trim()) return [];
 
       let bridgePedidos: ServiciosYaBridgePedido[] = [];
       try {
@@ -251,8 +257,22 @@ export default function PedidosMicaSection() {
     if (!enabled) return "Conexión Web/Mica pendiente de URL.";
     if (contextQuery.data?.oficios.length === 0)
       return "Publicá o cargá al menos un oficio para recibir pedidos compatibles.";
+    if (!contextQuery.data?.ciudad || !contextQuery.data?.provincia)
+      return "Completá ciudad y provincia para recibir pedidos de tu zona.";
     return "Pedidos generados por MICA y coordinados desde el chat interno.";
-  }, [enabled, contextQuery.data?.oficios.length]);
+  }, [
+    enabled,
+    contextQuery.data?.ciudad,
+    contextQuery.data?.oficios.length,
+    contextQuery.data?.provincia,
+  ]);
+
+  const missingWorkerLocation = Boolean(
+    enabled &&
+      contextQuery.data &&
+      (!contextQuery.data.ciudad?.trim() ||
+        !contextQuery.data.provincia?.trim()),
+  );
 
   return (
     <View style={styles.section}>
@@ -285,6 +305,28 @@ export default function PedidosMicaSection() {
           <Text style={styles.statusText}>
             Falta configurar la URL del puente Web/Mica.
           </Text>
+        </View>
+      ) : missingWorkerLocation ? (
+        <View style={styles.statusBoxColumn}>
+          <View style={styles.statusBoxRow}>
+            <Ionicons name="location-outline" size={18} color="#92400E" />
+            <Text style={styles.statusText}>
+              No podemos buscar pedidos cercanos hasta que confirmes tu ciudad y
+              provincia.
+            </Text>
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Completar ubicación del perfil"
+            activeOpacity={0.82}
+            onPress={() => navigation.navigate("Perfil")}
+            style={styles.completeLocationButton}
+          >
+            <Text style={styles.completeLocationButtonText}>
+              Completar ubicación
+            </Text>
+            <Ionicons name="chevron-forward" size={17} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
       ) : pedidosQuery.data && pedidosQuery.data.length === 0 ? (
         <View style={styles.statusBox}>
@@ -530,6 +572,29 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   statusText: { flex: 1, color: "#374151", fontSize: 13, lineHeight: 18 },
+  statusBoxColumn: {
+    gap: 10,
+    backgroundColor: "#FFFBEB",
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+  },
+  statusBoxRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  completeLocationButton: {
+    minHeight: 42,
+    borderRadius: 10,
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+  },
+  completeLocationButtonText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
+  },
   pedidoCard: {
     backgroundColor: "#F9FAFB",
     borderRadius: 14,

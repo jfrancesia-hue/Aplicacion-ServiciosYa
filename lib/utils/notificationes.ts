@@ -24,7 +24,7 @@ export async function fetchUserNotifications() {
     const user = users.find((u) => u.id === n.emisor_id);
     return {
       ...n,
-      foto_perfil: user?.foto_perfil ?? "https://picsum.photos/id/9/200/300",
+      foto_perfil: user?.foto_perfil ?? null,
     };
   });
 }

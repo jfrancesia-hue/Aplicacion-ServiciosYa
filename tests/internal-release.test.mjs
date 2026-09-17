@@ -19,10 +19,7 @@ const assetLinks = JSON.parse(
   fs.readFileSync("website/.well-known/assetlinks.json", "utf8"),
 );
 const appleAppSiteAssociation = JSON.parse(
-  fs.readFileSync(
-    "website/.well-known/apple-app-site-association",
-    "utf8",
-  ),
+  fs.readFileSync("website/.well-known/apple-app-site-association", "utf8"),
 );
 const environmentCheck = fs.readFileSync(
   "scripts/check_internal_release_env.js",
@@ -38,10 +35,7 @@ test("la prueba interna genera un AAB y apunta al track internal", () => {
   assert.equal(eas.build.internal.distribution, "store");
   assert.equal(eas.build.internal.environment, "preview");
   assert.equal(eas.build.internal.android.buildType, "app-bundle");
-  assert.equal(
-    eas.build.internal.env.EXPO_PUBLIC_RELEASE_CHANNEL,
-    "internal",
-  );
+  assert.equal(eas.build.internal.env.EXPO_PUBLIC_RELEASE_CHANNEL, "internal");
   assert.equal(eas.submit.internal.android.track, "internal");
   assert.equal(eas.submit.internal.android.releaseStatus, "completed");
 });
@@ -64,17 +58,14 @@ test("la build interna exige una selección explícita del entorno de datos", ()
   );
 });
 
-test("la próxima compilación conserva la versión configurada 96", () => {
-  assert.equal(app.expo.version, "96.0.0");
-  assert.equal(app.expo.android.versionCode, 96);
-  assert.equal(app.expo.ios.buildNumber, "96");
+test("la próxima compilación usa una versión posterior a la build 96 existente", () => {
+  assert.equal(app.expo.version, "97.0.0");
+  assert.equal(app.expo.android.versionCode, 97);
+  assert.equal(app.expo.ios.buildNumber, "97");
 });
 
 test("la guía interna usa el perfil correcto y aísla las pruebas QA", () => {
-  assert.match(
-    internalBetaGuide,
-    /npm run build:android:internal/,
-  );
+  assert.match(internalBetaGuide, /npm run build:android:internal/);
   assert.doesNotMatch(
     internalBetaGuide,
     /build --platform android --profile production/,
@@ -108,14 +99,8 @@ test("Android 36 y los enlaces verificados usan serviciosya.site", () => {
       "android.permission.WRITE_EXTERNAL_STORAGE",
     ].sort(),
   );
-  assert.match(
-    androidManifest,
-    /READ_EXTERNAL_STORAGE" tools:node="remove"/,
-  );
-  assert.match(
-    androidManifest,
-    /WRITE_EXTERNAL_STORAGE" tools:node="remove"/,
-  );
+  assert.match(androidManifest, /READ_EXTERNAL_STORAGE" tools:node="remove"/);
+  assert.match(androidManifest, /WRITE_EXTERNAL_STORAGE" tools:node="remove"/);
   assert.deepEqual(app.expo.ios.associatedDomains, [
     "applinks:serviciosya.site",
   ]);
@@ -124,10 +109,7 @@ test("Android 36 y los enlaces verificados usan serviciosya.site", () => {
     filter.data.map((entry) => entry.host).filter(Boolean),
   );
   assert.deepEqual([...new Set(hosts)], ["serviciosya.site"]);
-  assert.equal(
-    assetLinks[0].target.package_name,
-    "com.alex_6775.appTrabajo",
-  );
+  assert.equal(assetLinks[0].target.package_name, "com.alex_6775.appTrabajo");
   assert.equal(
     appleAppSiteAssociation.applinks.details[0].appID,
     "HHY5MJ22J3.com.alex-6775.appTrabajo",

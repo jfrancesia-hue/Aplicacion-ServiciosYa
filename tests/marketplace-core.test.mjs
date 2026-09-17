@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import test from "node:test";
 import {
+  SERVICE_CONFIRMATION_COMMISSION_RATE,
+  calculateServiceConfirmationFee,
+} from "../lib/constants/billing.ts";
+import {
+  createAudioMessageContent,
+  getChatMessagePreview,
+  parseAudioMessageContent,
+} from "../lib/utils/audioMessage.ts";
+import {
   ARGENTINE_PROVINCE_BY_STATE_CODE,
   formatLocationScope,
   getArgentineProvinceCapital,
@@ -10,25 +19,16 @@ import {
   sameProvince,
 } from "../lib/utils/geoSegmentation.ts";
 import {
-  createAudioMessageContent,
-  getChatMessagePreview,
-  parseAudioMessageContent,
-} from "../lib/utils/audioMessage.ts";
+  asksForKnownLocation,
+  getMicaRequestLocationStatus,
+  inferMicaLocation,
+  resolveMicaRequestLocation,
+} from "../lib/utils/micaLocation.ts";
 import {
   createMicaAssistantContent,
   getMicaSystemMessagePreview,
   parseMicaSystemMessage,
 } from "../lib/utils/micaMessage.ts";
-import {
-  asksForKnownLocation,
-  inferMicaLocation,
-  resolveMicaRequestLocation,
-} from "../lib/utils/micaLocation.ts";
-import { repairSpanishMojibake } from "../lib/utils/textEncoding.ts";
-import {
-  SERVICE_CONFIRMATION_COMMISSION_RATE,
-  calculateServiceConfirmationFee,
-} from "../lib/constants/billing.ts";
 import {
   createQuoteMessage,
   parseQuoteMessage,
@@ -38,6 +38,7 @@ import {
   getServiceSystemMessagePreview,
   parseServiceSystemMessage,
 } from "../lib/utils/serviceSystemMessage.ts";
+import { repairSpanishMojibake } from "../lib/utils/textEncoding.ts";
 
 test("segmenta prestadores de Catamarca sin depender de tildes", () => {
   const target = {
@@ -162,6 +163,7 @@ test("interpreta una resolución de cancelación como evento del servicio", () =
 
 test("MICA reconoce ciudades y barrios con tildes sin repetir la pregunta", () => {
   assert.equal(inferMicaLocation("Zona Nueva Córdoba"), "Nueva Córdoba");
+  assert.equal(inferMicaLocation("Barrio 9 de Julio"), "Barrio 9 de Julio");
   assert.equal(
     inferMicaLocation("San Fernando del Valle de Catamarca", true),
     "San Fernando del Valle de Catamarca",
@@ -172,6 +174,56 @@ test("MICA reconoce ciudades y barrios con tildes sin repetir la pregunta", () =
       "Nueva Córdoba",
     ),
     true,
+  );
+});
+
+test("MICA no publica un barrio ambiguo sin ciudad y provincia", () => {
+  assert.deepEqual(
+    getMicaRequestLocationStatus({ requestedZone: "Barrio 9 de Julio" }),
+    {
+      city: null,
+      province: null,
+      requestedZone: "Barrio 9 de Julio",
+      isComplete: false,
+      label: null,
+      draftLabel: "Barrio 9 de Julio",
+    },
+  );
+});
+
+test("MICA combina el barrio con la ciudad confirmada por GPS o selección manual", () => {
+  assert.deepEqual(
+    getMicaRequestLocationStatus({
+      requestedZone: "Barrio 9 de Julio",
+      fallbackCity: "San Fernando del Valle de Catamarca",
+      fallbackProvince: "Catamarca",
+    }),
+    {
+      city: "San Fernando del Valle de Catamarca",
+      province: "Catamarca",
+      requestedZone: "Barrio 9 de Julio",
+      isComplete: true,
+      label:
+        "Barrio 9 de Julio, San Fernando del Valle de Catamarca, Catamarca",
+      draftLabel:
+        "Barrio 9 de Julio, San Fernando del Valle de Catamarca, Catamarca",
+    },
+  );
+});
+
+test("MICA separa correctamente una ciudad y provincia escritas juntas", () => {
+  assert.deepEqual(
+    getMicaRequestLocationStatus({
+      requestedZone: "San Fernando del Valle de Catamarca, Catamarca",
+    }),
+    {
+      city: "San Fernando del Valle de Catamarca",
+      province: "Catamarca",
+      requestedZone: "San Fernando del Valle de Catamarca, Catamarca",
+      isComplete: true,
+      label: "San Fernando del Valle de Catamarca, Catamarca",
+      draftLabel: "San Fernando del Valle de Catamarca, Catamarca",
+    },
   );
 });
 

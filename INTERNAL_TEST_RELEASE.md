@@ -59,7 +59,7 @@ npm run build:android:internal
 npm run submit:android:internal
 ```
 
-Al enviar, seleccionar la build 96 recién generada. El perfil de envío usa el
+Al enviar, seleccionar la build 97 recién generada. El perfil de envío usa el
 track `internal`; no seleccionar el perfil `production`.
 
 Agregar los correos de testers desde Google Play Console, sin versionarlos en

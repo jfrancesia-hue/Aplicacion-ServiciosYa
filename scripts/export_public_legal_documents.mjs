@@ -51,13 +51,17 @@ const publicLegalPayload = {
 };
 
 const serializedPayload = `${JSON.stringify(publicLegalPayload, null, 2)}\n`;
+const normalizeLineEndings = (value) => value.replace(/\r\n?/g, "\n");
 
 for (const outputDirectory of outputDirectories) {
   const outputPath = path.join(outputDirectory, "legal-documents.json");
 
   if (checkOnly) {
     const currentPayload = await readFile(outputPath, "utf8");
-    if (currentPayload !== serializedPayload) {
+    if (
+      normalizeLineEndings(currentPayload) !==
+      normalizeLineEndings(serializedPayload)
+    ) {
       throw new Error(
         `${outputPath} no coincide con lib/legal/documents.ts. Ejecutá npm run legal:export-public.`,
       );
