@@ -1,7 +1,14 @@
 import { MaterialIcons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
+import * as Location from "expo-location";
 import { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import colors from "../../lib/constants/colors";
 import { useUserSettings } from "../../lib/hooks/useUserSettings";
 import { cityToLocationData } from "../../lib/utils/location";
@@ -16,6 +23,8 @@ function SelectCitySheetView() {
   const {
     effectiveLocation,
     source,
+    error,
+    isLoading,
     setCustomLocation,
     clearCustomLocation,
     requestDeviceLocation,
@@ -23,6 +32,8 @@ function SelectCitySheetView() {
   const [initialLocation] = useState(effectiveLocation);
   const { updateSettings } = useUserSettings();
   const [city, setCity] = useState<City | null>(null);
+  const [address, setAddress] = useState("");
+  const [manualError, setManualError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false); // 🔹 estado loading
   const country = "AR";
 
@@ -32,10 +43,23 @@ function SelectCitySheetView() {
   const canClear = initialLocation !== currentLocation || source === "custom";
 
   const handleSubmit = async () => {
-    if (!city) return;
+    if (!city || !address.trim()) {
+      setManualError("Elegí una ciudad y escribí la dirección exacta.");
+      return;
+    }
     setLoading(true);
+    setManualError(null);
     try {
-      const newLocation = cityToLocationData(city);
+      const matches = await Location.geocodeAsync(
+        `${address.trim()}, ${city.name}, Argentina`,
+      );
+      const match = matches[0];
+      if (!match) throw new Error("No encontramos esa dirección.");
+      const newLocation = {
+        ...cityToLocationData(city),
+        latitude: match.latitude,
+        longitude: match.longitude,
+      };
       await setCustomLocation(newLocation);
       await updateSettings({ customLocation: newLocation });
 
@@ -43,6 +67,12 @@ function SelectCitySheetView() {
       setCurrentLocation(newLocation);
 
       queryClient.invalidateQueries({ queryKey: ["user", "services"] });
+    } catch (cause) {
+      setManualError(
+        cause instanceof Error
+          ? cause.message
+          : "No pudimos ubicar esa dirección.",
+      );
     } finally {
       setLoading(false);
     }
@@ -53,8 +83,10 @@ function SelectCitySheetView() {
     try {
       await updateSettings({ customLocation: null });
       setCity(null);
+      setAddress("");
+      setManualError(null);
       clearCustomLocation();
-      await requestDeviceLocation();
+      setCurrentLocation(useLocationStore.getState().effectiveLocation);
       queryClient.invalidateQueries({ queryKey: ["user", "services"] });
     } finally {
       setLoading(false);
@@ -76,7 +108,7 @@ function SelectCitySheetView() {
 
   return (
     <SheetContainer style={styles.sheetContainer}>
-      <Text style={styles.sheetTitle}>Selecciona tu ciudad</Text>
+      <Text style={styles.sheetTitle}>Confirmá la ubicación</Text>
 
       {/* Display current city info if set, otherwise show GPS info */}
       <View style={styles.currentCityContainer}>
@@ -88,7 +120,7 @@ function SelectCitySheetView() {
             style={styles.locationIcon}
           />
           <View style={styles.currentCityInfo}>
-            <Text style={styles.currentCityTitle}>Ciudad actual</Text>
+            <Text style={styles.currentCityTitle}>Ubicación actual</Text>
             <Text style={styles.currentCityText}>
               {[currentLocation?.city, currentLocation?.province]
                 .filter(Boolean)
@@ -114,45 +146,58 @@ function SelectCitySheetView() {
 
       <Text style={styles.infoTextLong}>
         {source === "custom"
-          ? "Podés cambiar la ciudad elegida o eliminarla para volver a usar el GPS."
-          : "Buscá cualquier localidad de Argentina o seguí usando tu ubicación GPS."}
+          ? "Podés cambiar la dirección elegida o volver a usar el GPS."
+          : "Usá el GPS o ingresá una ciudad y una dirección exacta."}
       </Text>
+
+      {error ? <Text style={styles.locationError}>{error}</Text> : null}
 
       <TouchableOpacity
         activeOpacity={0.82}
-        disabled={loading}
+        disabled={loading || isLoading}
         onPress={handleUseDeviceLocation}
         style={styles.deviceLocationButton}
       >
         <MaterialIcons name="my-location" size={19} color="#087d8d" />
         <View style={styles.deviceLocationCopy}>
-          <Text style={styles.deviceLocationTitle}>Usar mi ubicación GPS</Text>
+          <Text style={styles.deviceLocationTitle}>
+            {isLoading ? "Obteniendo ubicación…" : "Usar mi ubicación GPS"}
+          </Text>
           <Text style={styles.deviceLocationText}>
             Android te pedirá permiso antes de acceder.
           </Text>
         </View>
       </TouchableOpacity>
 
-      <Text style={styles.manualDivider}>O elegí la ciudad manualmente</Text>
+      <Text style={styles.manualDivider}>O ingresá la ubicación manualmente</Text>
 
       <View style={styles.autocompleteContainer}>
         <CityAutocomplete
           label="Ciudad"
           countryCode={country}
           onSelectCity={(city) => {
-            console.log("Ciudad seleccionada:", city);
             setCity(city || null);
           }}
-          placeholder="Selecciona una ciudad"
+          placeholder="Seleccioná una ciudad"
           dropdownProps={{ direction: "down" }}
         />
+        <TextInput
+          value={address}
+          onChangeText={setAddress}
+          placeholder="Calle y número, barrio o referencia"
+          placeholderTextColor="#70878c"
+          style={styles.addressInput}
+        />
+        {manualError ? (
+          <Text style={styles.locationError}>{manualError}</Text>
+        ) : null}
       </View>
 
       <GenericButton
-        title={loading ? "Cargando..." : "Actualizar"} // 🔹 cambia título si carga
+        title={loading ? "Ubicando..." : "Confirmar dirección"}
         onPress={handleSubmit}
         style={styles.button}
-        disabled={loading || !city} // 🔹 deshabilitado mientras carga
+        disabled={loading || !city || !address.trim()}
       />
     </SheetContainer>
   );
@@ -184,8 +229,29 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
   },
+  locationError: {
+    color: "#9a3412",
+    backgroundColor: "#fff7ed",
+    borderColor: "#fed7aa",
+    borderWidth: 1,
+    borderRadius: 10,
+    padding: 10,
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
   autocompleteContainer: {
     marginBottom: 16,
+  },
+  addressInput: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#bcdde1",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: "#173f47",
+    backgroundColor: "#fff",
   },
   button: {
     marginTop: 8,

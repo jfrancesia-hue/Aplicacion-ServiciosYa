@@ -1,25 +1,17 @@
 import * as Location from "expo-location";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { resolveArgentineProvince } from "../lib/utils/geoSegmentation";
 import { zustandStorage } from "../lib/storagev2";
 import type { Coords, LocationSource } from "../types/location";
-import queryClient from "../lib/reactQuery";
-import { locationIpInfoQueryOptions } from "../lib/queryOptions";
-import { resolveArgentineProvince } from "../lib/utils/geoSegmentation";
 
 type LocationState = {
-  source: LocationSource; // "device" | "custom" | "ip"
-
+  source: LocationSource;
   deviceLocation: Coords | null;
   customLocation: Coords | null;
-
   isLoading: boolean;
   error: string | null;
-
-  // derived
   effectiveLocation: Coords | null;
-
-  // actions
   requestDeviceLocation: () => Promise<void>;
   setCustomLocation: (coords: Coords) => Promise<void>;
   useDeviceLocation: () => void;
@@ -52,9 +44,6 @@ function normalizeArgentineLocation(coords: Coords): Coords {
   };
 }
 
-/**
- * Reverse-geocode GPS coordinates → city & country
- */
 async function resolveLocationFromCoords(coords: Coords): Promise<Coords> {
   if (coords.city && coords.province) {
     return normalizeArgentineLocation({
@@ -76,73 +65,41 @@ async function resolveLocationFromCoords(coords: Coords): Promise<Coords> {
       accuracy: coords.accuracy ?? null,
       city: coords.city ?? place?.city ?? place?.subregion ?? null,
       province: coords.province ?? place?.region ?? null,
-      locality: coords.locality ?? place?.subregion ?? place?.city ?? null,
+      locality: coords.locality ?? place?.district ?? place?.subregion ?? null,
       country: coords.country ?? place?.country ?? null,
     });
   } catch {
     return normalizeArgentineLocation({
-      latitude: coords.latitude,
-      longitude: coords.longitude,
+      ...coords,
       accuracy: coords.accuracy ?? null,
-      city: coords.city ?? null,
-      province: coords.province ?? null,
-      locality: coords.locality ?? null,
-      country: coords.country ?? null,
     });
   }
 }
 
-/**
- * IP-based fallback (no permissions, low accuracy)
- */
-async function resolveLocationFromIP(): Promise<Coords> {
-  const { latitude, longitude, city, province, locality, country } =
-    await queryClient.ensureQueryData(locationIpInfoQueryOptions);
-
-  return normalizeArgentineLocation({
-    latitude,
-    longitude,
-    accuracy: null,
-    city,
-    province,
-    locality,
-    country,
-  });
-}
-
 export const useLocationStore = create<LocationState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       source: "device",
-
       deviceLocation: null,
       customLocation: null,
-
       isLoading: false,
       error: null,
-
       effectiveLocation: null,
 
-      /**
-       * Request GPS ONCE.
-       * If permission denied or GPS fails → fallback to IP.
-       */
+      // Solo se llama desde un botón elegido por el usuario.
       requestDeviceLocation: async () => {
         set({ isLoading: true, error: null });
-        console.log("Requesting device location...");
 
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
-
-          // 🚨 Permission denied → IP fallback
           if (status !== "granted") {
-            const ipLocation = await resolveLocationFromIP();
-
             set({
-              deviceLocation: ipLocation,
-              source: "ip",
-              effectiveLocation: ipLocation,
+              deviceLocation: null,
+              source: "device",
+              effectiveLocation: null,
               isLoading: false,
+              error:
+                "Permiso de ubicación rechazado. Elegí una ciudad manualmente o habilitá el permiso en Android.",
             });
             return;
           }
@@ -172,68 +129,82 @@ export const useLocationStore = create<LocationState>()(
             effectiveLocation:
               state.source === "custom" ? state.customLocation : resolved,
             isLoading: false,
+            error: null,
           }));
-        } catch {
-          // ⚠️ Any failure → IP fallback
-          try {
-            const ipLocation = await resolveLocationFromIP();
-
-            set({
-              deviceLocation: ipLocation,
-              source: "ip",
-              effectiveLocation: ipLocation,
-              isLoading: false,
-            });
-          } catch (e: unknown) {
-            console.log(`Failed to resolve location: ${e}`);
-            const message =
-              e instanceof Error ? e.message : "Failed to resolve location";
-            set({
-              error: message,
-              isLoading: false,
-            });
-          }
+        } catch (error: unknown) {
+          console.warn(
+            "No se pudo obtener la ubicación GPS:",
+            error instanceof Error ? error.message : error,
+          );
+          set({
+            deviceLocation: null,
+            source: "device",
+            effectiveLocation: null,
+            isLoading: false,
+            error:
+              "No pudimos obtener tu ubicación. Revisá que el GPS esté activo o elegí una ciudad manualmente.",
+          });
         }
       },
 
-      /**
-       * Manually set a custom location (map picker, search, etc.)
-       */
       setCustomLocation: async (coords) => {
         set({ isLoading: true, error: null });
-
         const resolved = await resolveLocationFromCoords(coords);
-
         set({
           customLocation: resolved,
           source: "custom",
           effectiveLocation: resolved,
           isLoading: false,
+          error: null,
         });
       },
 
-      /**
-       * Switch back to device (GPS or IP)
-       */
       useDeviceLocation: () =>
         set((state) => ({
-          source: state.deviceLocation ? "device" : state.source,
+          source: "device",
           effectiveLocation: state.deviceLocation,
+          error: null,
         })),
 
-      /**
-       * Clear custom override
-       */
       clearCustomLocation: () =>
         set((state) => ({
           customLocation: null,
           source: "device",
           effectiveLocation: state.deviceLocation,
+          error: null,
         })),
     }),
     {
       name: "location-store",
       storage: createJSONStorage(() => zustandStorage),
+      version: 2,
+      migrate: (persistedState: unknown, persistedVersion: number) => {
+        const state = persistedState as Partial<LocationState> | undefined;
+        if (!state) return persistedState as unknown as LocationState;
+
+        // Las versiones anteriores podían guardar una ubicación aproximada
+        // por IP o el centro de una ciudad. Al actualizar, se pide una única
+        // confirmación explícita para no reutilizarla como si fuera exacta.
+        if (persistedVersion < 2) {
+          return {
+            ...state,
+            source: "device",
+            deviceLocation: null,
+            customLocation: null,
+            effectiveLocation: null,
+            error: null,
+          } as LocationState;
+        }
+
+        if (state.source !== "ip") return state as LocationState;
+        return {
+          ...state,
+          source: "device",
+          deviceLocation: null,
+          effectiveLocation: null,
+          error: null,
+        } as LocationState;
+      },
     },
   ),
 );

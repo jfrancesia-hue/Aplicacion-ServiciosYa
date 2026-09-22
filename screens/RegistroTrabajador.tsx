@@ -3,8 +3,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system";
 import * as ImagePicker from "expo-image-picker";
-import * as Location from "expo-location";
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Alert,
   FlatList,
@@ -23,13 +22,17 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-import { AuthContext } from "../lib/context/AppContext";
 import { recordCurrentLegalAcceptance } from "../lib/legal/acceptance";
 import { VERIFICATION_DOCUMENTS_BUCKET } from "../lib/legal/verificationDocuments";
 import { supabase } from "../lib/supabase";
 import { syncPrestadorConServiciosYa } from "../lib/serviciosYaApi";
+import LocationInput from "../components/location/LocationInput";
+import { withDropDownProvider } from "../components/forms/withDropDownProvider";
+import { withModalProvider } from "../components/sheet/withModalProvider";
 import vexo from "../lib/vexo";
+import { locationQueryString } from "../lib/utils/location";
 import type { UserUpdate } from "../types/db.overrides.types";
+import type { LocationItem } from "../types/location";
 import type { MainStackParamList } from "../types/navigation";
 import { uniqueCategoryNames } from "../lib/utils/categoryNames";
 
@@ -43,7 +46,7 @@ type RegistrationUpdate = UserUpdate & {
   perfilPublico?: boolean;
 };
 
-export default function RegistroTrabajadorSimplificado() {
+function RegistroTrabajadorSimplificado() {
   const [categorias, setCategorias] = useState<string[]>([]);
   const [categoriasSeleccionadas, setCategoriasSeleccionadas] = useState<
     string[]
@@ -59,6 +62,7 @@ export default function RegistroTrabajadorSimplificado() {
     [],
   );
   const [antiguedad, setAntiguedad] = useState("");
+  const [ubicacion, setUbicacion] = useState<LocationItem | null>(null);
 
   const navigation = useNavigation<NavigationProp>();
   const [nombre, setNombre] = useState("");
@@ -66,27 +70,10 @@ export default function RegistroTrabajadorSimplificado() {
   const [numeroCelular, setNumeroCelular] = useState("");
   const [aceptaTerminos, setAceptaTerminos] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { location, setLocation } = useContext(AuthContext);
   const [fotoPerfil, setFotoPerfil] = useState<string | null>(null);
   const [mostrarModal, setMostrarModal] = useState(true);
   const [procesandoModal, setProcesandoModal] = useState(false);
   const [mostrarOpcionales, setMostrarOpcionales] = useState(false);
-
-  const isInBolivia = (lat: number, lon: number) => {
-    return lat >= -23.0 && lat <= -9.5 && lon >= -69.6 && lon <= -57.5;
-  };
-
-  useEffect(() => {
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const loc = await Location.getCurrentPositionAsync({});
-      setLocation({
-        latitude: loc.coords.latitude,
-        longitude: loc.coords.longitude,
-      });
-    })();
-  }, []);
 
   useEffect(() => {
     (async () => {
@@ -126,7 +113,7 @@ export default function RegistroTrabajadorSimplificado() {
     try {
       const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permiso.granted) {
-        Alert.alert("Permiso requerido", "Debes permitir acceso a la galería.");
+        Alert.alert("Permiso requerido", "Tenés que permitir acceso a la galería.");
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -138,7 +125,7 @@ export default function RegistroTrabajadorSimplificado() {
         setFotoPerfil(result.assets[0].uri);
       }
     } catch (e) {
-      console.log("Error seleccionando foto:", e);
+      console.error("Error seleccionando foto:", e);
     }
   };
 
@@ -187,7 +174,7 @@ export default function RegistroTrabajadorSimplificado() {
         }
       }
     } catch (e) {
-      console.log("Error seleccionando archivo:", e);
+      console.error("Error seleccionando archivo:", e);
     }
   };
 
@@ -241,11 +228,12 @@ export default function RegistroTrabajadorSimplificado() {
       !numeroCelular.trim() ||
       categoriasSeleccionadas.length === 0 ||
       !ciudad.trim() ||
-      !provincia.trim()
+      !provincia.trim() ||
+      !ubicacion
     ) {
       Alert.alert(
         "Faltan datos básicos",
-        "Completá nombre, celular, especialidad, provincia y ciudad.",
+        "Completá nombre, celular, especialidad, provincia, ciudad y ubicación exacta.",
       );
       return;
     }
@@ -254,7 +242,7 @@ export default function RegistroTrabajadorSimplificado() {
       edadNum !== null &&
       (Number.isNaN(edadNum) || edadNum < 18 || edadNum > 100)
     ) {
-      Alert.alert("Edad inválida", "Debes ser mayor de 18 años.");
+      Alert.alert("Edad inválida", "Tenés que ser mayor de 18 años.");
       return;
     }
     const antiguedadNum = antiguedad.trim()
@@ -264,7 +252,7 @@ export default function RegistroTrabajadorSimplificado() {
       antiguedadNum !== null &&
       (Number.isNaN(antiguedadNum) || antiguedadNum < 0)
     ) {
-      Alert.alert("Antigüedad inválida", "Ingresa un número válido.");
+      Alert.alert("Antigüedad inválida", "Ingresá un número válido.");
       return;
     }
     if (numeroCelular.length < 8) {
@@ -275,7 +263,7 @@ export default function RegistroTrabajadorSimplificado() {
       return;
     }
     if (!aceptaTerminos) {
-      Alert.alert("Debes aceptar los términos y condiciones.");
+      Alert.alert("Aceptá los términos y condiciones.");
       return;
     }
     setLoading(true);
@@ -307,9 +295,6 @@ export default function RegistroTrabajadorSimplificado() {
       // Cargar documentos no equivale a validarlos. La verificación se realiza
       // por separado para evitar insignias engañosas.
       const verificado = false;
-      const enBolivia = location
-        ? isInBolivia(location.latitude, location.longitude)
-        : false;
       const domicilio = `${ciudad}, ${provincia}${barrio ? `, ${barrio}` : ""}`;
 
       const updateData: RegistrationUpdate = {
@@ -321,12 +306,8 @@ export default function RegistroTrabajadorSimplificado() {
         ciudad: ciudad.trim(),
         provincia: provincia.trim(),
         barrio: barrio || null,
-        verificado: false,
         perfil_completo: true,
         perfilPublico: true,
-        dni_verificado: false,
-        pago: !enBolivia,
-        creditos: 0,
       };
 
       if (edadNum !== null) updateData.edad = edadNum;
@@ -359,6 +340,7 @@ export default function RegistroTrabajadorSimplificado() {
             last_seen_at: now.toISOString(),
             available_until: availableUntil,
             availability_duration_hours: 12,
+            location: locationQueryString(ubicacion.lat, ubicacion.lng),
           },
           { onConflict: "user_id" },
         );
@@ -395,13 +377,10 @@ export default function RegistroTrabajadorSimplificado() {
         documentos_cargados: matriculaUrls.length > 0,
       });
 
-      const redirectTo: "pagoInicial" | "Home" = enBolivia
-        ? "pagoInicial"
-        : "Home";
       Alert.alert(
         "Perfil publicado",
         "Ya podés recibir consultas. Completá tus datos opcionales cuando quieras para sumar confianza.",
-        [{ text: "OK", onPress: () => navigation.navigate(redirectTo) }],
+        [{ text: "OK", onPress: () => navigation.navigate("Home") }],
       );
     } catch (err) {
       Alert.alert("Error", "Ocurrió un error al registrar tus datos.");
@@ -411,35 +390,8 @@ export default function RegistroTrabajadorSimplificado() {
   };
 
   const elegirContratar = async () => {
-    try {
-      setProcesandoModal(true);
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
-      if (authError || !user) {
-        Alert.alert("Error", "No se pudo obtener el usuario.");
-        return;
-      }
-      const { error } = await supabase
-        .from("usuarios")
-        .update({
-          rol: "user",
-          perfil_completo: true,
-          dni_verificado: true,
-        })
-        .eq("id", user.id);
-      if (error) {
-        Alert.alert("Error", "No se pudo actualizar el perfil.");
-        return;
-      }
-      setMostrarModal(false);
-      navigation.reset({ index: 0, routes: [{ name: "LegalAcceptance" }] });
-    } catch (e) {
-      Alert.alert("Error", "Ocurrió un problema.");
-    } finally {
-      setProcesandoModal(false);
-    }
+    setMostrarModal(false);
+    navigation.replace("RegistroCliente");
   };
 
   return (
@@ -522,6 +474,10 @@ export default function RegistroTrabajadorSimplificado() {
                 value={ciudad}
                 onChangeText={setCiudad}
                 style={styles.input}
+              />
+              <LocationInput
+                locationText="Confirmar ubicación exacta"
+                onChange={setUbicacion}
               />
 
               {/* Categorías con buscador */}
@@ -960,3 +916,7 @@ const styles = StyleSheet.create({
   modalSecondary: { backgroundColor: "#F1F1F1" },
   modalSecondaryText: { color: "#4A7C84", fontSize: 16, fontWeight: "600" },
 });
+
+export default withDropDownProvider(
+  withModalProvider(RegistroTrabajadorSimplificado),
+);

@@ -237,14 +237,14 @@ export const PRIVACY_DOCUMENT: LegalDocument = {
     {
       title: "6. Decisiones automatizadas e inteligencia artificial",
       paragraphs: [
-        "Se utilizan reglas automáticas para detectar datos de contacto, exigir presupuestos estructurados, transcribir audios, ordenar resultados, generar recordatorios, registrar vencimientos de urgencias y señalar riesgos. MICA utiliza modelos de inteligencia artificial para interpretar solicitudes y resumir información.",
-        "Los sistemas automáticos pueden equivocarse. Una transcripción o resumen no reemplaza la confirmación de las partes. Las decisiones relevantes sobre reclamos controvertidos, devoluciones, cierres de cuenta o sanciones significativas admiten intervención humana. No se adoptan decisiones judiciales o administrativas basadas exclusivamente en perfiles automatizados.",
+        "Se utilizan reglas automáticas para detectar datos de contacto, exigir presupuestos estructurados, ordenar resultados, generar recordatorios, registrar vencimientos de urgencias y señalar riesgos. MICA utiliza modelos de inteligencia artificial para interpretar solicitudes y resumir información. Los mensajes de audio no se transcriben automáticamente.",
+        "Los sistemas automáticos pueden equivocarse. Una interpretación o resumen no reemplaza la confirmación de las partes. Las decisiones relevantes sobre reclamos controvertidos, devoluciones, cierres de cuenta o sanciones significativas admiten intervención humana. No se adoptan decisiones judiciales o administrativas basadas exclusivamente en perfiles automatizados.",
       ],
     },
     {
       title: "7. Destinatarios y proveedores",
       paragraphs: [
-        "Servicios Ya comparte únicamente los datos necesarios con la contraparte de una operación y con proveedores que ayudan a prestar el servicio. Actualmente pueden intervenir Supabase en autenticación, base de datos, funciones y almacenamiento; Expo en notificaciones y distribución; Mercado Pago en pagos; OpenAI en asistencia de MICA y transcripción; Resend en correo transaccional cuando esté configurado; Google y Apple en autenticación y servicios del dispositivo; proveedores de mapas y geolocalización; y Vexo u otras herramientas habilitadas para métricas técnicas.",
+        "Servicios Ya comparte únicamente los datos necesarios con la contraparte de una operación y con proveedores que ayudan a prestar el servicio. Actualmente pueden intervenir Supabase en autenticación, base de datos, funciones y almacenamiento; Expo en notificaciones y distribución; Mercado Pago en pagos; Anthropic en la asistencia de MICA; Resend en correo transaccional cuando esté configurado; Google y Apple en autenticación y servicios del dispositivo; proveedores de mapas y geolocalización; y Vexo u otras herramientas habilitadas para métricas técnicas.",
         "Esos proveedores tratan datos conforme a sus funciones, contratos y políticas. Se procura limitar el acceso, configurar permisos y utilizar empresas con medidas razonables de seguridad. También pueden comunicarse datos a autoridades cuando exista obligación legal, orden válida, emergencia o necesidad de proteger derechos y seguridad.",
         "Servicios Ya no vende bases de datos personales ni entrega documentos de identidad, audios o conversaciones a anunciantes para publicidad dirigida de terceros.",
       ],

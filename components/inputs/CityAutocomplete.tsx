@@ -81,7 +81,6 @@ export const CityAutocomplete = ({
   useEffect(() => {
     onSelectCity(null);
     autocompleteRef.current?.clear();
-    console.log("se cambio el country code");
   }, [countryCode]);
 
   // Handle empty states

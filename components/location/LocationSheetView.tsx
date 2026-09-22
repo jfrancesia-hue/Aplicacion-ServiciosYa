@@ -1,16 +1,13 @@
 import { BottomSheetView } from "@gorhom/bottom-sheet";
 import { View, Text, StyleSheet, Pressable } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocation } from "../../lib/hooks/useLocation";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import LoadingIndicator from "../LoadingIndicator";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { LocationItem } from "../../types/location";
-import { useUserSettingsSuspense } from "../../lib/hooks/useUserSettings";
 import { withSuspense } from "../withSuspense";
 import LoadingView from "../LoadingView";
 import { ManualSelectLocation } from "./ManualSelectLocation";
-import { getLocationName } from "../../lib/utils/location";
+import { useLocationStore } from "../../store/locationStore";
 
 // Reuse the same color scheme
 const colors = {
@@ -38,29 +35,32 @@ function LocationSheetView({
   onLocationSelected,
   initialValue,
 }: LocationInputProps) {
-  const insets = useSafeAreaInsets();
-  const { data: settings } = useUserSettingsSuspense();
-  const useGps = settings?.useGPS;
-  const { location, isLoading } = useLocation();
+  const { isLoading, error, requestDeviceLocation } = useLocationStore();
   const [selectedItem, setSelectedItem] = useState<LocationItem | null>(null);
-
-  const currentLocation = useMemo(() => {
-    if (!location) return null;
-    return {
-      name: getLocationName(location.fullAddress[0]),
-      lat: location.latitude,
-      lng: location.longitude,
-      isoCountryCode: location.fullAddress[0]?.isoCountryCode || "N/A",
-    };
-  }, [location]);
+  const [mode, setMode] = useState<"gps" | "manual">("gps");
 
   useEffect(() => {
-    if (currentLocation && useGps) {
-      setSelectedItem(currentLocation);
-    } else if (initialValue) {
+    if (initialValue) {
       setSelectedItem(initialValue);
     }
-  }, [currentLocation, useGps, initialValue]);
+  }, [initialValue]);
+
+  const handleGps = async () => {
+    setMode("gps");
+    setSelectedItem(null);
+    await requestDeviceLocation();
+    const resolved = useLocationStore.getState().effectiveLocation;
+    if (!resolved) return;
+    setSelectedItem({
+      name:
+        [resolved.city || resolved.locality, resolved.province]
+          .filter(Boolean)
+          .join(", ") || "Ubicación GPS confirmada",
+      lat: resolved.latitude,
+      lng: resolved.longitude,
+      isoCountryCode: resolved.country ?? "AR",
+    });
+  };
 
   const handleSubmit = () => {
     if (selectedItem && onLocationSelected) {
@@ -78,11 +78,11 @@ function LocationSheetView({
       style={[styles.sheetContainer]}
     >
       <View style={styles.header}>
-        <Text style={styles.sheetTitle}>Elige tu ubicación</Text>
+        <Text style={styles.sheetTitle}>Elegí tu ubicación</Text>
       </View>
 
       <View style={styles.content}>
-        {useGps ? (
+        {mode === "gps" ? (
           <View style={styles.gpsContainer}>
             {initialValue && (
               <View style={styles.locationCard}>
@@ -104,8 +104,8 @@ function LocationSheetView({
               </View>
             )}
 
-            <View style={styles.locationCard}>
-              <Text style={styles.cardLabel}>Tu ubicación actual</Text>
+            <Pressable style={styles.locationCard} onPress={() => void handleGps()}>
+              <Text style={styles.cardLabel}>Usar mi ubicación GPS</Text>
               <View style={styles.locationRow}>
                 {isLoading ? (
                   <LoadingIndicator size={20} color={colors.primary} />
@@ -118,33 +118,42 @@ function LocationSheetView({
                 )}
 
                 <View style={styles.locationDetails}>
-                  {currentLocation ? (
+                  {selectedItem ? (
                     <>
                       <Text style={styles.locationName}>
-                        {currentLocation.name}
+                        {selectedItem.name}
                       </Text>
                       <Text style={styles.coordinates}>
-                        lat: {location?.latitude.toFixed(4)}, lng:{" "}
-                        {location?.longitude.toFixed(4)}
+                        Ubicación exacta confirmada
                       </Text>
                     </>
                   ) : (
                     <Text style={styles.locationName}>
                       {isLoading
                         ? "Detectando ubicación..."
-                        : "Ubicación no disponible"}
+                        : "Tocá para permitir el acceso"}
                     </Text>
                   )}
                 </View>
               </View>
-            </View>
+            </Pressable>
+            {error ? <Text style={styles.locationError}>{error}</Text> : null}
+            <Pressable
+              style={styles.modeLink}
+              onPress={() => {
+                setMode("manual");
+                setSelectedItem(null);
+              }}
+            >
+              <Text style={styles.modeLinkText}>Ingresar dirección manualmente</Text>
+            </Pressable>
           </View>
         ) : (
           <View style={styles.manualContainer}>
-            <ManualSelectLocation
-              onChange={setSelectedItem}
-              // initialValue={initialValue}
-            />
+            <ManualSelectLocation onChange={setSelectedItem} />
+            <Pressable style={styles.modeLink} onPress={() => setMode("gps")}>
+              <Text style={styles.modeLinkText}>Prefiero usar GPS</Text>
+            </Pressable>
           </View>
         )}
 
@@ -196,6 +205,13 @@ const styles = StyleSheet.create({
   manualContainer: {
     marginBottom: 8,
   },
+  locationError: {
+    color: "#9a3412",
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  modeLink: { paddingVertical: 10, alignItems: "center" },
+  modeLinkText: { color: "#087d8d", fontSize: 13, fontWeight: "800" },
   locationCard: {
     backgroundColor: colors.lightGray,
     borderRadius: 12,

@@ -1,6 +1,17 @@
 import type { Database } from "./db.overrides.types";
 
-export type Servicio = Database["public"]["Tables"]["servicios"]["Row"] & {
+type ServicioTableRow = Database["public"]["Tables"]["servicios"]["Row"];
+
+export type Servicio = Omit<
+  ServicioTableRow,
+  "latitud" | "longitud" | "location" | "postal_code"
+> &
+  Partial<
+    Pick<
+      ServicioTableRow,
+      "latitud" | "longitud" | "location" | "postal_code"
+    >
+  > & {
   nombre?: string | null;
   user_foto_perfil?: string | null;
   verificado?: boolean | null;

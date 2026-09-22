@@ -12,13 +12,9 @@ Por eso las pruebas deben hacerse sólo con cuentas identificadas de QA y sin
 notificaciones masivas.
 
 Si más adelante se crea un Supabase de staging, aplicar allí las migraciones y
-funciones del repositorio, configurar estas variables en el environment
-`preview` de EAS y cambiar `EXPO_PUBLIC_INTERNAL_USES_PRODUCTION` a `false`:
-
-```powershell
-eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value "https://<project-ref>.supabase.co" --visibility plaintext
-eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY --value "<publishable-key>" --visibility plaintext
-```
+funciones del repositorio, cargar en el environment `preview` de EAS la URL y
+la clave publicable reales de ese proyecto, y cambiar
+`EXPO_PUBLIC_INTERNAL_USES_PRODUCTION` a `false`.
 
 Mientras se use producción, no editar ni borrar publicaciones de usuarios
 reales.
@@ -27,16 +23,14 @@ reales.
 
 La API key de Resend nunca se incluye en Expo ni en el APK/AAB. Primero hay que
 verificar `serviciosya.site` en Resend con los registros DNS que indique el
-proveedor. Luego configurar en el proyecto Supabase que use la prueba interna:
-
-```powershell
-npx supabase secrets set RESEND_API_KEY="<resend-api-key>" RESEND_WEBHOOK_SECRET="<webhook-signing-secret>" PROVIDER_EMAIL_FROM="ServiciosYa <perfiles@serviciosya.site>" PROVIDER_EMAIL_LEGAL_ADDRESS="TORI SERVICIOS S.A.S. - Av. Republica de China 745, Mza. 7, Lote 1, Cordoba, Argentina" EMAIL_UNSUBSCRIBE_SECRET="<secreto-aleatorio-largo>" PROVIDER_PROFILE_URL="https://serviciosya.site/completar-perfil" --project-ref <project-ref>
-```
+proveedor. Luego se cargan en Supabase los secretos reales enumerados en
+`.env.example`. No se copian secretos al repositorio ni a variables
+`EXPO_PUBLIC_*`.
 
 Configurar en Resend el webhook:
 
 ```text
-https://<project-ref>.supabase.co/functions/v1/provider-email-webhook
+https://dhhhftzdfpqthzvkrqoz.supabase.co/functions/v1/provider-email-webhook
 ```
 
 ## 3. Verificaciones antes del build
@@ -97,7 +91,7 @@ el repositorio.
 - Usar cuentas exclusivas de QA y descripciones con prefijo
   `[QA-INTERNAL-AAAA-MM-DD]`.
 - Registrar los IDs creados durante la sesión.
-- Limpiar los datos desde el proyecto de staging al finalizar.
+- Limpiar exclusivamente los registros QA del proyecto activo al finalizar.
 - No probar notificaciones masivas ni correos a prestadores reales.
 
 ## Criterio de salida

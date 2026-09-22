@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { verifyMercadoPagoSignature } from "../_shared/mercadoPagoSignature.ts";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -18,7 +19,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const mercadoPagoToken = Deno.env.get("MERCADOPAGO_ACCESS_TOKEN");
-    if (!supabaseUrl || !serviceRoleKey || !mercadoPagoToken) {
+    const webhookSecret = Deno.env.get("MERCADOPAGO_WEBHOOK_SECRET");
+    if (!supabaseUrl || !serviceRoleKey || !mercadoPagoToken || !webhookSecret) {
       return json({ ok: false, error: "Payment service not configured" }, 503);
     }
 
@@ -41,6 +43,16 @@ Deno.serve(async (req) => {
     ).toLowerCase();
     if (!/^\d{4,32}$/.test(paymentId) || !topic.includes("payment")) {
       return json({ ok: true, ignored: true });
+    }
+
+    const signatureValid = await verifyMercadoPagoSignature({
+      secret: webhookSecret,
+      signatureHeader: req.headers.get("x-signature") ?? "",
+      requestId: req.headers.get("x-request-id") ?? "",
+      paymentId,
+    });
+    if (!signatureValid) {
+      return json({ ok: false, error: "Invalid webhook signature" }, 401);
     }
 
     const providerResponse = await fetch(

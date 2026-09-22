@@ -6,7 +6,7 @@ import { Picker } from '@react-native-picker/picker';
 import ModalFooter from '../ModalFooter';
 
 const REPORT_REASONS = [
-  { label: 'Selecciona una razón...', value: '' },
+  { label: 'Seleccioná una razón...', value: '' },
   { label: 'Contenido Inapropiado', value: 'inappropriate_content' },
   { label: 'Información Falsa o Engañosa', value: 'false_information' },
   { label: 'Spam o Publicidad no Deseada', value: 'spam' },
@@ -28,7 +28,7 @@ const ReportServiceModal = ({ visible, onClose, servicio }) => {
 
   const handleReportSubmit = async () => {
     if (!selectedReason) {
-      ToastAndroid.show('Por favor, selecciona una razón para el reporte.', ToastAndroid.SHORT);
+      ToastAndroid.show('Por favor, seleccioná una razón para el reporte.', ToastAndroid.SHORT);
       return;
     }
     if (selectedReason === 'other' && !details.trim()) {
@@ -37,7 +37,7 @@ const ReportServiceModal = ({ visible, onClose, servicio }) => {
     }
     const currentUserId = await getUserId();
     if (!id || !currentUserId) {
-      ToastAndroid.show('No se pudo identificar el servicio o el usuario. Intenta de nuevo.', ToastAndroid.SHORT);
+      ToastAndroid.show('No se pudo identificar el servicio o el usuario. Intentá de nuevo.', ToastAndroid.SHORT);
       return;
     }
 

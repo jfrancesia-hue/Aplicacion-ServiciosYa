@@ -76,6 +76,7 @@
       "intentFilters": [
         {
           "action": "VIEW",
+          "autoVerify": true,
           "data": [
             {
               "scheme": "https",
@@ -139,7 +140,7 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Permitir que $(PRODUCT_NAME) acceda a tu ubicación en todo momento para mostrarte trabajadores o proveedores de servicios cercanos y ayudarte a recibir asistencia más rápida y eficiente en tu zona."
+          "locationWhenInUsePermission": "Permitir que $(PRODUCT_NAME) use tu ubicación mientras utilizás la app para buscar prestadores cercanos y confirmar la zona del trabajo."
         }
       ],
       "react-native-edge-to-edge",

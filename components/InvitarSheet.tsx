@@ -44,7 +44,6 @@ function InviteSheetView({
 
     const handleCopyLink = async () => {
         try {
-            console.log("Copiando enlace:", inviteLink);
             await Clipboard.setStringAsync(inviteLink);
             // showToast.success("¡Copiado!", "El enlace se copió al portapapeles");
         } catch (error) {

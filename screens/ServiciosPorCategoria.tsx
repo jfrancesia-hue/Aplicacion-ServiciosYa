@@ -1,4 +1,5 @@
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -26,6 +27,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import BotonVolver from "../components/BotonVolver";
 import BottomNavBar from "../components/home/BottomNavBar";
+import SelectCitySheetView from "../components/home/SelectCitySheetView";
+import { withModalProvider } from "../components/sheet/withModalProvider";
 import TrustSafetyModal from "../components/trust/TrustSafetyModal";
 import UrgentRequestPanel from "../components/urgent/UrgentRequestPanel";
 import {
@@ -43,6 +46,7 @@ import { createUrgentWorkAlert } from "../lib/utils/urgentWorkNotification";
 import vexo from "../lib/vexo";
 import { getUserID } from "../store/authStore";
 import { useLocationStore } from "../store/locationStore";
+import { useUserSettings } from "../lib/hooks/useUserSettings";
 import type { MainStackParamList } from "../types/navigation";
 
 type Props = NativeStackScreenProps<
@@ -88,26 +92,7 @@ interface Worker {
   reviewCount?: number;
   averageResponseMinutes?: number | null;
   responseSampleSize?: number;
-}
-
-type RawWorker = Omit<Worker, "categoria"> & {
-  categoria?: unknown;
-};
-
-function parseCategories(value: unknown): string[] {
-  let parsed = value;
-  if (typeof parsed === "string") {
-    try {
-      parsed = JSON.parse(parsed);
-    } catch {
-      parsed = [parsed];
-    }
-  }
-
-  const values = Array.isArray(parsed) ? parsed : parsed ? [parsed] : [];
-  return Array.from(
-    new Set(values.map((category) => String(category).trim()).filter(Boolean)),
-  );
+  distanceKm?: number | null;
 }
 
 function formatResponseTime(minutes?: number | null) {
@@ -162,6 +147,16 @@ function WorkerCard({
               <Text style={styles.metaText}>{ubicacion}</Text>
             </View>
           )}
+          {worker.distanceKm != null && Number.isFinite(worker.distanceKm) ? (
+            <View style={styles.metaRow}>
+              <MaterialIcons name="near-me" size={13} color="#069eb3" />
+              <Text style={styles.metaText}>
+                {worker.distanceKm < 1
+                  ? `${Math.max(1, Math.round(worker.distanceKm * 1000))} m aprox.`
+                  : `${worker.distanceKm.toFixed(1).replace(".", ",")} km aprox.`}
+              </Text>
+            </View>
+          ) : null}
           {!!worker.edad && (
             <View style={styles.metaRow}>
               <MaterialIcons name="person" size={13} color="#069eb3" />
@@ -342,7 +337,7 @@ function WorkerDetailModal({
   const contactarChat = async (urgent = false) => {
     const myId = getUserID();
     if (!myId) {
-      Alert.alert("Error", "Debes iniciar sesión para enviar mensajes.");
+      Alert.alert("Error", "Iniciá sesión para enviar mensajes.");
       return;
     }
     if (!worker?.id) {
@@ -701,10 +696,11 @@ interface WorkerService {
   horario?: string | null;
 }
 
-export default function ServiciosPorCategoria({ route, navigation }: Props) {
+function ServiciosPorCategoria({ route, navigation }: Props) {
   const { categoria } = route.params;
   const [workers, setWorkers] = useState<Worker[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Worker | null>(null);
   const [workerServices, setWorkerServices] = useState<WorkerService[]>([]);
   const [loadingServices, setLoadingServices] = useState(false);
@@ -714,40 +710,28 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
   const [locationMode, setLocationMode] = useState<
     "auto" | "province" | "city"
   >("auto");
-  const [profileLocation, setProfileLocation] =
-    useState<UserLocation>(undefined);
+  const locationSheetRef = useRef<BottomSheetModal>(null);
+  const { settings } = useUserSettings();
+  const searchRadius = settings?.searchRadius ?? 10000;
   const effectiveLocation = useLocationStore(
     (state) => state.effectiveLocation,
   );
-  const requestDeviceLocation = useLocationStore(
-    (state) => state.requestDeviceLocation,
-  );
   const locationLoading = useLocationStore((state) => state.isLoading);
   const locationErrorMessage = useLocationStore((state) => state.error);
-  const gpsHasAddress = Boolean(
-    effectiveLocation?.city ||
-      effectiveLocation?.province ||
-      effectiveLocation?.locality,
-  );
-  const locationPending =
-    locationLoading || (!gpsHasAddress && profileLocation === undefined);
+  const locationPending = locationLoading;
   const combinedLocation = useMemo<UserLocation>(() => {
     const location = {
       ciudad:
-        effectiveLocation?.city ??
-        effectiveLocation?.locality ??
-        profileLocation?.ciudad,
-      provincia: effectiveLocation?.province ?? profileLocation?.provincia,
+        effectiveLocation?.city ?? effectiveLocation?.locality ?? undefined,
+      provincia: effectiveLocation?.province ?? undefined,
       localidad:
-        effectiveLocation?.locality ??
-        effectiveLocation?.city ??
-        profileLocation?.localidad,
+        effectiveLocation?.locality ?? effectiveLocation?.city ?? undefined,
     };
 
     return location.ciudad || location.provincia || location.localidad
       ? location
       : null;
-  }, [effectiveLocation, profileLocation]);
+  }, [effectiveLocation]);
   const userLocation = locationPending ? undefined : combinedLocation;
   const locationError = !locationPending && !userLocation;
   const locationScope = formatLocationScope(userLocation);
@@ -783,6 +767,10 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
           availabilityOrder[a.availabilityStatus ?? "to_confirm"] -
           availabilityOrder[b.availabilityStatus ?? "to_confirm"];
         if (availabilityDifference !== 0) return availabilityDifference;
+        const distanceDifference =
+          (a.distanceKm ?? Number.POSITIVE_INFINITY) -
+          (b.distanceKm ?? Number.POSITIVE_INFINITY);
+        if (distanceDifference !== 0) return distanceDifference;
         if (targetCity) {
           const aSameCity = sameLocality(a.ciudad || a.barrio, targetCity);
           const bSameCity = sameLocality(b.ciudad || b.barrio, targetCity);
@@ -854,7 +842,7 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
     }
     setLoadingServices(true);
     supabase
-      .from("servicios")
+      .from("servicios_public")
       .select("id, titulo, descripcion, precio, horario")
       .or(`user_id.eq.${selected.id},usuario_id.eq.${selected.id}`)
       .then(({ data }) => {
@@ -872,75 +860,22 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
     }
   }, [categoria]);
 
-  useEffect(() => {
-    if (!effectiveLocation && !locationLoading && !locationErrorMessage) {
-      requestDeviceLocation();
-    }
-  }, [
-    effectiveLocation,
-    locationErrorMessage,
-    locationLoading,
-    requestDeviceLocation,
-  ]);
-
-  useEffect(() => {
-    let isMounted = true;
-    const userId = getUserID();
-
-    if (!userId) {
-      setProfileLocation(null);
-      return undefined;
-    }
-
-    supabase
-      .from("usuarios")
-      .select("ciudad, provincia")
-      .eq("id", userId)
-      .maybeSingle()
-      .then(
-        ({ data, error }) => {
-          if (!isMounted) return;
-          if (error) {
-            console.warn(
-              "[ServiciosPorCategoria] ubicación de perfil no disponible:",
-              error,
-            );
-            setProfileLocation(null);
-            return;
-          }
-          setProfileLocation(
-            data
-              ? {
-                  ciudad: data.ciudad ?? undefined,
-                  provincia: data.provincia ?? undefined,
-                }
-              : null,
-          );
-        },
-        (error: unknown) => {
-          if (!isMounted) return;
-          console.warn(
-            "[ServiciosPorCategoria] no se pudo consultar la ubicación de perfil:",
-            error,
-          );
-          setProfileLocation(null);
-        },
-      );
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
   const cargarWorkers = useCallback(async () => {
-    if (locationPending) return;
+    if (locationPending || !effectiveLocation) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setLoadError(null);
     try {
       const [response, currentBlockedIds] = await Promise.all([
         getAvailableProviders(categoria, {
           city: userLocation?.ciudad,
           province: userLocation?.provincia,
           locality: userLocation?.localidad,
+          latitude: effectiveLocation.latitude,
+          longitude: effectiveLocation.longitude,
+          radiusMeters: searchRadius,
         }),
         getBlockedUserIds(),
       ]);
@@ -966,48 +901,23 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
         etapa: "indice_unificado",
         provincia: userLocation?.provincia || "sin_provincia",
       });
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from("user_public_profiles")
-        .select(
-          "id, nombre, edad, foto_perfil, provincia, ciudad, barrio, categoria, verificado, suscriptor, antiguedad",
-        )
-        .eq("rol", "worker")
-        .eq("perfil_publico", true)
-        .order("creado_en", { ascending: false })
-        .limit(1000);
-
-      if (error) throw error;
-
-      const catLower = categoria.trim().toLowerCase();
-      const rawWorkers = (data || []) as unknown as RawWorker[];
-      const filtrados = rawWorkers.filter((worker) => {
-        const cats = parseCategories(worker.categoria).map((category) =>
-          category.toLowerCase(),
-        );
-        if (cats.length === 0) return false;
-        return cats.some((c) => c.includes(catLower) || catLower.includes(c));
-      });
-
-      setWorkers(
-        filtrados.map((worker) => ({
-          ...worker,
-          categoria: parseCategories(worker.categoria),
-          availabilityStatus: "to_confirm",
-          availabilityLabel: "Disponibilidad a confirmar",
-          availabilityDetail: "Consultá por el chat interno",
-        })),
-      );
+      setWorkers([]);
       setLegacyIncluded(0);
       setCampaignIncluded(0);
-    } catch {
-      Alert.alert("Error", "No se pudieron cargar los profesionales.");
-    } finally {
+      setLoadError(
+        "No pudimos consultar los prestadores dentro de tu zona. Reintent\u00e1 sin cambiar la ubicaci\u00f3n.",
+      );
       setLoading(false);
+      return;
     }
-  }, [categoria, locationPending, userLocation]);
+
+  }, [
+    categoria,
+    effectiveLocation,
+    locationPending,
+    searchRadius,
+    userLocation,
+  ]);
 
   useEffect(() => {
     if (!locationPending) cargarWorkers();
@@ -1039,8 +949,10 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
         <Text style={styles.headerSub}>
           {loading || locationPending
             ? "Buscando en tu zona..."
+            : loadError
+              ? "No se pudo actualizar la b\u00fasqueda"
             : locationFallbackActive
-              ? `${visibleWorkers.length} en la provincia · ampliamos la búsqueda`
+              ? `${visibleWorkers.length} dentro de ${Math.max(1, Math.round(searchRadius / 1000))} km`
               : `${visibleWorkers.length} prestador${visibleWorkers.length !== 1 ? "es" : ""} en tu zona`}
         </Text>
       </LinearGradient>
@@ -1053,6 +965,19 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
               ? "Buscando profesionales..."
               : "Detectando tu ciudad y provincia..."}
           </Text>
+        </View>
+      ) : loadError ? (
+        <View style={styles.loadingContainer}>
+          <MaterialIcons name="cloud-off" size={52} color="#a43b32" />
+          <Text style={styles.emptyTitle}>No pudimos consultar tu zona</Text>
+          <Text style={styles.emptyText}>{loadError}</Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => void cargarWorkers()}
+            style={styles.expandLocationButton}
+          >
+            <Text style={styles.expandLocationButtonText}>Reintentar</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <FlatList
@@ -1075,17 +1000,17 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
                 <MaterialIcons name="location-off" size={18} color="#92400e" />
                 <View style={styles.locationBannerCopy}>
                   <Text style={styles.locationBannerTitle}>
-                    No pudimos definir tu zona
+                    Confirmá tu ubicación exacta
                   </Text>
                   <Text style={styles.locationBannerText}>
-                    Mostramos todos los prestadores. Podés volver a intentar el
-                    GPS.
+                    No mostramos resultados generales: usá GPS o ingresá una
+                    dirección para encontrar prestadores cercanos.
                   </Text>
                 </View>
                 <TouchableOpacity
                   accessibilityRole="button"
-                  accessibilityLabel="Volver a intentar obtener mi ubicación"
-                  onPress={requestDeviceLocation}
+                  accessibilityLabel="Elegir mi ubicación"
+                  onPress={() => locationSheetRef.current?.present()}
                   style={styles.locationRetryButton}
                 >
                   <MaterialIcons name="refresh" size={20} color="#047a8f" />
@@ -1110,13 +1035,13 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
                 <View style={styles.locationBannerCopy}>
                   <Text style={styles.scopeTitle}>
                     {locationFallbackActive && targetCity
-                      ? `Ampliamos desde ${targetCity}`
+                      ? `Opciones cercanas a ${targetCity}`
                       : `Prestadores de ${locationScope || "tu zona"}`}
                   </Text>
                   <Text style={styles.scopeText}>
                     {locationFallbackActive
-                      ? `No había resultados exactos en tu ciudad. Mostramos opciones de ${userLocation?.provincia || "tu provincia"} sin mezclar otras provincias.`
-                      : "Priorizamos tu ciudad y a quienes informaron disponibilidad. Nunca mezclamos otra provincia automáticamente."}
+                      ? `No hab\u00eda resultados en la misma ciudad. Mostramos opciones dentro del radio configurado de ${Math.max(1, Math.round(searchRadius / 1000))} km, sin mezclar otras provincias.`
+                      : `Resultados dentro del radio configurado de ${Math.max(1, Math.round(searchRadius / 1000))} km. Priorizamos cercan\u00eda y disponibilidad.`}
                   </Text>
                   {(userLocation?.ciudad || userLocation?.localidad) && (
                     <View style={styles.scopeToggle}>
@@ -1155,7 +1080,7 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
                               styles.scopeToggleTextActive,
                           ]}
                         >
-                          Provincia
+                          En mi radio
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
@@ -1236,6 +1161,9 @@ export default function ServiciosPorCategoria({ route, navigation }: Props) {
         workerServices={workerServices}
         loadingServices={loadingServices}
       />
+      <BottomSheetModal ref={locationSheetRef} snapPoints={["75%"]}>
+        <SelectCitySheetView />
+      </BottomSheetModal>
       <BottomNavBar />
     </SafeAreaView>
   );
@@ -1646,3 +1574,5 @@ const styles = StyleSheet.create({
   svcMetaItem: { flexDirection: "row", alignItems: "center", gap: 4 },
   svcMetaText: { fontSize: 13, color: "#047a8f", fontWeight: "600" },
 });
+
+export default withModalProvider(ServiciosPorCategoria);

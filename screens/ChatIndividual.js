@@ -255,12 +255,6 @@ function ChatIndividual({ route }) {
   // Si el servicio llegó vacío, buscarlo desde la BD usando el usuario partner
   useEffect(() => {
     if (servicio?.titulo) return; // ya tiene datos
-    const partnerId =
-      usuarioId1 && usuarioId2
-        ? usuarioId1 !== usuarioId2
-          ? null
-          : null // se resuelve abajo
-        : null;
     // Buscar el primer servicio del otro usuario del chat
     const fetchServicio = async () => {
       // Determinar quién es el partner (no el usuario actual)
@@ -271,15 +265,15 @@ function ChatIndividual({ route }) {
       const workerId = usuarioId1 === myId ? usuarioId2 : usuarioId1;
       if (!workerId) return;
       const { data } = await supabase
-        .from("servicios")
+        .from("servicios_public")
         .select("id, titulo, descripcion, categoria, horario, precio")
-        .eq("usuario_id", workerId)
+        .or(`usuario_id.eq.${workerId},user_id.eq.${workerId}`)
         .limit(1)
         .maybeSingle();
       if (data) setServicioData(data);
     };
-    fetchServicio();
-  }, []);
+    void fetchServicio();
+  }, [servicio?.titulo, usuarioId1, usuarioId2]);
 
   // --- Cargar usuario y mensajes iniciales
   useEffect(() => {
@@ -295,6 +289,7 @@ function ChatIndividual({ route }) {
       } = await supabase.auth.getUser();
       if (error || !user) {
         console.error("No se pudo obtener el usuario:", error);
+        if (isMounted) setLoadingMsg(false);
         return;
       }
       if (!isMounted) return;
@@ -326,6 +321,7 @@ function ChatIndividual({ route }) {
         cargarPresupuestosChat(),
         cargarEstadoTrabajo(),
       ]);
+      if (!isMounted) return;
       suscribirRealtime(user.id);
     };
 
@@ -548,10 +544,6 @@ function ChatIndividual({ route }) {
         );
       }
 
-      await supabase
-        .from("chats")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", chatId);
     },
     [
       usuarioId,
@@ -680,10 +672,6 @@ function ChatIndividual({ route }) {
         });
       }
 
-      await supabase
-        .from("chats")
-        .update({ updated_at: new Date().toISOString() })
-        .eq("id", chatId);
     },
     [chatId, usuarioId, jobStatus?.status, jobStatus?.job_status],
   );
@@ -789,10 +777,6 @@ function ChatIndividual({ route }) {
         });
         if (messageError) throw messageError;
 
-        await supabase
-          .from("chats")
-          .update({ updated_at: new Date().toISOString() })
-          .eq("id", chatId);
         setMicaAssistantVisible(false);
         vexo.marketplace("mica_intervention", {
           audios_sin_transcribir: mensajes.some((message) => {
@@ -1585,6 +1569,7 @@ function ChatIndividual({ route }) {
             }
             onSend={enviarMensaje}
             onSendAudio={enviarAudio}
+            canSendAudio={chatUnlocked}
             contentProtectionActive={!chatUnlocked}
           />
         )}

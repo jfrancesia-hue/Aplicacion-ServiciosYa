@@ -38,6 +38,7 @@ export type MicaOrderStatus = {
     selectedBudgetId?: string | null;
     chatId?: string | null;
     createdAt?: string | null;
+    hasExactLocation: boolean;
   } | null;
   quotes: MicaOrderQuote[];
   history?: Array<{ author: "mica" | "user"; text: string }>;
@@ -79,6 +80,32 @@ export function selectMicaOrderQuote(offerId: string, budgetId: string) {
     offerId,
     budgetId,
   });
+}
+
+export async function confirmMicaOrderLocation(
+  offerId: string,
+  location: {
+    city: string;
+    province: string;
+    latitude: number;
+    longitude: number;
+    zone?: string | null;
+  },
+) {
+  const { data, error } = await supabase.rpc(
+    "confirm_my_service_request_location",
+    {
+      p_offer_id: Number(offerId),
+      p_city: location.city,
+      p_province: location.province,
+      p_latitude: location.latitude,
+      p_longitude: location.longitude,
+      p_zone: location.zone ?? null,
+    },
+  );
+
+  if (error) throw new Error(error.message);
+  return Boolean(data);
 }
 
 export function respondToMicaOrder(

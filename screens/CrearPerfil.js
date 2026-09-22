@@ -94,7 +94,7 @@ if (!result.canceled && result.assets.length > 0) {
 
 
 } catch (error) {
-console.log('Error seleccionando imagen:', error);
+console.error('Error seleccionando imagen:', error);
 }
 };
 
@@ -177,7 +177,7 @@ try {
   navigation.navigate('Home');
 
 } catch (error) {
-  console.log('Error al enviar:', error);
+  console.error('Error al enviar:', error);
   Alert.alert('❌ Error', 'No se pudo enviar la información.');
 } finally {
   setSubiendo(false);
@@ -251,7 +251,7 @@ return (
   {validaciones.edad ? (
     <Text style={styles.validacion}>✔️ Edad válida</Text>
   ) : (
-    edad !== '' && <Text style={styles.invalidacion}>⚠️ Debes ser mayor de 18 años.</Text>
+    edad !== '' && <Text style={styles.invalidacion}>⚠️ Tenés que ser mayor de 18 años.</Text>
   )}
 
   <TextInput

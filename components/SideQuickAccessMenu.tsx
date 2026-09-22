@@ -120,21 +120,33 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
           onPress: onPublicarNecesidadPress,
         }]
       : []),
-    {
-      label: "Buscar servicio",
-      subtitle: "Contale a MICA qué necesitás",
-      icon: "search-outline",
-      gradient: ["#12c7dd", "#069eb3", "#047486"],
-      badge: "CLIENTE",
-      onPress: () => onBuscarServicioPress?.(),
-    },
-    {
-      label: "Publicar un servicio",
-      subtitle: "Mostrá tu trabajo a nuevos clientes",
-      icon: "briefcase-outline",
-      gradient: ["#ffb04a", "#fe971a", "#d86f00"],
-      onPress: () => onOfrecerServicioPress?.(),
-    },
+    ...(onBuscarServicioPress
+      ? [{
+          label: "Buscar servicio",
+          subtitle: "Contale a MICA qué necesitás",
+          icon: "search-outline" as const,
+          gradient: ["#12c7dd", "#069eb3", "#047486"] as [
+            string,
+            string,
+            string,
+          ],
+          badge: "CLIENTE",
+          onPress: onBuscarServicioPress,
+        }]
+      : []),
+    ...(onOfrecerServicioPress
+      ? [{
+          label: "Publicar un servicio",
+          subtitle: "Mostrá tu trabajo a nuevos clientes",
+          icon: "briefcase-outline" as const,
+          gradient: ["#ffb04a", "#fe971a", "#d86f00"] as [
+            string,
+            string,
+            string,
+          ],
+          onPress: onOfrecerServicioPress,
+        }]
+      : []),
   ];
 
   const runPulse = () => {

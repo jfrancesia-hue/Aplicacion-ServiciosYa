@@ -8,36 +8,10 @@ import type {
 import { query } from "../hooks/useUserSettings";
 import type { City } from "../../components/inputs/CityAutocomplete";
 import countries from "../constants/country";
-import * as Location from "expo-location";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import queryClient from "../reactQuery";
 import { useLocationStore } from "../../store/locationStore";
 import type { UserSettings } from "../hooks/useUserSettings";
 import { ARGENTINE_PROVINCE_BY_STATE_CODE } from "./geoSegmentation";
-
-const LOCATION_TIMEOUT_MS = 10_000;
-
-function getCurrentPositionWithTimeout(): Promise<Location.LocationObject> {
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(
-      () => reject(new Error("La ubicación GPS demoró demasiado.")),
-      LOCATION_TIMEOUT_MS,
-    );
-
-    Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    }).then(
-      (position) => {
-        clearTimeout(timeout);
-        resolve(position);
-      },
-      (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      },
-    );
-  });
-}
 
 export function locationQueryString(lat: number, lng: number): string {
   return `POINT(${lng} ${lat})`;
@@ -50,145 +24,17 @@ export function getLocationName(location: LocationGeocodedAddress) {
   return name;
 }
 
-async function saveLocation(coords: { latitude: number; longitude: number }) {
-  try {
-    await AsyncStorage.setItem(
-      "lastLocation",
-      JSON.stringify({
-        latitude: coords.latitude,
-        longitude: coords.longitude,
-        timestamp: Date.now(),
-      }),
-    );
-  } catch (err) {
-    console.warn("Error guardando ubicación:", err);
-  }
-}
-
-async function getSavedLocation() {
-  try {
-    const saved = await AsyncStorage.getItem("lastLocation");
-    if (!saved) return null;
-    const parsed = JSON.parse(saved);
-    const age = Date.now() - parsed.timestamp;
-    if (age < 1000 * 60 * 60 * 6) {
-      // menos de 6 h → válida
-      return parsed;
-    }
-  } catch (err) {
-    console.warn("Error leyendo ubicación guardada:", err);
-  }
-  return null;
-}
-
 export async function getLocationParamsFromClient(
   client: QueryClient,
-  authLocation?: { latitude: number; longitude: number } | null,
 ): Promise<LocationParams> {
   const settings = client.getQueryData<UserSettings>(query.queryKey);
-  console.log("Solicitando ubicación al iniciar sesión...");
+  const location = useLocationStore.getState().effectiveLocation;
 
-  let coords: { latitude: number; longitude: number } | null = null;
-
-  try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") {
-      console.warn("Permiso de ubicación denegado");
-      return {};
-    }
-
-    // 1️⃣ Si viene del AuthContext
-    if (authLocation) {
-      coords = authLocation;
-      console.log("📦 Usando ubicación del AuthContext:", coords);
-    }
-
-    // 2️⃣ Si no hay authLocation, probar AsyncStorage
-    if (!coords) {
-      const saved = await getSavedLocation();
-      if (saved) {
-        coords = saved;
-        console.log("📍 Usando ubicación guardada:", coords);
-      }
-    }
-
-    // 3️⃣ Si no hay guardada, pedir última conocida (rápido)
-    if (!coords) {
-      const lastKnown = await Location.getLastKnownPositionAsync();
-      if (lastKnown) {
-        coords = lastKnown.coords;
-        console.log("📍 Usando lastKnownPosition:", coords);
-      }
-    }
-    // 4️⃣ Si tampoco hay, pedir una nueva con un límite para no trabar la app.
-    if (!coords) {
-      console.log("⏳ Obteniendo nueva ubicación GPS...");
-      const location = await getCurrentPositionWithTimeout();
-      coords = location.coords;
-    }
-
-    if (!coords) throw new Error("No se pudo obtener ubicación");
-
-    // Guardar para la próxima vez
-    saveLocation(coords);
-
-    // Actualizar React Query client
-    updateClientWithCoords(client, settings, coords);
-
-    return {
-      search_lat: coords.latitude,
-      search_lon: coords.longitude,
-      search_radius_meters: settings?.searchRadius ?? 5000,
-    };
-  } catch (e) {
-    console.warn("Error obteniendo ubicación:", e);
-    return {};
-  }
-}
-
-async function updateClientWithCoords(
-  client: QueryClient,
-  settings: UserSettings | undefined,
-  coords: { latitude: number; longitude: number },
-) {
-  if (!settings) return;
-
-  const baseSettings = {
-    ...settings,
-    lastGPSLocation: {
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      city: null,
-      country: null,
-      fullAddress: [],
-    },
-    useGPS: true,
+  return {
+    search_lat: location?.latitude,
+    search_lon: location?.longitude,
+    search_radius_meters: settings?.searchRadius ?? 10000,
   };
-  client.setQueryData(query.queryKey, baseSettings);
-
-  try {
-    const geocoded = await Location.reverseGeocodeAsync({
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-    });
-
-    const first = geocoded[0];
-    const city =
-      first?.city || first?.district || first?.region || "Desconocida";
-    const country = first?.country ?? "Desconocido";
-
-    client.setQueryData(query.queryKey, {
-      ...baseSettings,
-      lastGPSLocation: {
-        ...baseSettings.lastGPSLocation,
-        city,
-        country,
-        fullAddress: geocoded,
-      },
-    });
-  } catch (err) {
-    console.warn("Error en reverseGeocode:", err);
-  }
 }
 
 export function cityToLocationItem(city: City): LocationItem {

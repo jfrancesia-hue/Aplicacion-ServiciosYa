@@ -178,72 +178,11 @@ Deno.serve(async (req) => {
     }
 
     if (action === "transcribe") {
-      const apiKey = Deno.env.get("OPENAI_API_KEY");
-      if (!apiKey) {
-        return json({
-          transcript: null,
-          warning: "Transcripción no configurada.",
-        });
-      }
-
-      const { data: audioBlob, error: downloadError } = await admin.storage
-        .from(BUCKET)
-        .download(path);
-
-      if (downloadError || !audioBlob) {
-        return json(
-          { error: downloadError?.message ?? "No se encontró el audio." },
-          404,
-        );
-      }
-      if (audioBlob.size > MAX_FILE_BYTES) {
-        return json(
-          { error: "El archivo de audio supera el límite permitido." },
-          413,
-        );
-      }
-
-      const fileName = path.split("/").pop() || "mensaje.m4a";
-      const form = new FormData();
-      form.append("file", audioBlob, fileName);
-      form.append(
-        "model",
-        Deno.env.get("OPENAI_TRANSCRIBE_MODEL") ?? "gpt-4o-mini-transcribe",
-      );
-      form.append("language", "es");
-      form.append("response_format", "json");
-      form.append(
-        "prompt",
-        "Conversación en español argentino sobre servicios, oficios, presupuestos, materiales, horarios y ubicaciones.",
-      );
-
-      const transcriptionResponse = await fetch(
-        "https://api.openai.com/v1/audio/transcriptions",
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${apiKey}` },
-          body: form,
-        },
-      );
-      const transcription = await transcriptionResponse.json();
-
-      if (!transcriptionResponse.ok) {
-        console.error(
-          "[chat-audio] transcription failed",
-          transcription?.error,
-        );
-        return json({
-          transcript: null,
-          warning: "El audio se guardó, pero no se pudo transcribir.",
-        });
-      }
-
-      const transcript =
-        typeof transcription?.text === "string"
-          ? transcription.text.trim().slice(0, 4_000)
-          : "";
-
-      return json({ transcript: transcript || null });
+      return json({
+        transcript: null,
+        warning:
+          "La transcripción automática no está habilitada. Los audios se permiten después de confirmar la reserva.",
+      });
     }
 
     return json({ error: "Acción no válida." }, 400);

@@ -29,6 +29,7 @@ import { calculateServiceConfirmationFee } from "../lib/constants/billing";
 import {
   type MicaOrderQuote,
   type MicaOrderStatus,
+  confirmMicaOrderLocation,
   formatMicaOrderAmount,
   getMicaOrderStatus,
   selectMicaOrderQuote,
@@ -93,6 +94,8 @@ type MicaLocationFallback = {
   province?: string | null;
   locality?: string | null;
   source?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 type MicaApiResponse = {
   reply?: string;
@@ -682,9 +685,13 @@ async function createMicaAppRequest({
     fallbackProvince:
       locationFallback?.province?.trim() || profile?.provincia?.trim(),
   });
-  if (!requestLocation.isComplete) {
+  if (
+    !requestLocation.isComplete ||
+    locationFallback?.latitude == null ||
+    locationFallback.longitude == null
+  ) {
     throw new Error(
-      "Confirmá la ciudad y la provincia con el GPS o la selección manual antes de publicar.",
+      "Confirmá la ubicación exacta con GPS o ingresando una dirección antes de publicar.",
     );
   }
   const requestCity = requestLocation.city;
@@ -701,7 +708,7 @@ async function createMicaAppRequest({
     .filter(Boolean)
     .join("\n");
 
-  const { data, error } = await supabase.rpc("create_mica_app_request", {
+  const { data, error } = await supabase.rpc("create_mica_app_request_v2", {
     p_categoria: categoria,
     p_descripcion: descripcion || `Pedido de ${categoria} en ${zona}`,
     p_zona: zona,
@@ -709,6 +716,8 @@ async function createMicaAppRequest({
     p_cliente_telefono: profile?.celular ? String(profile.celular) : undefined,
     p_ciudad: requestCity ?? undefined,
     p_provincia: requestProvince ?? undefined,
+    p_latitude: locationFallback.latitude,
+    p_longitude: locationFallback.longitude,
     p_historial: history.map(({ author, text }) => ({ author, text })),
     p_metadata: {
       source_screen: "MicaChat",
@@ -758,6 +767,8 @@ function MicaChat({ navigation, route }: Props) {
   const [isThinking, setIsThinking] = useState(false);
   const [isCreatingRequest, setIsCreatingRequest] = useState(false);
   const [isRefreshingQuotes, setIsRefreshingQuotes] = useState(false);
+  const [isConfirmingOrderLocation, setIsConfirmingOrderLocation] =
+    useState(false);
   const [selectingQuoteId, setSelectingQuoteId] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [profileFallback, setProfileFallback] =
@@ -767,9 +778,6 @@ function MicaChat({ navigation, route }: Props) {
   );
   const locationSource = useLocationStore((state) => state.source);
   const locationIsLoading = useLocationStore((state) => state.isLoading);
-  const requestDeviceLocation = useLocationStore(
-    (state) => state.requestDeviceLocation,
-  );
 
   useEffect(() => {
     if (mode !== "buscar-servicio") return;
@@ -799,13 +807,6 @@ function MicaChat({ navigation, route }: Props) {
     };
   }, [mode]);
 
-  useEffect(() => {
-    if (mode !== "buscar-servicio" || effectiveLocation) return;
-    requestDeviceLocation().catch((error) => {
-      console.warn("[MICA] no se pudo resolver ubicacion:", error);
-    });
-  }, [effectiveLocation, mode, requestDeviceLocation]);
-
   const confirmedFallback = useMemo(() => {
     if (effectiveLocation && locationSource !== "ip") {
       return {
@@ -815,16 +816,8 @@ function MicaChat({ navigation, route }: Props) {
       };
     }
 
-    if (profileFallback?.ciudad && profileFallback.provincia) {
-      return {
-        city: profileFallback.ciudad,
-        province: profileFallback.provincia,
-        source: "profile",
-      };
-    }
-
     return null;
-  }, [effectiveLocation, locationSource, profileFallback]);
+  }, [effectiveLocation, locationSource]);
   const locationStatus = useMemo(
     () =>
       getMicaRequestLocationStatus({
@@ -853,9 +846,11 @@ function MicaChat({ navigation, route }: Props) {
             city: confirmedFallback.city,
             province: confirmedFallback.province,
             source: confirmedFallback.source,
+            latitude: effectiveLocation?.latitude,
+            longitude: effectiveLocation?.longitude,
           }
         : null,
-    [confirmedFallback],
+    [confirmedFallback, effectiveLocation],
   );
   const searchReadiness = useMemo(
     () => getSearchReadiness(insight, profileLocation),
@@ -1021,6 +1016,51 @@ function MicaChat({ navigation, route }: Props) {
       addMicaMessage(
         "Compará monto, disponibilidad, experiencia y detalle. Podés abrir el chat protegido para conversar la propuesta antes de aceptarla.",
       );
+    }
+  };
+
+  const handleConfirmExistingOrderLocation = async () => {
+    if (!createdOfertaId || activeOrder?.hasExactLocation !== false) return;
+
+    const city = locationFallback?.city?.trim();
+    const province = locationFallback?.province?.trim();
+    const latitude = locationFallback?.latitude;
+    const longitude = locationFallback?.longitude;
+    if (
+      !city ||
+      !province ||
+      latitude == null ||
+      longitude == null
+    ) {
+      locationSheetRef.current?.present();
+      addMicaMessage(
+        "Para actualizar esta búsqueda anterior, confirmá la ubicación con GPS o ingresá una dirección exacta.",
+      );
+      return;
+    }
+
+    setIsConfirmingOrderLocation(true);
+    setOrderError(null);
+    try {
+      await confirmMicaOrderLocation(createdOfertaId, {
+        city,
+        province,
+        latitude,
+        longitude,
+        zone: locationStatus.label || activeOrder.zone,
+      });
+      await refreshOrderStatus(createdOfertaId, true);
+      addMicaMessage(
+        "Ubicación exacta confirmada. Desde ahora este pedido se prioriza por distancia real.",
+      );
+    } catch (error) {
+      setOrderError(
+        error instanceof Error
+          ? error.message
+          : "No pudimos actualizar la ubicación del pedido.",
+      );
+    } finally {
+      setIsConfirmingOrderLocation(false);
     }
   };
 
@@ -1302,7 +1342,7 @@ function MicaChat({ navigation, route }: Props) {
             style={styles.locationControl}
             activeOpacity={0.82}
             accessibilityRole="button"
-            accessibilityLabel="Cambiar ciudad del pedido"
+            accessibilityLabel="Cambiar ubicación del pedido"
             onPress={() => locationSheetRef.current?.present()}
           >
             <Ionicons name="location-outline" size={16} color="#ffffff" />
@@ -1313,7 +1353,7 @@ function MicaChat({ navigation, route }: Props) {
                   : null) ||
                 (locationIsLoading
                   ? "Detectando tu ubicación"
-                  : "Elegí ciudad y provincia")}
+                  : "Confirmá la ubicación exacta")}
             </Text>
             <Text style={styles.locationControlAction}>
               {locationStatus.isComplete ? "Cambiar" : "Confirmar"}
@@ -1328,7 +1368,7 @@ function MicaChat({ navigation, route }: Props) {
           onPress={() => locationSheetRef.current?.present()}
           style={styles.locationWarning}
           accessibilityRole="button"
-          accessibilityLabel="Elegir ciudad y provincia manualmente"
+          accessibilityLabel="Confirmar ubicación exacta"
         >
           <Ionicons name="alert-circle-outline" size={19} color="#8a5600" />
           <View style={styles.locationWarningCopy}>
@@ -1336,9 +1376,8 @@ function MicaChat({ navigation, route }: Props) {
               Confirmá dónde se hará el trabajo
             </Text>
             <Text style={styles.locationWarningText}>
-              El GPS necesita permiso. Si preferís no darlo, elegí ciudad y
-              provincia manualmente. La ubicación por IP no se usa para
-              publicar.
+              El GPS necesita permiso. Si preferís no darlo, ingresá una
+              dirección exacta manualmente. La ubicación por IP no se usa.
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#8a5600" />
@@ -1442,6 +1481,43 @@ function MicaChat({ navigation, route }: Props) {
             </View>
           </View>
         )}
+
+        {mode === "buscar-servicio" &&
+        activeOrder?.hasExactLocation === false &&
+        searchStage !== "closed" ? (
+          <View style={styles.legacyLocationWarning}>
+            <Ionicons name="location-outline" size={20} color="#9a5b08" />
+            <View style={styles.legacyLocationCopy}>
+              <Text style={styles.legacyLocationTitle}>
+                Falta confirmar la ubicación exacta
+              </Text>
+              <Text style={styles.legacyLocationText}>
+                Esta búsqueda se creó con una versión anterior. Confirmala
+                para ordenar prestadores por distancia real.
+              </Text>
+              <TouchableOpacity
+                activeOpacity={0.8}
+                disabled={isConfirmingOrderLocation}
+                onPress={() => void handleConfirmExistingOrderLocation()}
+                style={styles.legacyLocationButton}
+              >
+                {isConfirmingOrderLocation ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <Ionicons name="navigate" size={15} color="#ffffff" />
+                )}
+                <Text style={styles.legacyLocationButtonText}>
+                  {isConfirmingOrderLocation
+                    ? "Actualizando..."
+                    : locationFallback?.latitude != null &&
+                        locationFallback.longitude != null
+                      ? "Usar esta ubicación"
+                      : "Elegir ubicación"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : null}
 
         {mode === "buscar-servicio" && searchStage === "submitted" && (
           <View style={styles.quotesPanel}>
@@ -2199,6 +2275,45 @@ const styles = StyleSheet.create({
     backgroundColor: "#f2fbfa",
     borderWidth: 1,
     borderColor: "#cfecea",
+  },
+  legacyLocationWarning: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 14,
+    padding: 13,
+    borderRadius: 10,
+    backgroundColor: "#fff8e8",
+    borderWidth: 1,
+    borderColor: "#f4d58a",
+  },
+  legacyLocationCopy: { flex: 1 },
+  legacyLocationTitle: {
+    color: "#6e4308",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  legacyLocationText: {
+    color: "#785c32",
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 3,
+  },
+  legacyLocationButton: {
+    alignSelf: "flex-start",
+    minHeight: 36,
+    marginTop: 9,
+    paddingHorizontal: 11,
+    borderRadius: 9,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#087d8d",
+  },
+  legacyLocationButtonText: {
+    color: "#ffffff",
+    fontSize: 11,
+    fontWeight: "900",
   },
   requestStatusCopy: {
     flex: 1,

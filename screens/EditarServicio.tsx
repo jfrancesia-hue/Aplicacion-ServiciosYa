@@ -18,7 +18,7 @@ import { withModalProvider } from "../components/sheet/withModalProvider";
 import { withDropDownProvider } from "../components/forms/withDropDownProvider";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { locationQueryString } from "../lib/utils/location";
-import showToast from "../lib/toast";
+import { parseMoneyInput } from "../lib/utils/money";
 import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'
 import BotonVolver from "../components/BotonVolver";
 
@@ -28,48 +28,63 @@ function EditarServicio({ route, navigation }: Props) {
   const { servicio } = route.params;
   const [titulo, setTitulo] = useState(servicio.titulo ?? "");
   const [descripcion, setDescripcion] = useState(servicio.descripcion ?? "");
-  const [precio, setPrecio] = useState(servicio.precio?.toString() || '');
+  const [precio, setPrecio] = useState(servicio.precio?.toString() || "");
   const [horario, setHorario] = useState(servicio.horario ?? "");
   const [categoria, setCategoria] = useState(servicio.categoria ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const initialLocation =
+    typeof (servicio.latitude ?? servicio.latitud) === "number" &&
+    typeof (servicio.longitude ?? servicio.longitud) === "number"
+      ? {
+          lat: (servicio.latitude ?? servicio.latitud) as number,
+          lng: (servicio.longitude ?? servicio.longitud) as number,
+        }
+      : null;
+  const [ubicacion, setUbicacion] = useState<LocationItem | null>(
+    initialLocation,
+  );
 
   const handleActualizar = async () => {
-    if (!titulo || !descripcion || !precio || !horario || !categoria) {
+    if (submitting) return;
+    if (!titulo.trim() || !descripcion.trim() || !horario.trim() || !categoria) {
       Alert.alert("Error", "Todos los campos son obligatorios");
       return;
     }
-
-    const { error } = await supabase
-      .from("servicios")
-      .update({
-        titulo,
-        descripcion,
-        precio: Number(precio),
-        horario,
-        categoria,
-      })
-      .eq("id", servicio.id);
-
-    if (error) {
-      Alert.alert("Error al actualizar", error.message);
-    } else {
-      Alert.alert("Éxito", "Servicio actualizado");
-      navigation.goBack();
-    }
-  };
-
-  const handleUpdateLocation = async (location: LocationItem) => {
-    const { error } = await supabase
-      .from("servicios")
-      .update({
-        location: locationQueryString(location.lat, location.lng),
-      })
-      .eq("id", servicio.id);
-
-    if (error) {
-      showToast.error(
-        "Ocurrio un error",
-        "No se pudo actualizar la ubicación del servicio",
+    const parsedPrice = parseMoneyInput(precio);
+    if (parsedPrice === null) {
+      Alert.alert(
+        "Precio inválido",
+        "Ingresá un monto mayor que cero. Podés usar 5000 o 5.000.",
       );
+      return;
+    }
+    if (!ubicacion) {
+      Alert.alert("Falta la ubicación", "Confirmá la ubicación del servicio.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("servicios")
+        .update({
+          titulo: titulo.trim(),
+          descripcion: descripcion.trim(),
+          precio: parsedPrice,
+          horario: horario.trim(),
+          categoria,
+          location: locationQueryString(ubicacion.lat, ubicacion.lng),
+        })
+        .eq("id", servicio.id);
+
+      if (error) {
+        Alert.alert("Error al actualizar", error.message);
+      } else {
+        Alert.alert("Éxito", "Servicio actualizado");
+        navigation.goBack();
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -103,18 +118,15 @@ function EditarServicio({ route, navigation }: Props) {
               placeholderTextColor="#b6e1ea"
             />
             <LocationInput
-              onChange={(value) => handleUpdateLocation(value)}
-              initialValue={{
-                lat: servicio.latitud ?? 0,
-                lng: servicio.longitud ?? 0,
-              }}
+              onChange={setUbicacion}
+              initialValue={initialLocation}
             />
 
             <Text style={styles.labelInput}>Precio</Text>
             <TextInput
               style={styles.input}
               placeholder="Precio"
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               value={precio}
               onChangeText={setPrecio}
               placeholderTextColor="#b6e1ea"
@@ -157,11 +169,14 @@ function EditarServicio({ route, navigation }: Props) {
             </ScrollView>
 
             <TouchableOpacity
-              style={styles.boton}
+              style={[styles.boton, submitting && { opacity: 0.6 }]}
               onPress={handleActualizar}
+              disabled={submitting}
               activeOpacity={0.85}
             >
-              <Text style={styles.botonTexto}>Guardar Cambios</Text>
+              <Text style={styles.botonTexto}>
+                {submitting ? "Guardando…" : "Guardar cambios"}
+              </Text>
             </TouchableOpacity>
           </KeyboardAwareScrollView>
         </View>

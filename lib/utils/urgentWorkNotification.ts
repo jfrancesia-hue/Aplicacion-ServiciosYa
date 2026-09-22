@@ -7,28 +7,6 @@ export const URGENT_WORK_SOUND = "urgent_work.wav";
 
 type UrgentWorkAlertSource = "service_request" | "direct_contact";
 
-export async function sendStandardWorkPush(input: {
-  to: string | null | undefined;
-  title: string;
-  body: string;
-  data?: Record<string, unknown>;
-}) {
-  if (!input.to) return null;
-  return fetch("https://exp.host/--/api/v2/push/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      to: input.to,
-      priority: "default",
-      channelId: "default",
-      sound: "default",
-      title: input.title,
-      body: input.body,
-      data: input.data ?? {},
-    }),
-  });
-}
-
 type CreateUrgentWorkAlertParams = {
   supabase: SupabaseClient;
   source: UrgentWorkAlertSource;

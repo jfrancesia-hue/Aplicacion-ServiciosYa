@@ -20,18 +20,6 @@ export type MainStackParamList = {
   TrabajosPendientes: undefined;
   Configuracion: undefined;
   ServiciosPorCategoria: { categoria: string };
-  pagoInicial: undefined;
-  PasarelaPago: { categoria: string };
-  PasarelaPagoWorker:
-    | {
-        notificacion?: {
-          id: string;
-          emisor_id: string;
-          servicio_id?: string | null;
-          mensaje?: string | null;
-        };
-      }
-    | undefined;
   ChatIA: undefined;
   MicaChat: { mode: MicaChatMode; offerId?: string };
   ChatIndividual: {
@@ -44,19 +32,21 @@ export type MainStackParamList = {
     providerId?: string;
   };
   MisServicios: undefined;
-  EditarServicio: { servicio: Partial<ServicioRow> & { id: number } };
+  EditarServicio: {
+    servicio: Partial<ServicioRow> & {
+      id: number;
+      latitude?: number | null;
+      longitude?: number | null;
+    };
+  };
   NotificacionesScreen: undefined;
-  DniPendiente: undefined;
   PerfilesPendientes: undefined;
-  PerfilPendienteDetalle: undefined;
   OperationalDashboard: undefined;
   LegalDocument: { document: LegalDocumentKind };
   LegalAcceptance: undefined;
   ConsumerRightRequest: {
     requestType: "withdrawal" | "service_cancellation";
   };
-  Maps: undefined;
-  OnlineWorkers: undefined;
   WorkerProfile: UserProfile;
 };
 

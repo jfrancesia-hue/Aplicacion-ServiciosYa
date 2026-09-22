@@ -10,9 +10,8 @@ import * as SplashScreen from "expo-splash-screen";
 import { useCallback, useEffect } from "react";
 import { Alert, AppState, type AppStateStatus, Platform } from "react-native";
 import { useAuthStore } from "../../store/authStore";
-import { registrarTokenPush } from "../notificaciones";
 import { sessionQueryOptions } from "../queryOptions";
-import { lastUserId } from "../storage";
+import { lastUserId, removeCredentials } from "../storage";
 import { supabase } from "../supabase";
 import { clearSettingsToStorage, queryKey } from "./useUserSettings";
 
@@ -34,6 +33,12 @@ export function useAuth(queryClient: QueryClient) {
 
   useEffect(() => {
     const bootstrap = async () => {
+      // Borra una credencial legada si una versión anterior la guardó. La
+      // sesión renovable de Supabase es suficiente para mantener el acceso.
+      await removeCredentials().catch((error) => {
+        console.warn("No se pudo limpiar la credencial legada:", error);
+      });
+
       // Initialize auth (loads cache synchronously, verifies in background)
       await initialize();
 
@@ -107,8 +112,6 @@ export function useAuth(queryClient: QueryClient) {
       // Este es el modelo "push" que mantiene nuestros datos actualizados.
       queryClient.setQueryData(sessionQueryKey, newSession);
       queryCacheUserId = nextUserId;
-      if (_event === "SIGNED_IN" && newSession)
-        onSignedIn(newSession, queryClient);
     });
 
     // 3. Listener de deep link para cuando la app ya está en ejecución
@@ -180,10 +183,6 @@ export function useAuth(queryClient: QueryClient) {
     isInitialized,
     isAuth,
   };
-}
-
-function onSignedIn(session: Session, client: QueryClient) {
-  registrarTokenPush();
 }
 
 function onAppStateChange(status: AppStateStatus) {

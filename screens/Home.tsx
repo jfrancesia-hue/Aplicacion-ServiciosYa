@@ -1,23 +1,23 @@
-import { useFocusEffect, useIsFocused } from "@react-navigation/native";
+import { useIsFocused } from "@react-navigation/native";
 import React, {
-  useState,
   useContext,
-  useCallback,
   useEffect,
-  useRef,
+  useState,
 } from "react";
-import { StyleSheet, View } from "react-native";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { withModalProvider } from "../components/sheet/withModalProvider";
 import { AuthContext } from "../lib/context/AppContext";
 
 import { useHomeData } from "../lib/hooks/useHomeData";
-import { useOnboarding } from "../lib/hooks/useOnboarding";
-// Custom Hooks
-import { useUserSettings } from "../lib/hooks/useUserSettings";
 
-import ChatBotModal from "../components/ChatBotModal";
 import HomeHeader from "../components/HomeHeader";
 // Refactored Components
 import BottomNavBar from "../components/home/BottomNavBar";
@@ -33,7 +33,7 @@ import { HomeEventRenderer } from "../components/home/HomeEventRenderer";
 import WorkerHomeView from "../components/home/WorkerHomeView";
 import usePrefetchData from "../lib/hooks/usePrefetchData";
 import vexo from "../lib/vexo";
-import { getUserID, useIsGuest } from "../store/authStore";
+import { useIsGuest } from "../store/authStore";
 import { useHomeEventsStore } from "../store/homeEventsStore";
 import type { MainStackParamList } from "../types/navigation";
 import type { MicaChatMode } from "../types/navigation";
@@ -43,12 +43,7 @@ type Props = NativeStackScreenProps<MainStackParamList, "Home">;
 function Home({ navigation, route }: Props) {
   usePrefetchData();
   const [busqueda, setBusqueda] = useState("");
-  const [chatVisible, setChatVisible] = useState(false);
-  const onboardingShown = useRef(false);
   const isGuest = useIsGuest();
-  // Custom Hooks
-  const { startOnboarding } = useOnboarding();
-  const { settings, updateSettings } = useUserSettings();
   const {
     askDniVerification,
     askProfileCompletion,
@@ -56,6 +51,10 @@ function Home({ navigation, route }: Props) {
     providerProfileScore,
     providerMissingFields,
     rol,
+    profileLoading,
+    profileIsError,
+    profileError,
+    refetchProfile,
   } = useHomeData();
   const isWorker = rol === "worker";
   const isFocused = useIsFocused();
@@ -64,40 +63,12 @@ function Home({ navigation, route }: Props) {
   // Notifications & Messages
   const { unreadMessagesCount } = useContext(AuthContext);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (
-        !onboardingShown.current &&
-        settings &&
-        !settings.onBoardingComplete
-      ) {
-        onboardingShown.current = true;
-        startOnboarding((results) =>
-          updateSettings({
-            useBiometric: results.useBiometric,
-            onBoardingComplete: true,
-          }),
-        );
-      }
-    }, [settings]),
-  );
-
   const handleCategoryPress = (categoria: string) => {
     if (isGuest) {
       return;
     }
 
     vexo.marketplace("category_opened", { categoria });
-
-    // Registrar evento
-    fetch("https://insightpulse.store/api/registrar_evento.php", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tipo_evento: "categoria_visitada",
-        datos: { usuario_id: getUserID(), categoria },
-      }),
-    }).catch(() => {});
 
     navigation.navigate("ServiciosPorCategoria", { categoria });
   };
@@ -107,31 +78,6 @@ function Home({ navigation, route }: Props) {
   };
 
   useEffect(() => {
-    const registrarActividad = async () => {
-      try {
-        const response = await fetch(
-          "https://insightpulse.store/api/registrar_evento.php",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tipo_evento: "actividad",
-              datos: {
-                usuario_id: getUserID(),
-              },
-            }),
-          },
-        );
-      } catch {
-        // La telemetría heredada no debe afectar ni ensuciar el recorrido
-        // principal cuando el servicio externo no responde.
-      }
-    };
-
-    registrarActividad();
-  }, []);
-
-  useEffect(() => {
     setHomeVisible(isFocused);
     if (!isFocused) {
       setHomeDataReady(false);
@@ -139,6 +85,34 @@ function Home({ navigation, route }: Props) {
   }, [isFocused, setHomeVisible, setHomeDataReady]);
 
   const isUserRestricted = askDniVerification || askProfileCompletion;
+
+  if (!isGuest && profileLoading) {
+    return (
+      <View style={styles.profileState}>
+        <ActivityIndicator size="large" color="#069eb3" />
+        <Text style={styles.profileStateText}>Cargando tu perfil…</Text>
+      </View>
+    );
+  }
+
+  if (!isGuest && profileIsError) {
+    return (
+      <View style={styles.profileState}>
+        <Text style={styles.profileStateTitle}>No pudimos cargar tu perfil</Text>
+        <Text style={styles.profileStateText}>
+          {profileError instanceof Error
+            ? profileError.message
+            : "Revisá tu conexión e intentá nuevamente."}
+        </Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() => void refetchProfile()}
+        >
+          <Text style={styles.retryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -194,7 +168,7 @@ function Home({ navigation, route }: Props) {
         {!isWorker && (
           <FloatingActionButtonMenu
             onHelpPress={() => navigation.navigate("Configuracion")}
-            onChatPress={() => setChatVisible(true)}
+            onChatPress={() => handleMicaModePress("buscar-servicio")}
           />
         )}
 
@@ -204,16 +178,19 @@ function Home({ navigation, route }: Props) {
               ? () => navigation.navigate("PublicarNecesidad", { view: "new" })
               : undefined
           }
-          onBuscarServicioPress={() => handleMicaModePress("buscar-servicio")}
-          onOfrecerServicioPress={() => navigation.navigate("OfrecerServicio")}
-        />
-        <ChatBotModal
-          visible={chatVisible}
-          onClose={() => setChatVisible(false)}
+          onBuscarServicioPress={
+            !isWorker ? () => handleMicaModePress("buscar-servicio") : undefined
+          }
+          onOfrecerServicioPress={
+            isWorker ? () => navigation.navigate("OfrecerServicio") : undefined
+          }
         />
       </View>
 
-      <BottomNavBar unreadMessagesCount={unreadMessagesCount} />
+      <BottomNavBar
+        unreadMessagesCount={unreadMessagesCount}
+        isWorker={isWorker}
+      />
     </SafeAreaView>
   );
 }
@@ -223,4 +200,26 @@ export default withDropDownProvider(withModalProvider(Home));
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#f0f2f5" },
   container: { flex: 1, backgroundColor: "#f0f2f5" },
+  profileState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "#f0fafa",
+  },
+  profileStateTitle: { color: "#174f59", fontSize: 20, fontWeight: "800" },
+  profileStateText: {
+    color: "#52666a",
+    fontSize: 15,
+    marginTop: 12,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: 20,
+    borderRadius: 12,
+    backgroundColor: "#069eb3",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  retryButtonText: { color: "#fff", fontSize: 16, fontWeight: "800" },
 });

@@ -13,8 +13,8 @@ export default function NuevaContrasena({ navigation }: Props) {
   const [cargando, setCargando] = useState(false);
 
   const guardar = async () => {
-    if (!contrasena || contrasena.length < 8) {
-      Alert.alert("Contraseña inválida", "Usá mínimo 8 caracteres.");
+    if (!contrasena || contrasena.length < 12) {
+      Alert.alert("Contraseña inválida", "Usá mínimo 12 caracteres.");
       return;
     }
     if (contrasena !== confirmacion) {

@@ -78,7 +78,16 @@ export async function updateWorkerAvailability(
   client: QueryClient,
 ) {
   const user = getUserFromClient(client);
-  const location = await getLocationParamsFromClient(client);
+  const location =
+    status === "ONLINE" ? await getLocationParamsFromClient(client) : null;
+  if (
+    status === "ONLINE" &&
+    (location?.search_lat == null || location.search_lon == null)
+  ) {
+    throw new Error(
+      "Para aparecer disponible necesitás confirmar tu ubicación con GPS o elegirla manualmente desde Inicio.",
+    );
+  }
   const now = new Date();
   const availableUntil =
     status === "ONLINE" && durationHours
@@ -93,10 +102,14 @@ export async function updateWorkerAvailability(
       available_until: availableUntil,
       availability_duration_hours:
         status === "ONLINE" ? durationHours ?? 12 : null,
-      location: locationQueryString(
-        location.search_lat || 0,
-        location.search_lon || 0,
-      ),
+      ...(location?.search_lat != null && location.search_lon != null
+        ? {
+            location: locationQueryString(
+              location.search_lat,
+              location.search_lon,
+            ),
+          }
+        : {}),
     },
     { onConflict: "user_id" },
   );

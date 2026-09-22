@@ -12,6 +12,7 @@ import {
 
 import { Picker } from "@react-native-picker/picker";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useQuery } from "@tanstack/react-query";
 // 1. Import the new component
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,6 +23,7 @@ import { withDropDownProvider } from "../components/forms/withDropDownProvider";
 import LocationInput from "../components/location/LocationInput";
 import { withModalProvider } from "../components/sheet/withModalProvider";
 import { supabase } from "../lib/supabase";
+import { perfilQueryOptions } from "../lib/queryOptions";
 import showToast from "../lib/toast";
 import {
   isServiciosYaBridgeConfigured,
@@ -29,6 +31,7 @@ import {
 } from "../lib/serviciosYaBridge";
 import { categoriasDisponibles } from "../lib/utils/categorias";
 import { locationQueryString } from "../lib/utils/location";
+import { parseMoneyInput } from "../lib/utils/money";
 import vexo from "../lib/vexo";
 import { getUserID } from "../store/authStore";
 import type { LocationItem } from "../types/location";
@@ -55,8 +58,26 @@ function OfrecerServicio({ navigation }: Props) {
   const [precio, setPrecio] = useState("");
   const [descripcion, setDescripcion] = useState("");
   const [ubicacion, setUbicacion] = useState<LocationItem>();
+  const [submitting, setSubmitting] = useState(false);
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileIsError,
+    refetch: refetchProfile,
+  } = useQuery(perfilQueryOptions);
+
+  useEffect(() => {
+    if (!profileLoading && profile && profile.rol !== "worker") {
+      Alert.alert(
+        "Acceso para prestadores",
+        "Para publicar servicios primero tenés que completar un perfil de prestador.",
+        [{ text: "Volver", onPress: () => navigation.replace("Home") }],
+      );
+    }
+  }, [navigation, profile, profileLoading]);
 
   const handleSubmit = async () => {
+    if (submitting) return;
     if (
       !titulo ||
       !categoria ||
@@ -65,12 +86,26 @@ function OfrecerServicio({ navigation }: Props) {
       !descripcion ||
       !ubicacion
     ) {
-      Alert.alert("Error", "Por favor completa todos los campos.");
+      Alert.alert("Error", "Por favor, completá todos los campos.");
+      return;
+    }
+
+    const parsedPrice = parseMoneyInput(precio);
+    if (parsedPrice === null) {
+      Alert.alert(
+        "Precio inválido",
+        "Ingresá un monto mayor que cero. Podés usar 5000 o 5.000.",
+      );
       return;
     }
 
     const userId = getUserID();
+    if (!userId) {
+      Alert.alert("Sesión vencida", "Volvé a iniciar sesión para publicar.");
+      return;
+    }
 
+    setSubmitting(true);
     try {
       // 🔹 Si el usuario ya pagó, crear el servicio
       const servicio = {
@@ -78,10 +113,11 @@ function OfrecerServicio({ navigation }: Props) {
         titulo,
         categoria,
         horario,
-        precio: Number(precio),
+        precio: parsedPrice,
         descripcion,
         location: locationQueryString(ubicacion.lat, ubicacion.lng),
         country: ubicacion.isoCountryCode,
+        estado: "activo",
       };
 
       const { data, error } = await supabase.from("servicios").insert(servicio);
@@ -131,8 +167,34 @@ function OfrecerServicio({ navigation }: Props) {
       const message = err instanceof Error ? err.message : "Error desconocido";
       console.error("Error al insertar el servicio:", message);
       Alert.alert("Error", `No se pudo crear el servicio: ${message}`);
+    } finally {
+      setSubmitting(false);
     }
   };
+
+  if (profileLoading) {
+    return (
+      <SafeAreaView style={styles.guardState}>
+        <Text style={styles.guardText}>Validando tu perfil…</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (profileIsError) {
+    return (
+      <SafeAreaView style={styles.guardState}>
+        <Text style={styles.guardText}>No pudimos validar tu perfil.</Text>
+        <TouchableOpacity
+          style={styles.submitButton}
+          onPress={() => void refetchProfile()}
+        >
+          <Text style={styles.submitButtonText}>Reintentar</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
+
+  if (profile?.rol !== "worker") return null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#E8FAF7" }}>
@@ -197,7 +259,7 @@ function OfrecerServicio({ navigation }: Props) {
             placeholderTextColor="#888"
             value={precio}
             onChangeText={setPrecio}
-            keyboardType="numeric"
+            keyboardType="decimal-pad"
           />
 
           <LocationInput onChange={(value) => setUbicacion(value)} />
@@ -214,8 +276,14 @@ function OfrecerServicio({ navigation }: Props) {
             multiline
           />
 
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.submitButtonText}>Publicar Servicio</Text>
+          <TouchableOpacity
+            style={[styles.submitButton, submitting && { opacity: 0.6 }]}
+            onPress={handleSubmit}
+            disabled={submitting}
+          >
+            <Text style={styles.submitButtonText}>
+              {submitting ? "Publicando…" : "Publicar servicio"}
+            </Text>
           </TouchableOpacity>
         </View>
       </KeyboardAwareScrollView>
@@ -226,6 +294,20 @@ function OfrecerServicio({ navigation }: Props) {
 export default withDropDownProvider(withModalProvider(OfrecerServicio));
 
 const styles = StyleSheet.create({
+  guardState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    backgroundColor: "#E8FAF7",
+  },
+  guardText: {
+    color: "#174f59",
+    fontSize: 17,
+    fontWeight: "700",
+    marginBottom: 18,
+    textAlign: "center",
+  },
   // 3. Adjust the styles. The main container now handles the background.
   container: {
     flex: 1,

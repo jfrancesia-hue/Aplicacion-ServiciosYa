@@ -16,7 +16,7 @@ type NavigationProp = NativeStackNavigationProp<MainStackParamList>;
 
 function ChatList() {
     const navigation = useNavigation<NavigationProp>();
-    const { data, refetch, isLoading } = useQuery({
+    const { data, refetch, isLoading, isError, error } = useQuery({
         ...fetchUserChatQueryOptions,
         staleTime: 5_000,
     });
@@ -95,7 +95,13 @@ function ChatList() {
                     servicioId: String(item.servicio.id ?? ""),
                 })}
             >
-                <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                {item.avatar ? (
+                    <Image source={{ uri: item.avatar }} style={styles.avatar} />
+                ) : (
+                    <View style={[styles.avatar, styles.avatarFallback]}>
+                        <Ionicons name="person" size={24} color="#047a8f" />
+                    </View>
+                )}
                 <View style={styles.textos}>
                     <Text style={styles.nombre}>{item.title}</Text>
                     <Text style={styles.mensaje} numberOfLines={1}>{item.mensaje}</Text>
@@ -117,7 +123,30 @@ function ChatList() {
             data={data ?? []}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
-            ListEmptyComponent={isLoading ? <LoadingView /> : null}
+            ListEmptyComponent={
+                isLoading ? (
+                    <LoadingView />
+                ) : isError ? (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="cloud-offline-outline" size={38} color="#9a6000" />
+                        <Text style={styles.emptyTitle}>No pudimos cargar tus chats</Text>
+                        <Text style={styles.emptyText}>
+                            {error instanceof Error ? error.message : "Revisá tu conexión e intentá nuevamente."}
+                        </Text>
+                        <TouchableOpacity style={styles.retryButton} onPress={() => void refetch()}>
+                            <Text style={styles.retryText}>Reintentar</Text>
+                        </TouchableOpacity>
+                    </View>
+                ) : (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="chatbubbles-outline" size={38} color="#047a8f" />
+                        <Text style={styles.emptyTitle}>Todavía no tenés conversaciones</Text>
+                        <Text style={styles.emptyText}>
+                            Tus chats aparecerán cuando contactes a un prestador o recibas una propuesta.
+                        </Text>
+                    </View>
+                )
+            }
             contentContainerStyle={{ paddingBottom: 20 }}
         />
     );
@@ -175,6 +204,41 @@ const styles = StyleSheet.create({
         borderWidth: 2,
         borderColor: '#069eb3',
         backgroundColor: '#F3FFFE'
+    },
+    avatarFallback: {
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    emptyState: {
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 28,
+        paddingVertical: 64,
+    },
+    emptyTitle: {
+        marginTop: 14,
+        color: "#174f59",
+        fontSize: 18,
+        fontWeight: "800",
+        textAlign: "center",
+    },
+    emptyText: {
+        marginTop: 8,
+        color: "#5f777c",
+        fontSize: 14,
+        lineHeight: 20,
+        textAlign: "center",
+    },
+    retryButton: {
+        marginTop: 18,
+        backgroundColor: "#047a8f",
+        borderRadius: 18,
+        paddingHorizontal: 20,
+        paddingVertical: 10,
+    },
+    retryText: {
+        color: "#fff",
+        fontWeight: "800",
     },
     textos: {
         flex: 1

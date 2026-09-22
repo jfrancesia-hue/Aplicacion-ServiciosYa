@@ -59,7 +59,10 @@ async function getBridgeWorkerContext() {
       .select("id,nombre,email,celular,categoria,ciudad,provincia")
       .eq("id", userId)
       .single(),
-    supabase.from("servicios").select("categoria").eq("user_id", userId),
+    supabase
+      .from("servicios_public")
+      .select("categoria")
+      .eq("user_id", userId),
   ]);
 
   const oficios = normalizeOficios([

@@ -11,21 +11,22 @@ import {
   Modal,
   SafeAreaView
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { resolveVerificationDocumentUrl } from '../lib/legal/verificationDocuments';
+import { useSuspenseProfile } from '../lib/hooks/useUser';
 
 export default function PerfilesPendientes() {
-  const navigation = useNavigation();
+  const { rol } = useSuspenseProfile();
   const [perfiles, setPerfiles] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [imgAmpliada, setImgAmpliada] = useState(null);
 
   useEffect(() => {
-    obtenerPerfilesPendientes();
-  }, []);
+    if (rol === 'admin') obtenerPerfilesPendientes();
+    else setCargando(false);
+  }, [rol]);
 
   const obtenerPerfilesPendientes = async () => {
     setCargando(true);
@@ -66,6 +67,8 @@ export default function PerfilesPendientes() {
     if (!error) {
       setPerfiles((prev) => prev.filter((u) => u.id !== usuarioId));
       Alert.alert('Perfil verificado');
+    } else {
+      Alert.alert('Error', 'No se pudo verificar el perfil.');
     }
   };
 
@@ -87,6 +90,8 @@ export default function PerfilesPendientes() {
             if (!error) {
               setPerfiles((prev) => prev.filter((u) => u.id !== usuarioId));
               Alert.alert('Perfil rechazado');
+            } else {
+              Alert.alert('Error', 'No se pudo rechazar el perfil.');
             }
           }
         }
@@ -98,7 +103,11 @@ export default function PerfilesPendientes() {
     <View style={styles.perfilCard}>
       <View style={styles.headerCard}>
         <Image
-          source={{ uri: item.foto_perfil || `https://ui-avatars.com/api/?background=00B8A9&color=fff&name=${item.nombre || 'U'}` }}
+          source={
+            item.foto_perfil
+              ? { uri: item.foto_perfil }
+              : require('../assets/serviciosya-logo-2026.png')
+          }
           style={styles.avatar}
         />
         <View>
@@ -137,16 +146,22 @@ export default function PerfilesPendientes() {
           <Ionicons name="close-circle" size={18} color="#fff" />
           <Text style={styles.txtBtn}>Rechazar</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => navigation.navigate('PerfilPendienteDetalle', { perfil: item })}
-          style={styles.btnVerDetalles}
-        >
-          <Ionicons name="information-circle-outline" size={18} color="#00B8A9" />
-          <Text style={[styles.txtBtn, { color: '#00B8A9' }]}>Detalles</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
+
+  if (rol !== 'admin') {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#f0fdfc' }}>
+        <View style={styles.unauthorized}>
+          <Ionicons name="lock-closed" size={42} color="#64748b" />
+          <Text style={styles.sinPerfiles}>
+            {'Esta secci\u00f3n es exclusiva para administradores.'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={{flex:1, backgroundColor: '#f0fdfc'}}>
@@ -193,6 +208,12 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 40,
     color: '#7f8c8d',
+  },
+  unauthorized: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
   },
   perfilCard: {
     backgroundColor: '#fff',
@@ -260,17 +281,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 17,
     elevation: 2,
-  },
-  btnVerDetalles: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F4F7FA',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
-    elevation: 1,
-    borderWidth: 1,
-    borderColor: '#00B8A9'
   },
   txtBtn: { color: '#fff', fontWeight: '700', marginLeft: 5, fontSize: 14 },
   modalBg: {

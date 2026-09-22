@@ -11,6 +11,8 @@ export type ManualServiceRequestInput = {
   zone: string;
   city?: string | null;
   province?: string | null;
+  latitude: number;
+  longitude: number;
   urgency: ServiceRequestUrgency;
   toolsResponsibility: ToolsResponsibility;
   teamSize: number;
@@ -52,10 +54,11 @@ function serviceRequestError(error: { message?: string }) {
   const message = error.message ?? "";
   if (
     message.includes("REQUEST_CITY_REQUIRED") ||
-    message.includes("REQUEST_PROVINCE_REQUIRED")
+    message.includes("REQUEST_PROVINCE_REQUIRED") ||
+    message.includes("REQUEST_EXACT_LOCATION_REQUIRED")
   ) {
     return new Error(
-      "Confirmá la ciudad y la provincia antes de publicar el trabajo.",
+      "Confirmá la ubicación exacta con GPS o ingresando una dirección.",
     );
   }
   return error;
@@ -64,12 +67,14 @@ function serviceRequestError(error: { message?: string }) {
 export async function createManualServiceRequest(
   input: ManualServiceRequestInput,
 ) {
-  const { data, error } = await supabase.rpc("create_manual_service_request", {
+  const { data, error } = await supabase.rpc("create_manual_service_request_v2", {
     p_categoria: input.category,
     p_descripcion: input.description,
     p_zona: input.zone,
     p_ciudad: input.city ?? undefined,
     p_provincia: input.province ?? undefined,
+    p_latitude: input.latitude,
+    p_longitude: input.longitude,
     p_urgencia: input.urgency,
     p_responsable_herramientas: input.toolsResponsibility,
     p_cantidad_personas: input.teamSize,

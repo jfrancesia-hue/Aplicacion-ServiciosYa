@@ -6,7 +6,6 @@ import {
   View,
   SectionList
 } from "react-native";
-import Animated, { FadeInDown, Layout } from "react-native-reanimated";
 
 // Components & Utils
 import { CategorySection } from "./CategorySection";
@@ -17,7 +16,6 @@ import { categoriasPorSeccion } from "../../lib/utils/categorias";
 import { useUserSettings } from "../../lib/hooks/useUserSettings";
 import { withSuspense } from "../withSuspense";
 import { useHomeEventsStore } from "../../store/homeEventsStore";
-import { supabase } from "../../lib/supabase";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { categoriasQueryOptions } from "../../lib/queryOptions";
 import {
@@ -32,9 +30,6 @@ interface CategoryListProps {
   isUserRestricted: boolean;
   // Removed 'refreshing' and 'onRefresh' as they were not used (logic is internal)
 }
-
-const AnimatedSectionList =
-  Animated.createAnimatedComponent(SectionList);
 
 const normalize = (s: string) =>
   s.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").trim();
@@ -51,6 +46,7 @@ const CategoryList = ({
   // 1. Hooks & State
   const { settings } = useUserSettings();
   const [isPullingToRefresh, setIsPullingToRefresh] = useState(false);
+  const [workerCountsError, setWorkerCountsError] = useState<string | null>(null);
   const setHomeDataReady = useHomeEventsStore(s => s.setHomeDataReady);
   const [workerCounts, setWorkerCounts] = useState<Record<string, number>>({});
   const { data: categoriasDB } = useSuspenseQuery(categoriasQueryOptions);
@@ -70,11 +66,21 @@ const CategoryList = ({
   }, [categoriasDB]);
 
   const loadWorkerCounts = useCallback(async () => {
+    if (!effectiveLocation) {
+      setWorkerCounts({});
+      setWorkerCountsError(null);
+      return;
+    }
+
     try {
+      setWorkerCountsError(null);
       const counts = await getAvailableProviderCounts({
         city: effectiveLocation?.city,
         province: effectiveLocation?.province,
         locality: effectiveLocation?.locality,
+        latitude: effectiveLocation?.latitude,
+        longitude: effectiveLocation?.longitude,
+        radiusMeters: settings?.searchRadius ?? 10000,
       });
       const mappedCounts: Record<string, number> = {};
       for (const category of categoriasDB) {
@@ -89,48 +95,21 @@ const CategoryList = ({
         "[CategoryList] conteo histórico no disponible; se usa el perfil actual:",
         unifiedError,
       );
+      setWorkerCounts({});
+      setWorkerCountsError(
+        "No pudimos actualizar la cantidad de prestadores cercanos. Desliz\u00e1 hacia abajo para reintentar.",
+      );
+      return;
     }
 
-    const { data } = await supabase
-      .from("user_public_profiles")
-      .select("categoria")
-      .eq("rol", "worker")
-      .eq("perfil_publico", true);
-    if (!data) return;
-
-    const countsByKey: Record<string, number> = {};
-    for (const user of data) {
-      let categories: unknown = user.categoria;
-      if (typeof categories === "string") {
-        try {
-          categories = JSON.parse(categories);
-        } catch {
-          categories = [categories];
-        }
-      }
-      const values: string[] = Array.isArray(categories)
-        ? categories.map(String).filter(Boolean)
-        : categories
-          ? [String(categories)]
-          : [];
-      for (const category of values) {
-        const key = providerCategoryKey(category);
-        if (key) countsByKey[key] = (countsByKey[key] || 0) + 1;
-      }
-    }
-
-    const mappedCounts: Record<string, number> = {};
-    for (const category of categoriasDB) {
-      if (!category?.nombre) continue;
-      mappedCounts[category.nombre] =
-        countsByKey[providerCategoryKey(category.nombre)] ?? 0;
-    }
-    setWorkerCounts(mappedCounts);
   }, [
     categoriasDB,
     effectiveLocation?.city,
     effectiveLocation?.locality,
     effectiveLocation?.province,
+    effectiveLocation?.latitude,
+    effectiveLocation?.longitude,
+    settings?.searchRadius,
   ]);
 
   useEffect(() => {
@@ -214,6 +193,22 @@ const CategoryList = ({
       keyExtractor={(_, index) => index.toString()}
       extraData={busqueda}
 
+      ListHeaderComponent={
+        !effectiveLocation ? (
+          <View style={styles.notice}>
+            <Text style={styles.noticeTitle}>{"Confirm\u00e1 tu ubicaci\u00f3n"}</Text>
+            <Text style={styles.noticeText}>
+              {"Las cantidades aparecen cuando podemos calcular prestadores dentro de tu radio de b\u00fasqueda."}
+            </Text>
+          </View>
+        ) : workerCountsError ? (
+          <View style={[styles.notice, styles.errorNotice]}>
+            <Text style={styles.noticeTitle}>No pudimos actualizar la zona</Text>
+            <Text style={styles.noticeText}>{workerCountsError}</Text>
+          </View>
+        ) : null
+      }
+
       renderSectionHeader={({ section }) => (
         <Text style={styles.sectionTitle}>{section.title}</Text>
       )}
@@ -282,5 +277,29 @@ const styles = StyleSheet.create({
   errorText: {
     color: "red",
     textAlign: "center",
+  },
+  notice: {
+    marginHorizontal: 16,
+    marginBottom: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#bcdde1",
+    backgroundColor: "#edfafa",
+    padding: 14,
+  },
+  errorNotice: {
+    borderColor: "#fed7aa",
+    backgroundColor: "#fff7ed",
+  },
+  noticeTitle: {
+    color: "#174f59",
+    fontSize: 15,
+    fontWeight: "800",
+    marginBottom: 4,
+  },
+  noticeText: {
+    color: "#52666a",
+    fontSize: 13,
+    lineHeight: 18,
   },
 });

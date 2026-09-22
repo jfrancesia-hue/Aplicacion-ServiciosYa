@@ -221,10 +221,10 @@ function PublicarNecesidad({ navigation, route }: Props) {
       fallbackCity: city,
       fallbackProvince: province,
     });
-    if (!requestLocation.isComplete) {
+    if (!requestLocation.isComplete || !effectiveLocation) {
       Alert.alert(
         "Falta confirmar la ubicación",
-        "Elegí la ciudad y la provincia con el GPS o de forma manual. La ubicación aproximada por IP no alcanza para publicar.",
+        "Usá el GPS o ingresá una dirección exacta. Una ciudad o un barrio sin coordenadas no alcanza para publicar.",
         [
           { text: "Ahora no", style: "cancel" },
           {
@@ -244,6 +244,8 @@ function PublicarNecesidad({ navigation, route }: Props) {
         zone: requestLocation.label as string,
         city: requestLocation.city,
         province: requestLocation.province,
+        latitude: effectiveLocation.latitude,
+        longitude: effectiveLocation.longitude,
         urgency,
         toolsResponsibility,
         teamSize,

@@ -31,12 +31,16 @@ export type AvailableProvider = {
   reviewCount: number;
   averageResponseMinutes?: number | null;
   responseSampleSize: number;
+  distanceKm?: number | null;
 };
 
 export type AvailableProviderLocation = {
   city?: string | null;
   province?: string | null;
   locality?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusMeters?: number | null;
 };
 
 type ProviderListResponse = {
@@ -108,6 +112,9 @@ export async function getAvailableProviders(
         city: location?.city ?? null,
         province: location?.province ?? null,
         locality: location?.locality ?? null,
+        latitude: location?.latitude ?? null,
+        longitude: location?.longitude ?? null,
+        radiusMeters: location?.radiusMeters ?? null,
       },
     },
   );
@@ -133,6 +140,9 @@ export async function getAvailableProviderCounts(
           city: location?.city ?? null,
           province: location?.province ?? null,
           locality: location?.locality ?? null,
+          latitude: location?.latitude ?? null,
+          longitude: location?.longitude ?? null,
+          radiusMeters: location?.radiusMeters ?? null,
         },
       },
     );

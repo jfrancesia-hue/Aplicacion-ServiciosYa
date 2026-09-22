@@ -109,7 +109,7 @@ async function fetchUserChats() {
 
     chats.push({
       id: chat.id,
-      avatar: user?.foto_perfil ?? "https://picsum.photos/id/9/200/300",
+      avatar: user?.foto_perfil ?? undefined,
       title: user?.nombre ?? "Usuario",
       noLeidos,
       mensaje:

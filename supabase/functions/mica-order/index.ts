@@ -150,7 +150,7 @@ async function loadOwnedOffer(
   let query = admin
     .from("nuevaOferta")
     .select(
-      "id,app_cliente_id,categoria,zona,descripcion,estado,paso,presupuesto_seleccionado_id,app_chat_id,created_at,historial_conversacion,metadata",
+      "id,app_cliente_id,categoria,zona,descripcion,estado,paso,presupuesto_seleccionado_id,app_chat_id,created_at,historial_conversacion,metadata,location",
     )
     .eq("app_cliente_id", userId);
 
@@ -613,6 +613,7 @@ Deno.serve(async (req) => {
             : null,
           chatId: offer.app_chat_id ?? null,
           createdAt: offer.created_at ?? null,
+          hasExactLocation: Boolean(offer.location),
         },
         quotes,
         history: safeHistory,

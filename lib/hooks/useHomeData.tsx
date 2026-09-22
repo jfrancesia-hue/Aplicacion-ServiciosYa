@@ -23,7 +23,13 @@ export const useHomeData = () => {
   const [askDniVerification, setAskDniVerification] = useState(false);
   const [askProfileCompletion, setAskProfileCompletion] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const { data: userData } = useQuery(perfilQueryOptions);
+  const {
+    data: userData,
+    isLoading: profileLoading,
+    isError: profileIsError,
+    error: profileError,
+    refetch: refetchProfile,
+  } = useQuery(perfilQueryOptions);
   const profileCompleteness = getProviderProfileCompleteness(userData);
   const askProviderProfileCompletion =
     userData?.rol === "worker" && profileCompleteness.score < 100;
@@ -58,7 +64,9 @@ export const useHomeData = () => {
       perfil_completo = perfil_completo ?? false;
       dni_verificado = dni_verificado ?? false;
 
-      setAskDniVerification(perfil_completo && !dni_verificado);
+      setAskDniVerification(
+        userData.rol === "worker" && perfil_completo && !dni_verificado,
+      );
       setAskProfileCompletion(!perfil_completo);
     }
   }, [userData]);
@@ -70,6 +78,10 @@ export const useHomeData = () => {
     askProviderProfileCompletion,
     providerProfileScore: profileCompleteness.score,
     providerMissingFields: profileCompleteness.missingLabels,
+    profileLoading,
+    profileIsError,
+    profileError,
+    refetchProfile,
     conteosPorCategoria,
     refreshing,
     onRefresh,

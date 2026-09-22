@@ -174,7 +174,7 @@ function AchievementsBottomSheet<const TAchievements extends readonly BaseAchiev
             { color: isDark ? '#9CA3AF' : '#6B7280' },
           ]}
         >
-          Completa hitos para desbloquear más.
+          Completá hitos para desbloquear más.
         </Text>
       </View>
 

@@ -75,12 +75,12 @@ export default function RegistroCliente() {
   const validarPaso = () => {
     if (step === 1) {
       if (!nombre || !apellido || !edad || !sexo) {
-        Alert.alert("Completa todos los campos");
+        Alert.alert("Completá todos los campos");
         return false;
       }
       const parsedAge = Number.parseInt(edad, 10);
       if (!Number.isInteger(parsedAge) || parsedAge < 18 || parsedAge > 100) {
-        Alert.alert("Edad inválida", "Debes tener 18 años o más.");
+        Alert.alert("Edad inválida", "Tenés que tener 18 años o más.");
         return false;
       }
     }
@@ -92,7 +92,7 @@ export default function RegistroCliente() {
       ) {
         Alert.alert(
           "Faltan datos",
-          "Debes completar todos los campos del paso 2.",
+          "Completá todos los campos del paso 2.",
         );
         return;
       }
@@ -107,7 +107,7 @@ export default function RegistroCliente() {
     }
     if (step === 3) {
       if (!acepto) {
-        Alert.alert("Debes aceptar los términos y condiciones");
+        Alert.alert("Aceptá los términos y condiciones");
         return false;
       }
     }
@@ -187,9 +187,6 @@ export default function RegistroCliente() {
           rol: "user",
           foto_perfil: urlFotoPerfil,
           perfil_completo: true,
-          creditos: 0,
-          pago: true,
-          dni_verificado: true,
         })
         .eq("id", user.id);
 
@@ -197,7 +194,7 @@ export default function RegistroCliente() {
 
       await recordCurrentLegalAcceptance("client_registration");
 
-      navigation.navigate("Home");
+      navigation.reset({ index: 0, routes: [{ name: "Home" }] });
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "Error de registro desconocido";

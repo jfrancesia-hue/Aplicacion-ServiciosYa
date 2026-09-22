@@ -3,7 +3,7 @@ import type { Json } from "../types/database.types";
 import { supabase } from "./supabase";
 
 export type paymentType = "registro_unico" | "plan";
-export type loginType = "email" | "google" | "apple" | "huella" | "guest";
+export type loginType = "email" | "google" | "apple" | "guest";
 export type MarketplaceFunnelStep =
   | "location_ready"
   | "category_opened"

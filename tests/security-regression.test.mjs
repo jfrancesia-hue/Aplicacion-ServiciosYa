@@ -271,10 +271,9 @@ const registrationLegalSources = (
 ).join("\n");
 const serviceNoticeSources = (
   await Promise.all(
-    [
-      "../screens/NotificacionesScreen.tsx",
-      "../screens/PasarelaPagoWorker.tsx",
-    ].map((path) => readFile(new URL(path, import.meta.url), "utf8")),
+    ["../screens/NotificacionesScreen.tsx"].map((path) =>
+      readFile(new URL(path, import.meta.url), "utf8"),
+    ),
   )
 ).join("\n");
 

@@ -256,11 +256,6 @@ export default function Perfil() {
     const categoriasActuales = categoriasRef.current;
     const matriculaActual = matriculaRef.current;
 
-    console.log('[Perfil] guardarCambios', {
-      nombreVal, celularVal, ciudadVal, provinciaVal,
-      categorias: categoriasActuales,
-    });
-
     if (!nombreVal || !celularVal || !ciudadVal || !provinciaVal) {
       Alert.alert('Error', 'Nombre, celular, ciudad y provincia son obligatorios.');
       return;
@@ -305,8 +300,6 @@ export default function Perfil() {
         categoria: categoriasActuales,
         matricula: matriculaUrls.length > 0 ? matriculaUrls[0] : null,
       };
-
-      console.log('[Perfil] updateData', updateData);
 
       const { error } = await supabase
         .from('usuarios')
@@ -395,7 +388,11 @@ export default function Perfil() {
         {/* ── AVATAR ── */}
         <View style={styles.avatarRow}>
           <Image
-            source={{ uri: userData.foto_perfil || 'https://via.placeholder.com/150' }}
+            source={
+              userData.foto_perfil
+                ? { uri: userData.foto_perfil }
+                : require('../assets/serviciosya-logo-2026.png')
+            }
             style={styles.avatar}
           />
           <TouchableOpacity

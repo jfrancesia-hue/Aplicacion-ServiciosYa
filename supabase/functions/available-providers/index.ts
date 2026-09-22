@@ -50,6 +50,10 @@ type WorkerStateRow = {
   last_seen_at: string | null;
   available_until: string | null;
   availability_duration_hours: number | null;
+  location: {
+    type?: string;
+    coordinates?: unknown;
+  } | null;
 };
 
 type CampaignProfileRow = {
@@ -96,6 +100,9 @@ type LocationInput = {
   city?: string | null;
   province?: string | null;
   locality?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusMeters?: number | null;
 };
 
 type RequestBody = LocationInput & {
@@ -405,7 +412,7 @@ async function loadData(admin: ReturnType<typeof createClient>) {
     fetchAll<WorkerStateRow>(
       admin,
       "workers",
-      "user_id,status,last_seen_at,available_until,availability_duration_hours",
+      "user_id,status,last_seen_at,available_until,availability_duration_hours,location",
     ),
     fetchAll<CampaignProfileRow>(
       admin,
@@ -647,6 +654,11 @@ function buildProviders(data: CachedData) {
     const coordinateLocation = draft.services
       .map((service) => serviceLocations.get(service.id))
       .find(Boolean);
+    const exactServiceLocation = draft.services.find(
+      (service) =>
+        typeof service.latitude === "number" &&
+        typeof service.longitude === "number",
+    );
     const province =
       cleanText(draft.user.provincia) ||
       resolveProvince(campaignZone) ||
@@ -660,11 +672,16 @@ function buildProviders(data: CachedData) {
       coordinateLocation?.city ||
       null;
     const barrio = cleanText(draft.user.barrio) || serviceDistrict || null;
+    const workerState = statesByUser.get(draft.id);
     const availability = availabilityFor(
       draft.user,
       draft.services,
-      statesByUser.get(draft.id),
+      workerState,
     );
+    const liveLocation =
+      availability.status === "online"
+        ? pointCoordinates(workerState?.location ?? null)
+        : null;
     const legacy =
       normalizeText(draft.user.rol) !== "worker" ||
       draft.user.perfilPublico !== true ||
@@ -717,6 +734,10 @@ function buildProviders(data: CachedData) {
           ? null
           : Number(trust.average_response_minutes),
       responseSampleSize: Number(trust?.response_sample_size ?? 0),
+      locationLatitude:
+        liveLocation?.latitude ?? exactServiceLocation?.latitude ?? null,
+      locationLongitude:
+        liveLocation?.longitude ?? exactServiceLocation?.longitude ?? null,
     };
   });
 
@@ -762,6 +783,91 @@ function providerMatchesLocation(
   return Boolean(providerProvince);
 }
 
+function distanceKm(
+  from: { latitude: number; longitude: number },
+  to: { latitude: number; longitude: number },
+) {
+  const radians = (degrees: number) => (degrees * Math.PI) / 180;
+  const latitudeDelta = radians(to.latitude - from.latitude);
+  const longitudeDelta = radians(to.longitude - from.longitude);
+  const a =
+    Math.sin(latitudeDelta / 2) ** 2 +
+    Math.cos(radians(from.latitude)) *
+      Math.cos(radians(to.latitude)) *
+      Math.sin(longitudeDelta / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function pointCoordinates(value: WorkerStateRow["location"]) {
+  const coordinates = value?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  const longitude = Number(coordinates[0]);
+  const latitude = Number(coordinates[1]);
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude) ||
+    latitude < -56 ||
+    latitude > -21 ||
+    longitude < -74 ||
+    longitude > -53
+  ) {
+    return null;
+  }
+  return { latitude, longitude };
+}
+
+function providerDistanceKm(
+  provider: { locationLatitude?: number | null; locationLongitude?: number | null },
+  target: LocationInput,
+) {
+  if (
+    typeof target.latitude !== "number" ||
+    typeof target.longitude !== "number" ||
+    typeof provider.locationLatitude !== "number" ||
+    typeof provider.locationLongitude !== "number"
+  ) {
+    return null;
+  }
+
+  return distanceKm(
+    { latitude: target.latitude, longitude: target.longitude },
+    {
+      latitude: provider.locationLatitude,
+      longitude: provider.locationLongitude,
+    },
+  );
+}
+
+function providerMatchesRadius(
+  provider: {
+    ciudad?: string | null;
+    barrio?: string | null;
+    locationLatitude?: number | null;
+    locationLongitude?: number | null;
+  },
+  target: LocationInput,
+) {
+  const radiusMeters = Number(target.radiusMeters);
+  if (!Number.isFinite(radiusMeters) || radiusMeters <= 0) return true;
+  if (
+    typeof target.latitude !== "number" ||
+    typeof target.longitude !== "number"
+  ) {
+    return true;
+  }
+
+  const distance = providerDistanceKm(provider, target);
+  if (distance != null) return distance * 1000 <= radiusMeters;
+
+  const targetCity = cleanText(target.city) || cleanText(target.locality);
+  return Boolean(
+    targetCity &&
+      [provider.ciudad, provider.barrio].some((value) =>
+        sameLocality(value, targetCity),
+      ),
+  );
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -800,8 +906,10 @@ Deno.serve(async (req) => {
         : buildProviders(data);
     cachedProviderIndex = { source: data, value: providerIndex };
     const { providers, unlinkedCampaignProfiles } = providerIndex;
-    const scopedProviders = providers.filter((provider) =>
-      providerMatchesLocation(provider, body),
+    const scopedProviders = providers.filter(
+      (provider) =>
+        providerMatchesLocation(provider, body) &&
+        providerMatchesRadius(provider, body),
     );
 
     if (action === "counts") {
@@ -827,15 +935,29 @@ Deno.serve(async (req) => {
       });
     }
 
-    const matchingProviders = scopedProviders
+    const matchingProvidersWithLocation = scopedProviders
       .filter((provider) =>
         provider.categoria.some((candidate) =>
           categoriesMatch(candidate, category),
         ),
       )
+      .map((provider) => ({
+        ...provider,
+        distanceKm: providerDistanceKm(provider, body),
+      }))
       .sort((a, b) => {
         if (a.availabilityRank !== b.availabilityRank) {
           return a.availabilityRank - b.availabilityRank;
+        }
+        const targetLatitude = body.latitude;
+        const targetLongitude = body.longitude;
+        if (
+          typeof targetLatitude === "number" &&
+          typeof targetLongitude === "number"
+        ) {
+          const aDistance = a.distanceKm ?? Number.POSITIVE_INFINITY;
+          const bDistance = b.distanceKm ?? Number.POSITIVE_INFINITY;
+          if (aDistance !== bDistance) return aDistance - bDistance;
         }
         const targetCity = cleanText(body.city) || cleanText(body.locality);
         if (targetCity) {
@@ -847,6 +969,10 @@ Deno.serve(async (req) => {
         return a.nombre.localeCompare(b.nombre, "es");
       })
       .slice(0, 300);
+    const matchingProviders = matchingProvidersWithLocation.map(
+      ({ locationLatitude: _latitude, locationLongitude: _longitude, ...provider }) =>
+        provider,
+    );
 
     return json({
       ok: true,

@@ -31,7 +31,7 @@ export default function BtnLoginGoogle({ onLogin }: BtnLoginGoogleProps) {
         onLogin('no ID token present!',null)
       }  
     } catch (error: unknown) {
-      console.log('BtnLoginGoogle error', error);
+      console.error('BtnLoginGoogle error', error);
       const errorCode =
         error && typeof error === "object" && "code" in error
           ? String(error.code)

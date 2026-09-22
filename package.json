@@ -17,7 +17,7 @@
     "legal:export-public": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/export_public_legal_documents.mjs",
     "legal:check-public": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/export_public_legal_documents.mjs --check",
     "bundle:android:check": "expo export --platform android --output-dir dist/qa-android",
-    "qa:release": "npm run typecheck && npm test && npm run check:serviciosya-contract && npm run legal:check-public && npx expo-doctor && npm run bundle:android:check",
+    "qa:release": "npm run typecheck && npm run lint && npm test && npm run check:serviciosya-contract && npm run legal:check-public && npm audit --omit=dev --audit-level=high && npx expo-doctor && npm run bundle:android:check",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types --test tests/*.test.mjs"
@@ -57,7 +57,6 @@
     "expo-image-picker": "~16.1.4",
     "expo-linear-gradient": "~14.1.5",
     "expo-linking": "~7.1.5",
-    "expo-local-authentication": "~16.0.4",
     "expo-location": "~18.1.5",
     "expo-maps": "~0.11.0",
     "expo-navigation-bar": "~4.2.5",

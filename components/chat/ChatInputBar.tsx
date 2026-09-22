@@ -49,6 +49,7 @@ interface ChatInputBarProps {
   }) => void | Promise<void>;
   serviceId?: string;
   canSendQuote?: boolean;
+  canSendAudio?: boolean;
   contentProtectionActive?: boolean;
 }
 
@@ -56,6 +57,7 @@ function ChatInputBar({
   onSend,
   onSendAudio,
   canSendQuote = false,
+  canSendAudio = true,
   contentProtectionActive = true,
 }: ChatInputBarProps) {
   const [message, setMessage] = React.useState("");
@@ -146,6 +148,13 @@ function ChatInputBar({
 
   const startRecording = useCallback(async () => {
     if (sendingAudio || recordingRef.current) return;
+    if (!canSendAudio) {
+      Alert.alert(
+        "Audio disponible después de reservar",
+        "Antes de confirmar la reserva usá mensajes escritos para que podamos proteger datos de contacto y precios.",
+      );
+      return;
+    }
 
     try {
       const permission = await Audio.requestPermissionsAsync();
@@ -178,7 +187,7 @@ function ChatInputBar({
           : "Revisá el permiso del micrófono.",
       );
     }
-  }, [sendingAudio]);
+  }, [canSendAudio, sendingAudio]);
 
   useEffect(() => {
     if (!isRecording) return;
@@ -324,6 +333,7 @@ function ChatInputBar({
             disabled={sendingAudio}
             style={[
               styles.audioButton,
+              !canSendAudio && { opacity: 0.55 },
               isRecording && styles.audioButtonRecording,
             ]}
             activeOpacity={0.72}

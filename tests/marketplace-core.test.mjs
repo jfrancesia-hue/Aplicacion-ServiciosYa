@@ -40,6 +40,75 @@ import {
 } from "../lib/utils/serviceSystemMessage.ts";
 import { repairSpanishMojibake } from "../lib/utils/textEncoding.ts";
 
+const loginSource = fs.readFileSync(
+  new URL("../screens/Login.tsx", import.meta.url),
+  "utf8",
+);
+const storageSource = fs.readFileSync(
+  new URL("../lib/storage.ts", import.meta.url),
+  "utf8",
+);
+const homeSource = fs.readFileSync(
+  new URL("../screens/Home.tsx", import.meta.url),
+  "utf8",
+);
+const notificationsSource = fs.readFileSync(
+  new URL("../screens/NotificacionesScreen.tsx", import.meta.url),
+  "utf8",
+);
+const categoryListSource = fs.readFileSync(
+  new URL("../components/home/CategoryList.tsx", import.meta.url),
+  "utf8",
+);
+const categoryResultsSource = fs.readFileSync(
+  new URL("../screens/ServiciosPorCategoria.tsx", import.meta.url),
+  "utf8",
+);
+const mainNavigationSource = fs.readFileSync(
+  new URL("../navigation/MainAppStackNavigator.tsx", import.meta.url),
+  "utf8",
+);
+const notificationHookSource = fs.readFileSync(
+  new URL("../lib/hooks/useNotifications.ts", import.meta.url),
+  "utf8",
+);
+const settingsSource = fs.readFileSync(
+  new URL("../screens/Configuracion.tsx", import.meta.url),
+  "utf8",
+);
+
+test("el dispositivo no guarda la contraseña y elimina credenciales legadas", () => {
+  assert.doesNotMatch(loginSource, /saveCredentials/);
+  assert.doesNotMatch(storageSource, /password:\s*string/);
+  assert.doesNotMatch(storageSource, /setItemAsync\([^)]*CREDENTIALS/s);
+  assert.match(storageSource, /deleteItemAsync\(STORAGE_KEYS\.CREDENTIALS\)/);
+});
+
+test("la operación no depende de la telemetría PHP heredada", () => {
+  assert.doesNotMatch(homeSource, /insightpulse\.store/);
+  assert.doesNotMatch(notificationsSource, /insightpulse\.store/);
+});
+
+test("un fallo geográfico no se disfraza con prestadores nacionales", () => {
+  assert.doesNotMatch(categoryListSource, /from\(["']user_public_profiles["']\)/);
+  assert.doesNotMatch(categoryResultsSource, /from\(["']user_public_profiles["']\)/);
+  assert.match(categoryResultsSource, /No pudimos consultar los prestadores/);
+});
+
+test("el binario no conserva pasarelas ni rutas alternativas obsoletas", () => {
+  assert.doesNotMatch(mainNavigationSource, /PasarelaPago/);
+  assert.doesNotMatch(mainNavigationSource, /OnlineWorkers/);
+  assert.doesNotMatch(mainNavigationSource, /DniPendiente/);
+  assert.doesNotMatch(homeSource, /ChatBotModal/);
+});
+
+test("los permisos sensibles se piden desde una accion explicita", () => {
+  assert.match(notificationHookSource, /requestPermission\s*\?/);
+  assert.match(notificationHookSource, /initializeNotifications\(false\)/);
+  assert.match(settingsSource, /requestPushNotificationPermission/);
+  assert.match(settingsSource, /Activar notificaciones/);
+});
+
 test("segmenta prestadores de Catamarca sin depender de tildes", () => {
   const target = {
     ciudad: "San Fernando del Valle de Catamarca",
@@ -276,7 +345,9 @@ test("MICA conserva un fallback remoto cuando no hay proveedor de IA", () => {
   );
 
   assert.match(functionSource, /buildLocalFallbackResponse/);
-  assert.match(functionSource, /if \(!apiKey\)/);
+  assert.match(functionSource, /ANTHROPIC_API_KEY/);
+  assert.match(functionSource, /if \(!apiKey \|\| !model\)/);
+  assert.doesNotMatch(functionSource, /OPENAI_API_KEY/);
   assert.match(functionSource, /knownLocation/);
   assert.doesNotMatch(functionSource, /OPENAI_API_KEY is not configured/);
 });

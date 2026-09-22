@@ -1,5 +1,4 @@
 import {
-  useQuery,
   useMutation,
   useQueryClient,
   useSuspenseQuery,
@@ -13,16 +12,8 @@ import type { LocationData } from "../../types/location";
  * Usar una interfaz de TypeScript nos da seguridad de tipos y autocompletado.
  */
 export interface UserSettings {
-  theme: "light" | "dark" | "system";
-  notificationsEnabled: boolean;
-  onBoardingComplete: boolean;
-  user_id: string | null;
-  useBiometric: boolean;
-  useGPS: boolean;
-  lastGPSLocation: LocationData | null;
   searchRadius: number;
   showAllCategories: boolean;
-  OnlyOnlineWorkers: boolean;
   customLocation: LocationData | null;
 }
 
@@ -40,18 +31,35 @@ export const queryKey = ["user", "settings"];
  * Configuración predeterminada para usuarios nuevos o si falla el almacenamiento.
  */
 const defaultSettings: UserSettings = {
-  theme: "system",
-  notificationsEnabled: true,
-  onBoardingComplete: false,
-  user_id: null,
-  useBiometric: false,
-  useGPS: true,
-  lastGPSLocation: null,
   searchRadius: 10000,
   showAllCategories: true,
-  OnlyOnlineWorkers: false,
   customLocation: null,
 };
+
+const validSearchRadii = new Set([1000, 5000, 10000, 50000]);
+
+function sanitizeSettings(value: unknown): UserSettings {
+  const stored =
+    value && typeof value === "object"
+      ? (value as Partial<UserSettings>)
+      : {};
+  const customLocation = stored.customLocation;
+  const hasValidCustomLocation =
+    customLocation != null &&
+    Number.isFinite(customLocation.latitude) &&
+    Number.isFinite(customLocation.longitude);
+
+  return {
+    searchRadius: validSearchRadii.has(Number(stored.searchRadius))
+      ? Number(stored.searchRadius)
+      : defaultSettings.searchRadius,
+    showAllCategories:
+      typeof stored.showAllCategories === "boolean"
+        ? stored.showAllCategories
+        : defaultSettings.showAllCategories,
+    customLocation: hasValidCustomLocation ? customLocation : null,
+  };
+}
 
 /**
  * Obtiene la configuración desde AsyncStorage.
@@ -63,8 +71,7 @@ export async function getSettingsFromStorage(): Promise<UserSettings> {
     if (rawSettings) {
       // Mezcla con la configuración predeterminada para asegurar que todas las claves estén presentes
       // en caso de que agreguemos nuevas configuraciones en una futura actualización de la app.
-      const parsedSettings = JSON.parse(rawSettings);
-      return { ...defaultSettings, ...parsedSettings };
+      return sanitizeSettings(JSON.parse(rawSettings));
     }
     return defaultSettings;
   } catch (error) {
@@ -130,7 +137,7 @@ export function useUserSettings() {
 
   // The hook `useMutation` to handle updates.
   // THIS IS THE MODIFIED PART
-  const { mutate, isPending: isUpdating } = useMutation({
+  const { mutateAsync, isPending: isUpdating } = useMutation({
     // The new mutation function now accepts a PARTIAL settings object.
     mutationFn: (newPartialSettings: Partial<UserSettings>) => {
       // 1. Get the current state from the query cache.
@@ -161,7 +168,7 @@ export function useUserSettings() {
      * A function to update the settings.
      * Pass a PARTIAL settings object (e.g., { theme: 'dark' }).
      */
-    updateSettings: mutate, // Keep the name `updateSettings` for the consumer
+    updateSettings: mutateAsync,
     /** True if settings are being fetched for the first time. */
     isLoading,
     /** True if an update operation is in progress. */

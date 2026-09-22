@@ -16,7 +16,6 @@ import * as WebBrowser from "expo-web-browser";
 import fondo from "../assets/fondo.png";
 import logo from "../assets/serviciosya-logo-2026.png";
 import Icon from "react-native-vector-icons/MaterialIcons";
-import { saveCredentials } from "../lib/storage";
 import BotonVolver from "../components/BotonVolver";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { AuthStackParamList } from "../types/navigation";
@@ -152,10 +151,7 @@ export default function Login({ navigation }: Props) {
 
       // Guardar credenciales y correo si el inicio de sesión es exitoso
       if (data?.user) {
-        await Promise.all([
-          saveCredentials(emailToAuth, password),
-          ensureUserProfile(data.user),
-        ]);
+        await ensureUserProfile(data.user);
         await setReferrer(data.user.id);
 
         // Forzar que Supabase guarde la sesión
@@ -286,10 +282,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 20,
     elevation: 20,
-  },
-  fingerprintIcon: {
-    marginRight: 12,
-    color: '#047a8f',
   },
   logo: {
     width: 150,

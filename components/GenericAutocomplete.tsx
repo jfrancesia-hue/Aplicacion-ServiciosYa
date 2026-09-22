@@ -71,7 +71,6 @@ const GenericAutocomplete = forwardRef(function GenericAutocomplete<T>(
         onSelectItem(originalItem || null);
       } else {
         onSelectItem(null);
-        console.log("fue null");
       }
     },
     [data, itemToDropdownItem, onSelectItem],

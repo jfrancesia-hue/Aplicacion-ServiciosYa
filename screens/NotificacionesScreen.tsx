@@ -27,6 +27,7 @@ type Navigation = NativeStackNavigationProp<MainStackParamList>;
 
 export default function Notificaciones() {
   const [notificaciones, setNotificaciones] = useState<NotificationItem[]>([]);
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const { data, isFetched } = useQuery({
     ...userNotificationsQueryOptions,
     staleTime: 200,
@@ -52,6 +53,8 @@ export default function Notificaciones() {
       setNotificaciones((prev) =>
         prev.map((item) => (item.id === id ? { ...item, leido: true } : item)),
       );
+    } else {
+      throw new Error("No se pudo marcar la notificaci\u00f3n como le\u00edda.");
     }
   };
 
@@ -62,6 +65,8 @@ export default function Notificaciones() {
       .eq("id", id);
     if (!error) {
       setNotificaciones((prev) => prev.filter((item) => item.id !== id));
+    } else {
+      Alert.alert("Error", "No se pudo eliminar la notificaci\u00f3n.");
     }
   };
 
@@ -74,6 +79,8 @@ export default function Notificaciones() {
 
     if (!error) {
       setNotificaciones([]);
+    } else {
+      Alert.alert("Error", "No se pudieron eliminar las notificaciones.");
     }
   };
 
@@ -84,6 +91,9 @@ export default function Notificaciones() {
       Alert.alert("Error", "Faltan datos de la notificación.");
       return;
     }
+    if (processingId === notificacion.id) return;
+    setProcessingId(notificacion.id);
+    try {
     vexo.accept(notificacion.servicio_id ?? "");
 
     const urgentAlertId = notificacion.urgent_work_alert_id;
@@ -122,50 +132,14 @@ export default function Notificaciones() {
         .update({ estado: "aceptado" })
         .eq("id", notificacion.id);
 
-      if (!errorEstado) {
-        console.log('Estado actualizado correctamente a "aceptado"');
-      }
-
-      // Llamar a la API PHP para registrar evento contratacion_aceptada
-      try {
-        const eventoPayload = {
-          tipo_evento: "contratacion_aceptada",
-          datos: {
-            contratante_id: notificacion.emisor_id, // este es el ID de la contratación
-            contratado_id: userId, // este es quien acepta
-          },
-        };
-
-        const response = await fetch(
-          "https://insightpulse.store/api/registrar_evento.php",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(eventoPayload),
-          },
-        );
-
-        const result = await response.json();
-
-        if (!response.ok || result.error) {
-          Alert.alert(
-            "Error",
-            "No se pudo registrar la aceptación en el servidor.",
-          );
-          console.error("API error:", result);
-          return;
-        }
-
-        console.log("Evento registrado correctamente:", result);
-      } catch (error) {
-        console.error("Error al llamar la API:", error);
-        Alert.alert("Error", "Error al comunicarse con el servidor.");
+      if (errorEstado) {
+        Alert.alert("Error", "No se pudo aceptar la solicitud.");
         return;
       }
-    }
 
-    Alert.alert("✅ Servicio confirmado", "Has aceptado la solicitud.");
-    await marcarComoLeida(notificacion.id);
+      // La aceptación ya quedó persistida en Supabase. La telemetría no
+      // puede convertir una operación exitosa en un error para el usuario.
+    }
 
     // chats.participant_a < participant_b (CHECK constraint)
     const [participantA, participantB] = [userId, notificacion.emisor_id]
@@ -195,16 +169,20 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
 
 ────────────────────────────`;
 
-    const mensajeTicket = `🎫 Se ha concretado una propuesta de trabajo. Este chat funcionará como comprobante. Puedes coordinar los detalles del servicio aquí.`;
+    const mensajeTicket = `🎫 Se concretó una propuesta de trabajo. Este chat funcionará como comprobante. Podés coordinar los detalles del servicio acá.`;
 
     let chatId: string;
     if (chatExistente) {
       chatId = chatExistente.id;
-      await supabase.from("mensajes").insert({
+      const { error: messageError } = await supabase.from("mensajes").insert({
         chat_id: chatId,
         remitente_id: userId,
         contenido: mensajeImportante,
       });
+      if (messageError) {
+        Alert.alert("Error", "La solicitud fue aceptada, pero no pudimos preparar el chat.");
+        return;
+      }
     } else {
       const { data: nuevoChat, error: errorNuevoChat } = await supabase
         .from("chats")
@@ -221,11 +199,27 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
       }
 
       chatId = nuevoChat.id;
-      await supabase.from("mensajes").insert([
+      const { error: messageError } = await supabase.from("mensajes").insert([
         { chat_id: chatId, remitente_id: userId, contenido: mensajeImportante },
         { chat_id: chatId, remitente_id: userId, contenido: mensajeTicket },
       ]);
+      if (messageError) {
+        Alert.alert("Error", "La solicitud fue aceptada, pero no pudimos preparar el chat.");
+        return;
+      }
     }
+
+    try {
+      await marcarComoLeida(notificacion.id);
+    } catch (error) {
+      Alert.alert(
+        "Solicitud aceptada",
+        error instanceof Error
+          ? error.message
+          : "No se pudo actualizar la notificaci\u00f3n.",
+      );
+    }
+    Alert.alert("✅ Servicio confirmado", "Has aceptado la solicitud.");
 
     const otroUsuarioId = notificacion.emisor_id;
     const { data: usuario } = await supabase
@@ -238,7 +232,7 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
     const servicioIdNumber = Number(servicioId);
     const { data: servicio } = Number.isFinite(servicioIdNumber)
       ? await supabase
-          .from("servicios")
+          .from("servicios_public")
           .select("id, titulo, descripcion, categoria, horario, usuario_id, user_id")
           .eq("id", servicioIdNumber)
           .maybeSingle()
@@ -256,9 +250,15 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
       servicioId,
       providerId: servicio?.usuario_id ?? servicio?.user_id ?? userId,
     });
+    } finally {
+      setProcessingId(null);
+    }
   };
 
   const rechazarNotificacion = async (notificacion: NotificacionRow) => {
+    if (processingId === notificacion.id) return;
+    setProcessingId(notificacion.id);
+    try {
     if (notificacion.urgent_work_alert_id) {
       try {
         const result = await respondToUrgentWorkAlert(
@@ -292,6 +292,9 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
       Alert.alert("❌ Solicitud rechazada", "Has rechazado la solicitud.");
     } else {
       Alert.alert("Error", "No se pudo rechazar la solicitud.");
+    }
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -332,13 +335,17 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
               <TouchableOpacity
                 style={[styles.boton, styles.botonAceptar]}
                 onPress={() => aceptarNotificacion(item)}
+                disabled={processingId === item.id}
               >
-                <Text style={styles.botonTexto}>Aceptar</Text>
+                <Text style={styles.botonTexto}>
+                  {processingId === item.id ? "Procesando..." : "Aceptar"}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.boton, styles.botonRechazar]}
                 onPress={() => rechazarNotificacion(item)}
+                disabled={processingId === item.id}
               >
                 <Text style={styles.botonTexto}>Rechazar</Text>
               </TouchableOpacity>
@@ -346,7 +353,16 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
           ) : !item.leido ? (
             <TouchableOpacity
               style={[styles.boton, styles.botonAceptar]}
-              onPress={() => marcarComoLeida(item.id)}
+              onPress={() => {
+                void marcarComoLeida(item.id).catch((error) =>
+                  Alert.alert(
+                    "Error",
+                    error instanceof Error
+                      ? error.message
+                      : "No se pudo actualizar la notificaci\u00f3n.",
+                  ),
+                );
+              }}
             >
               <Text style={styles.botonTexto}>Marcar como leída</Text>
             </TouchableOpacity>
@@ -380,7 +396,7 @@ Este chat ha sido creado exclusivamente para que puedas coordinar y acordar los 
       <Text style={styles.titulo}>Notificaciones</Text>
       {notificaciones.length === 0 ? (
         <Text style={styles.sinNotificaciones}>
-          No tienes notificaciones aún.
+          Todavía no tenés notificaciones.
         </Text>
       ) : (
         <FlatList

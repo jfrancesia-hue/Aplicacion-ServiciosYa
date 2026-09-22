@@ -21,7 +21,7 @@ export default function Register({ navigation }) {
   const { getReferrer, setReferrer } = useReferrer({ capture: true });
 
   const validarPassword = (pass) => ({
-    longitud: pass.length >= 8,
+    longitud: pass.length >= 12,
     mayuscula: /[A-Z]/.test(pass),
     minuscula: /[a-z]/.test(pass),
     numero: /[0-9]/.test(pass),
@@ -38,7 +38,7 @@ export default function Register({ navigation }) {
 
   const handleRegister = async () => {
   if (!validateEmail(email)) {
-    Alert.alert('Formato inválido', 'Por favor ingresa un email válido.');
+    Alert.alert('Formato inválido', 'Por favor, ingresá un email válido.');
     return;
   }
   if (!esSegura) {
@@ -147,7 +147,7 @@ export default function Register({ navigation }) {
                 </View>
 
                 <View style={styles.requisitosContainer}>
-                  {renderRequisito(requisitos.longitud, 'Mínimo 8 caracteres')}
+                  {renderRequisito(requisitos.longitud, 'Mínimo 12 caracteres')}
                   {renderRequisito(requisitos.mayuscula, 'Una mayúscula')}
                   {renderRequisito(requisitos.minuscula, 'Una minúscula')}
                   {renderRequisito(requisitos.numero, 'Un número')}
@@ -176,7 +176,7 @@ export default function Register({ navigation }) {
                 </TouchableOpacity>
 
                 <TouchableOpacity onPress={() => navigation.navigate('LoginSelect')}>
-                  <Text style={styles.registerText}>¿Ya tienes cuenta? Inicia sesión</Text>
+                  <Text style={styles.registerText}>¿Ya tenés cuenta? Iniciá sesión</Text>
                 </TouchableOpacity>
               </KeyboardAwareScrollView>
             </>

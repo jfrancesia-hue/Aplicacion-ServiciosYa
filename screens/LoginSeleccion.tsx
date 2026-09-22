@@ -1,4 +1,3 @@
-// import useAuthSession from '../lib/hooks/useAuthSession';
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import type { SignInResponse } from "@react-native-google-signin/google-signin";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -44,11 +43,6 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
 
   const { signInWithGoogle } = useGoogleAuth();
 
-  // const { biometricLogin } = useAuthSession({
-  //   onAuthSuccess: () => navigation.replace('Home'),
-  //   onError: (error) => ToastAndroid.show(error.message, ToastAndroid.SHORT)
-  // });
-
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
@@ -69,14 +63,6 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
     vexo.login("email");
     navigation.navigate("Login");
   };
-
-  // const handleHuellaLogin = async () => {
-  //   try {
-  //     await biometricLogin();
-  //   } catch (e) {
-  //     setErrorMessage('No se pudo iniciar sesión con huella.');
-  //   }
-  // };
 
   const handleLoginGoogle = async (
     errorResponse: string | null,
@@ -117,8 +103,6 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
 
       vexo.login("google");
 
-      // Continúa el flujo normal
-      console.log("Inicio de sesión exitoso con Google");
     } catch (err) {
       console.error("Error verificando/insertando usuario:", err);
       setErrorMessage("Error al procesar el usuario.");
@@ -166,26 +150,9 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
               style={styles.loginButtonIcon}
             />
             <Text style={styles.loginButtonText}>
-              Inicia con tu <Text style={styles.orange}>correo</Text>
+              Iniciá con tu <Text style={styles.orange}>correo</Text>
             </Text>
           </TouchableOpacity>
-
-          {/* HUELLA DIGITAL - DESHABILITADO TEMPORALMENTE
-          <TouchableOpacity
-            style={styles.loginButton}
-            onPress={handleHuellaLogin}
-            activeOpacity={0.85}
-          >
-            <MaterialCommunityIcons
-              name="fingerprint"
-              size={24}
-              style={styles.fingerprintIcon}
-            />
-            <Text style={styles.loginButtonText}>
-              Inicia con tu <Text style={styles.orange}>huella</Text>
-            </Text>
-          </TouchableOpacity>
-          */}
 
           <TouchableOpacity
             style={styles.loginButton}
@@ -203,7 +170,7 @@ export default function LoginSelect({ navigation }: LoginSelectProps) {
         </View>
 
         <TouchableOpacity onPress={() => navigation.navigate("Register", {})}>
-          <Text style={styles.registerText}>¿No tienes cuenta? Regístrate</Text>
+          <Text style={styles.registerText}>¿No tenés cuenta? Registrate</Text>
         </TouchableOpacity>
 
         <Text style={[styles.text, { marginTop: 25 }]}>
@@ -297,10 +264,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.6,
     shadowRadius: 20,
     elevation: 20,
-  },
-  fingerprintIcon: {
-    marginRight: 12,
-    color: "#047a8f",
   },
   logo: {
     width: 150,

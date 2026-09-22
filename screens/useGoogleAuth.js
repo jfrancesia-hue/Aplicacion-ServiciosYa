@@ -41,7 +41,6 @@ export const useGoogleAuth = () => {
     // 5. BLOQUE DE SEGURIDAD: Si estamos en Expo Go, mostramos alerta y salimos
     if (!GoogleSignin) {
       alert("Google Sign-In no funciona en 'Expo Go'. Necesitas una 'Development Build' para probar esto.");
-      console.log('Intento de login en Expo Go ignorado.');
       onLoginCallback('Funcionalidad no disponible en Expo Go', null);
       return;
     }
@@ -57,7 +56,7 @@ export const useGoogleAuth = () => {
         onLoginCallback('no ID token present!', null);
       }
     } catch (error) {
-      console.log('Google Sign-In Error', error);
+      console.error('Google Sign-In Error', error);
       
       let errorMessage = 'Error al iniciar sesión con Google.';
       

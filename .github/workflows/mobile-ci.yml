@@ -31,6 +31,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
       - name: TypeScript
         run: npm run typecheck
 
@@ -40,6 +43,9 @@ jobs:
       - name: ServiciosYa contract
         run: npm run check:serviciosya-contract
 
+      - name: Public legal documents are synchronized
+        run: npm run legal:check-public
+
       - name: Expo project health
         run: npx expo-doctor
 
@@ -47,4 +53,47 @@ jobs:
         run: npm run bundle:android:check
 
       - name: Critical production vulnerabilities
-        run: npm audit --omit=dev --audit-level=critical
+        run: npm audit --omit=dev --audit-level=high
+
+  android-native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Android release lint
+        working-directory: android
+        env:
+          NODE_ENV: production
+        run: ./gradlew :app:lintRelease --no-daemon
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2

@@ -1,21 +1,17 @@
 import type React from "react";
-import { memo, useState, useEffect } from "react";
+import { memo, useContext } from "react";
 import {
   View,
-  TouchableOpacity,
   StyleSheet,
-  Alert,
   Pressable,
   Text,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useMainNavigation } from "../../lib/hooks/useNavigation";
 import type { MainStackParamList } from "../../types/navigation";
-import { useLinkProps, type LinkProps, useIsFocused } from "@react-navigation/native";
-import { useIsGuest, getUserID } from "../../store/authStore";
-import { supabase } from "../../lib/supabase";
+import { useLinkProps, type LinkProps } from "@react-navigation/native";
+import { AuthContext } from "../../lib/context/AppContext";
 
 interface NavButtonProps {
   name: React.ComponentProps<typeof Ionicons>["name"];
@@ -77,78 +73,16 @@ function BadgeNavButton({
 
 interface BottomNavBarProps {
   unreadMessagesCount?: number;
+  isWorker?: boolean;
 }
 
-const BottomNavBar = ({ unreadMessagesCount: unreadProp }: BottomNavBarProps) => {
-  const isGuest = useIsGuest();
-  const navigation = useMainNavigation();
+const BottomNavBar = ({
+  unreadMessagesCount: unreadProp,
+  isWorker = false,
+}: BottomNavBarProps) => {
   const insets = useSafeAreaInsets();
-  const [internalUnread, setInternalUnread] = useState(0);
-
-  useEffect(() => {
-    const userId = getUserID();
-    if (!userId) return;
-
-    const fetchUnread = async () => {
-      // El nuevo schema de `mensajes` no tiene receptor_id. Contamos los mensajes no leídos
-      // en los chats del usuario donde el remitente NO es él.
-      const { data: myChats } = await supabase
-        .from("chats")
-        .select("id")
-        .or(`participant_a.eq.${userId},participant_b.eq.${userId}`);
-
-      const chatIds = (myChats ?? []).map((c) => c.id);
-      if (chatIds.length === 0) {
-        setInternalUnread(0);
-        return;
-      }
-
-      const { count } = await supabase
-        .from("mensajes")
-        .select("id", { count: "exact", head: true })
-        .in("chat_id", chatIds)
-        .eq("leido", false)
-        .neq("remitente_id", userId);
-
-      setInternalUnread(count ?? 0);
-    };
-
-    // Initial fetch
-    fetchUnread();
-
-    // Realtime subscription
-    const channel = supabase
-      .channel(`unread-badge-${userId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "mensajes" }, () => {
-        fetchUnread();
-      })
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  const unreadMessagesCount = unreadProp ?? internalUnread;
-
-  const handlePressOfferService = async () => {
-    navigation.navigate("OfrecerServicio");
-  };
-
-  const hanndleCenterPress = () => {
-    if (isGuest) {
-      Alert.alert(
-        "Inicia sesión",
-        "Debes iniciar sesión para continuar.",
-        [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Iniciar sesión", onPress: () => navigation.navigate("AuthStack", { screen: "LoginSelect" }) }
-        ]
-      );
-      return;
-    }
-
-    handlePressOfferService();
-  };
-
+  const { unreadMessagesCount: contextUnread = 0 } = useContext(AuthContext);
+  const unreadMessagesCount = unreadProp ?? contextUnread;
 
   return (
     <LinearGradient
@@ -158,16 +92,8 @@ const BottomNavBar = ({ unreadMessagesCount: unreadProp }: BottomNavBarProps) =>
       style={[styles.navContainer, { paddingBottom: insets.bottom }]}
     >
       <NavButton name="home-outline" screen="Home" />
-      <NavButton name="list-outline" screen="MisServicios" />
+      {isWorker ? <NavButton name="list-outline" screen="MisServicios" /> : null}
       <NavButton name="calendar-outline" screen="TrabajosPendientes" />
-
-      {/*<TouchableOpacity
-        onPress={hanndleCenterPress}
-        style={[
-          styles.publishButton,
-        ]}>
-        <Ionicons name="add-circle-outline" size={36} color="#fff" />
-      </TouchableOpacity>*/}
 
       <BadgeNavButton
         name="chatbubble-ellipses-outline"

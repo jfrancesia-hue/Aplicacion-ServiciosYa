@@ -40,7 +40,7 @@ function HomeHeader({
   const handleGuestProfileClick = React.useCallback(() => {
     Alert.alert(
       "Acceso restringido",
-      "Debes registrarte para acceder a tu perfil.",
+      "Registrate para acceder a tu perfil.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -182,7 +182,7 @@ function ProfileAvatar() {
     if (!perfil?.perfil_completo) {
       Alert.alert(
         "Perfil incompleto",
-        "Completa tu perfil antes de continuar.",
+        "Completá tu perfil antes de continuar.",
         [{ text: "OK" }],
       );
       return;

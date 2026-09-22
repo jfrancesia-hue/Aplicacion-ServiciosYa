@@ -1,10 +1,8 @@
-import { useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
-// hooks/useNotifications.ts
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Platform } from "react-native";
+import { Platform } from "react-native";
 import { getUserID } from "../../store/authStore";
 import { supabase } from "../supabase";
 import {
@@ -13,161 +11,125 @@ import {
 } from "../utils/urgentWorkNotification";
 import { useNotificationsCount } from "./useNotificationsCount";
 
+async function configureAndroidNotificationChannels() {
+  if (Platform.OS !== "android") return;
+
+  await Notifications.setNotificationChannelAsync("default", {
+    name: "Notificaciones",
+    importance: Notifications.AndroidImportance.MAX,
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: "#FF231F7C",
+  });
+  await Notifications.setNotificationChannelAsync(URGENT_WORK_CHANNEL_ID, {
+    name: "Trabajos urgentes",
+    importance: Notifications.AndroidImportance.MAX,
+    sound: URGENT_WORK_SOUND,
+    vibrationPattern: [0, 900, 250, 900, 250, 1200, 350, 1200],
+    lightColor: "#FF3B30",
+    lockscreenVisibility:
+      Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+}
+
+async function registerPushToken(requestPermission: boolean) {
+  if (!Device.isDevice) {
+    if (requestPermission) {
+      throw new Error(
+        "Las notificaciones push s\u00f3lo est\u00e1n disponibles en dispositivos f\u00edsicos.",
+      );
+    }
+    return null;
+  }
+
+  await configureAndroidNotificationChannels();
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  const finalStatus =
+    existingStatus === "granted"
+      ? existingStatus
+      : requestPermission
+        ? (await Notifications.requestPermissionsAsync()).status
+        : existingStatus;
+
+  if (finalStatus !== "granted") {
+    if (requestPermission) {
+      throw new Error(
+        "No habilitaste las notificaciones. Pod\u00e9s activarlas desde los ajustes de Android.",
+      );
+    }
+    return null;
+  }
+
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  if (!projectId) {
+    throw new Error("La aplicaci\u00f3n no tiene configurado el identificador de Expo.");
+  }
+
+  const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  if (!token) throw new Error("No se pudo obtener el token de notificaciones.");
+
+  const userId = getUserID();
+  if (!userId) throw new Error("Necesit\u00e1s iniciar sesi\u00f3n nuevamente.");
+  const { error } = await supabase
+    .from("usuarios")
+    .update({ expo_token: token })
+    .eq("id", userId);
+  if (error) throw new Error("No se pudo guardar el permiso de notificaciones.");
+
+  return token;
+}
+
+export async function requestPushNotificationPermission() {
+  return registerPushToken(true);
+}
+
 export const useNotifications = () => {
   useNotificationsCount();
-  const queryClient = useQueryClient();
-  const [expoPushToken, setExpoPushToken] = useState<string>("");
+  const [expoPushToken, setExpoPushToken] = useState("");
   const [notification, setNotification] = useState<
     Notifications.Notification | undefined
-  >(undefined);
+  >();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const saveTokenToSupabase = useCallback(async (token: string) => {
-    try {
-      const userId = getUserID();
-
-      const { error: updateError } = await supabase
-        .from("usuarios")
-        .update({ expo_token: token })
-        .eq("id", userId);
-
-      if (updateError) {
-        console.error("Error saving push token:", updateError);
-        setError("Failed to save notification settings");
-      }
-    } catch (err) {
-      console.error("Unexpected error saving token:", err);
-      setError("Failed to save notification settings");
-    }
-  }, []);
-
-  const registerForPushNotificationsAsync = useCallback(async (): Promise<
-    string | null
-  > => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      // Check if device supports notifications
-      if (!Device.isDevice) {
-        Alert.alert(
-          "Dispositivo no compatible",
-          "Las notificaciones push solo están disponibles en dispositivos físicos",
-        );
+  const initializeNotifications = useCallback(
+    async (requestPermission = false) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const token = await registerPushToken(requestPermission);
+        if (token) setExpoPushToken(token);
+        return token;
+      } catch (cause) {
+        const message =
+          cause instanceof Error
+            ? cause.message
+            : "No se pudieron configurar las notificaciones.";
+        setError(message);
+        if (requestPermission) throw new Error(message);
         return null;
+      } finally {
+        setIsLoading(false);
       }
-
-      // Setup Android notification channel
-      if (Platform.OS === "android") {
-        await Notifications.setNotificationChannelAsync("default", {
-          name: "Default",
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 250, 250, 250],
-          lightColor: "#FF231F7C",
-        });
-
-        await Notifications.setNotificationChannelAsync(
-          URGENT_WORK_CHANNEL_ID,
-          {
-            name: "Trabajos urgentes",
-            importance: Notifications.AndroidImportance.MAX,
-            sound: URGENT_WORK_SOUND,
-            vibrationPattern: [0, 900, 250, 900, 250, 1200, 350, 1200],
-            lightColor: "#FF3B30",
-            lockscreenVisibility:
-              Notifications.AndroidNotificationVisibility.PUBLIC,
-          },
-        );
-      }
-
-      // Check/request permissions
-      const { status: existingStatus } =
-        await Notifications.getPermissionsAsync();
-      let finalStatus = existingStatus;
-
-      if (existingStatus !== "granted") {
-        const { status } = await Notifications.requestPermissionsAsync();
-        finalStatus = status;
-      }
-
-      if (finalStatus !== "granted") {
-        Alert.alert(
-          "Permiso requerido",
-          "Las notificaciones push están deshabilitadas. Por favor, actívalas en la configuración de tu dispositivo para recibir actualizaciones.",
-          [{ text: "OK" }],
-        );
-        return null;
-      }
-
-      // Get project ID
-      const projectId =
-        Constants?.expoConfig?.extra?.eas?.projectId ??
-        Constants?.easConfig?.projectId;
-
-      if (!projectId) {
-        throw new Error("Project ID not found in app configuration");
-      }
-
-      // Get push token
-      const tokenData = await Notifications.getExpoPushTokenAsync({
-        projectId,
-      });
-      const token = tokenData.data;
-
-      if (!token) {
-        throw new Error("Failed to get push token");
-      }
-
-      return token;
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : "Unknown error occurred";
-      console.error("Push notification registration failed:", errorMessage);
-      setError(`Failed to register for notifications: ${errorMessage}`);
-      return null;
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const initializeNotifications = useCallback(async () => {
-    const token = await registerForPushNotificationsAsync();
-
-    if (token) {
-      setExpoPushToken(token);
-      await saveTokenToSupabase(token);
-    }
-  }, [registerForPushNotificationsAsync, saveTokenToSupabase]);
+    },
+    [],
+  );
 
   useEffect(() => {
-    // Initialize notifications
-    initializeNotifications();
+    // Si el permiso ya existe, renovamos el token. El pedido de permiso queda
+    // reservado para la acci\u00f3n expl\u00edcita del usuario en Configuraci\u00f3n.
+    void initializeNotifications(false);
 
-    // Setup listeners
     const notificationListener = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        setNotification(notification);
-        console.log("Notification received:", {
-          title: notification.request.content.title,
-          body: notification.request.content.body,
-          data: notification.request.content.data,
-        });
-      },
+      (receivedNotification) => setNotification(receivedNotification),
     );
-
-    // Cleanup function
-    return () => {
-      if (notificationListener) {
-        notificationListener.remove();
-      }
-    };
+    return () => notificationListener.remove();
   }, [initializeNotifications]);
 
-  // Public API for re-registering notifications (useful for settings screens)
-  const refreshNotificationToken = useCallback(async () => {
-    await initializeNotifications();
-  }, [initializeNotifications]);
+  const refreshNotificationToken = useCallback(
+    () => initializeNotifications(true),
+    [initializeNotifications],
+  );
 
   return {
     expoPushToken,

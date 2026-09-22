@@ -38,7 +38,7 @@ export default function AppleSignInButton() {
       });
 
       if (error) {
-        console.log("Error Supabase:", error.message);
+        console.error("Error Supabase:", error.message);
         Alert.alert("Error", error.message);
         return;
       }

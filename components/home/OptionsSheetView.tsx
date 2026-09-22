@@ -2,8 +2,7 @@ import { BottomSheetView } from "@gorhom/bottom-sheet";
 import { View, Text, StyleSheet, Switch, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUserSettings } from "../../lib/hooks/useUserSettings";
-import { useCallback, useEffect, useRef } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useCallback } from "react";
 
 // Color definitions
 const colors = {
@@ -84,19 +83,11 @@ const RadiusOption = ({
 
 function OptionsSheetView() {
   const insets = useSafeAreaInsets();
-  const client = useQueryClient();
   const bottomNavBarHeight = insets.bottom;
   const { settings, updateSettings } = useUserSettings();
-  // Track initial render
-  const isInitialRender = useRef(true);
 
-  const useGps = settings?.useGPS ?? true;
   const showAllCategories = settings?.showAllCategories ?? true;
-  const locationRadius = settings?.searchRadius ?? 5000; // Default to 5km
-
-  const handleGPSSwitch = useCallback(() => {
-    updateSettings({ useGPS: !useGps });
-  }, [useGps, updateSettings]);
+  const locationRadius = settings?.searchRadius ?? 10000;
 
   const handleCategoriesSwitch = useCallback(() => {
     updateSettings({ showAllCategories: !showAllCategories });
@@ -108,16 +99,6 @@ function OptionsSheetView() {
     },
     [updateSettings],
   );
-
-  useEffect(() => {
-    if (isInitialRender.current) {
-      isInitialRender.current = false;
-      return;
-    }
-
-    // Only invalidate when useGps changes AFTER initial render
-    client.invalidateQueries({ queryKey: ["user", "services"] });
-  }, [useGps, client]);
 
   const radiusOptions = [
   { value: 1000, label: "1KM" },
@@ -142,29 +123,24 @@ function OptionsSheetView() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ubicación</Text>
 
-          <SettingSwitch
-            label="Habilitar ubicación"
-            subtitle="Usa tu ubicación actual para encontrar servicios cercanos"
-            value={useGps}
-            onValueChange={handleGPSSwitch}
-          />
-
-          {useGps && (
-            <View style={styles.radiusContainer}>
-              <Text style={styles.radiusLabel}>Radio de búsqueda</Text>
-              <View style={styles.radiusOptionsContainer}>
-                {radiusOptions.map((option) => (
-                  <RadiusOption
-                    key={option.value}
-                    label={option.label}
-                    value={option.value}
-                    isSelected={locationRadius === option.value}
-                    onSelect={handleRadiusSelect}
-                  />
-                ))}
-              </View>
+          <Text style={styles.locationPrivacyText}>
+            El GPS se usa solamente cuando tocás “Usar mi ubicación”. Si
+            preferís, podés ingresar una dirección manualmente.
+          </Text>
+          <View style={styles.radiusContainer}>
+            <Text style={styles.radiusLabel}>Radio de búsqueda</Text>
+            <View style={styles.radiusOptionsContainer}>
+              {radiusOptions.map((option) => (
+                <RadiusOption
+                  key={option.value}
+                  label={option.label}
+                  value={option.value}
+                  isSelected={locationRadius === option.value}
+                  onSelect={handleRadiusSelect}
+                />
+              ))}
             </View>
-          )}
+          </View>
         </View>
 
         <View style={styles.divider} />
@@ -237,6 +213,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
     lineHeight: 18,
+  },
+  locationPrivacyText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    backgroundColor: colors.lightGray,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   radiusContainer: {
     gap: 8,

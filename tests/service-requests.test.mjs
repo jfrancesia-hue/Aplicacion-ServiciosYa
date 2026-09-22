@@ -17,6 +17,28 @@ const publicationScreen = await readFile(
   new URL("../screens/PublicarNecesidad.tsx", import.meta.url),
   "utf8",
 );
+const availableProvidersFunction = await readFile(
+  new URL(
+    "../supabase/functions/available-providers/index.ts",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const providersScreen = await readFile(
+  new URL("../screens/ServiciosPorCategoria.tsx", import.meta.url),
+  "utf8",
+);
+const legacyLocationMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260921224534_confirm_legacy_request_location.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
+const micaOrderFunction = await readFile(
+  new URL("../supabase/functions/mica-order/index.ts", import.meta.url),
+  "utf8",
+);
 const workerHome = await readFile(
   new URL("../components/home/WorkerHomeView.tsx", import.meta.url),
   "utf8",
@@ -104,6 +126,13 @@ const confirmedLocationMigration = await readFile(
   ),
   "utf8",
 );
+const exactLocationMigration = await readFile(
+  new URL(
+    "../supabase/migrations/20260921220813_exact_request_location_matching.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 const micaWorkerPanel = await readFile(
   new URL("../components/serviciosYa/PedidosMicaSection.tsx", import.meta.url),
   "utf8",
@@ -159,8 +188,8 @@ test("las publicaciones relacionan oficios equivalentes", () => {
   );
 });
 
-test("MICA muestra la ubicación y deja entrar a mis publicaciones", () => {
-  assert.match(micaChat, /Cambiar ciudad del pedido/);
+test("MICA muestra la ubicación exacta y deja entrar a mis publicaciones", () => {
+  assert.match(micaChat, /Cambiar ubicación del pedido/);
   assert.match(micaChat, /Ver mis publicaciones/);
   assert.match(
     micaChat,
@@ -188,6 +217,45 @@ test("el backend rechaza pedidos móviles sin ciudad o provincia confirmadas", (
     confirmedLocationMigration,
     /private\.create_manual_service_request/,
   );
+});
+
+test("los pedidos nuevos guardan coordenadas y el matching usa distancia real", () => {
+  assert.match(exactLocationMigration, /REQUEST_EXACT_LOCATION_REQUIRED/);
+  assert.match(exactLocationMigration, /add column if not exists location/);
+  assert.match(exactLocationMigration, /gis\.st_makepoint/);
+  assert.match(exactLocationMigration, /gis\.st_distance/);
+  assert.match(micaChat, /create_mica_app_request_v2/);
+  assert.match(publicationScreen, /effectiveLocation\.latitude/);
+});
+
+test("el radio y la distancia real llegan al buscador sin exponer coordenadas", () => {
+  assert.match(availableProvidersFunction, /radiusMeters/);
+  assert.match(
+    availableProvidersFunction,
+    /availability_duration_hours,location/,
+  );
+  assert.match(availableProvidersFunction, /availability\.status === "online"/);
+  assert.match(
+    availableProvidersFunction,
+    /liveLocation\?\.latitude \?\? exactServiceLocation\?\.latitude/,
+  );
+  assert.match(availableProvidersFunction, /providerMatchesRadius/);
+  assert.match(availableProvidersFunction, /distanceKm: providerDistanceKm/);
+  assert.match(
+    availableProvidersFunction,
+    /locationLatitude: _latitude, locationLongitude: _longitude/,
+  );
+  assert.match(providersScreen, /radiusMeters: searchRadius/);
+  assert.match(providersScreen, /worker\.distanceKm/);
+});
+
+test("una búsqueda anterior exige reconfirmar su ubicación exacta", () => {
+  assert.match(legacyLocationMigration, /auth\.uid\(\)/);
+  assert.match(legacyLocationMigration, /app_cliente_id = v_user_id/);
+  assert.match(legacyLocationMigration, /gis\.st_makepoint/);
+  assert.match(micaOrderFunction, /hasExactLocation: Boolean\(offer\.location\)/);
+  assert.match(micaChat, /confirmMicaOrderLocation/);
+  assert.match(micaChat, /Falta confirmar la ubicación exacta/);
 });
 
 test("los prestadores ven primero pedidos de su ciudad sin perder alcance provincial", () => {

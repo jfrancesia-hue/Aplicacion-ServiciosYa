@@ -1,3 +1,6 @@
+import Anthropic from "npm:@anthropic-ai/sdk@0.72.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
+
 declare const Deno: {
   env: { get(name: string): string | undefined };
   serve(handler: (req: Request) => Response | Promise<Response>): void;
@@ -65,34 +68,21 @@ function safeJsonParse(text: string) {
   }
 }
 
-type OpenAIResponse = {
-  output_text?: unknown;
-  output?: Array<{ content?: Array<{ text?: unknown }> }>;
-};
-
-function extractText(response: OpenAIResponse) {
-  if (typeof response?.output_text === "string") return response.output_text;
-
-  const parts: string[] = [];
-  for (const item of response?.output ?? []) {
-    for (const content of item?.content ?? []) {
-      if (typeof content?.text === "string") parts.push(content.text);
-    }
-  }
-
-  return parts.join("\n").trim();
-}
-
-function buildInput(body: MicaRequest) {
+function buildInput(
+  body: MicaRequest,
+): Array<{ role: "user" | "assistant"; content: string }> {
   const recentHistory = (body.history ?? []).slice(-20).map((message) => ({
-    role: message.author === "user" ? "user" : "assistant",
+    role:
+      message.author === "user"
+        ? ("user" as const)
+        : ("assistant" as const),
     content: message.text,
   }));
 
   return [
     ...recentHistory,
     {
-      role: "user",
+      role: "user" as const,
       content: [
         `Modo: ${body.mode}`,
         `Mensaje actual: ${body.message}`,
@@ -246,8 +236,54 @@ Deno.serve(async (req) => {
       );
     }
 
-    const apiKey = Deno.env.get("OPENAI_API_KEY");
-    if (!apiKey && body.mode === "intermediar-chat") {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const token = (req.headers.get("Authorization") ?? "").replace(
+      /^Bearer\s+/i,
+      "",
+    );
+    if (!supabaseUrl || !serviceRoleKey || !token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: jsonHeaders,
+      });
+    }
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const { data: authData, error: authError } = await admin.auth.getUser(token);
+    if (authError || !authData.user) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: jsonHeaders,
+      });
+    }
+    const { data: allowed, error: rateLimitError } = await admin.rpc(
+      "consume_ai_rate_limit",
+      {
+        p_subject_id: authData.user.id,
+        p_scope: "mica-chat",
+        p_max_requests: 20,
+        p_window_seconds: 60,
+      },
+    );
+    if (rateLimitError) {
+      console.error("[mica-chat] rate limit unavailable", rateLimitError);
+      return new Response(
+        JSON.stringify({ error: "Servicio temporalmente no disponible" }),
+        { status: 503, headers: jsonHeaders },
+      );
+    }
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: "Demasiados mensajes. Esperá un minuto." }),
+        { status: 429, headers: jsonHeaders },
+      );
+    }
+
+    const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
+    const model = Deno.env.get("ANTHROPIC_MODEL");
+    if ((!apiKey || !model) && body.mode === "intermediar-chat") {
       return new Response(
         JSON.stringify({
           reply: buildLocalIntermediaryReply(body),
@@ -258,23 +294,18 @@ Deno.serve(async (req) => {
         },
       );
     }
-    if (!apiKey) {
+    if (!apiKey || !model) {
       return new Response(JSON.stringify(buildLocalFallbackResponse(body)), {
         headers: jsonHeaders,
       });
     }
 
-    const model = Deno.env.get("OPENAI_MODEL") ?? "gpt-4o-mini";
-    const openaiResponse = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
+    try {
+      const anthropic = new Anthropic({ apiKey });
+      const message = await anthropic.messages.create({
         model,
-        store: false,
-        instructions: [
+        max_tokens: 650,
+        system: [
           modeInstructions[body.mode],
           "Escribi en español rioplatense, sin sonar robotico.",
           "Hace una sola pregunta concreta por turno cuando falten datos.",
@@ -285,58 +316,51 @@ Deno.serve(async (req) => {
             ? "Tu respuesta sera visible para cliente y prestador. Usa listas breves y separa Acordado, Pendiente y Proximo paso solo cuando ayude."
             : "",
         ].join("\n"),
-        input: buildInput(body),
-        max_output_tokens: 650,
-      }),
-    });
+        messages: buildInput(body),
+      });
+      const text = message.content
+        .flatMap((block) => (block.type === "text" ? [block.text] : []))
+        .join("\n")
+        .trim();
+      const parsed = safeJsonParse(text);
 
-    const responseJson = await openaiResponse.json();
-    if (!openaiResponse.ok) {
-      return new Response(
-        JSON.stringify({
-          error: responseJson?.error?.message ?? "OpenAI request failed",
-        }),
-        {
-          status: 502,
-          headers: jsonHeaders,
-        },
-      );
-    }
-
-    const text = extractText(responseJson);
-    const parsed = safeJsonParse(text);
-
-    if (!parsed?.reply) {
-      return new Response(
-        JSON.stringify({
-          reply: text || "Dale, contame un poco mas para ayudarte mejor.",
-        }),
-        {
-          headers: jsonHeaders,
-        },
-      );
-    }
-
-    const insightPatch: Record<string, string> = {};
-    for (const [key, value] of Object.entries(parsed.insightPatch ?? {})) {
-      if (typeof value === "string" && value.trim()) {
-        insightPatch[key] = value.trim();
+      if (!parsed?.reply) {
+        return new Response(
+          JSON.stringify({
+            reply: text || "Dale, contame un poco más para ayudarte mejor.",
+          }),
+          { headers: jsonHeaders },
+        );
       }
-    }
-    if (body.insight?.location?.trim()) {
-      insightPatch.location = body.insight.location.trim();
-    }
 
-    return new Response(
-      JSON.stringify({
-        reply: parsed.reply,
-        insightPatch,
-        readyForNextStep: Boolean(parsed.readyForNextStep),
-      }),
-      {
-        headers: jsonHeaders,
-      },
-    );
+      const insightPatch: Record<string, string> = {};
+      for (const [key, value] of Object.entries(parsed.insightPatch ?? {})) {
+        if (typeof value === "string" && value.trim()) {
+          insightPatch[key] = value.trim();
+        }
+      }
+      if (body.insight?.location?.trim()) {
+        insightPatch.location = body.insight.location.trim();
+      }
+
+      return new Response(
+        JSON.stringify({
+          reply: parsed.reply,
+          insightPatch,
+          readyForNextStep: Boolean(parsed.readyForNextStep),
+        }),
+        {
+          headers: jsonHeaders,
+        },
+      );
+    } catch (error) {
+      console.error("[mica-chat] Anthropic unavailable", error);
+      const fallback =
+        body.mode === "intermediar-chat"
+          ? { reply: buildLocalIntermediaryReply(body), fallback: true }
+          : buildLocalFallbackResponse(body);
+      return new Response(JSON.stringify(fallback), { headers: jsonHeaders });
+    }
   } catch (error) {
     return new Response(
       JSON.stringify({

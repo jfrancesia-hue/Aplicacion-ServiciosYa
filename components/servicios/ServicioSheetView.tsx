@@ -155,8 +155,8 @@ function ServicioSheetView({
     onPress={() => {
         if (isGuest(rol)) {
             Alert.alert(
-                "Inicia sesión",
-                "Debes iniciar sesión para contratar un servicio.",
+                "Iniciá sesión",
+                "Iniciá sesión para contratar un servicio.",
                 [
                     { text: "Cancelar", style: "cancel" },
                     { text: "Iniciar sesión", onPress: () => navigation.navigate("AuthStack", { screen: "LoginSelect" }) },

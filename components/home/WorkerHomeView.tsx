@@ -236,7 +236,7 @@ function OfertasView({ navigation }: { navigation: WorkerHomeNavigation }) {
         ),
       );
     } catch {
-      setError("Error al cargar ofertas. Intenta nuevamente.");
+      setError("Error al cargar ofertas. Intentá nuevamente.");
     } finally {
       setLoading(false);
       setRefreshing(false);

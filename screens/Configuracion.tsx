@@ -1,7 +1,7 @@
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -16,8 +16,8 @@ import InviteSheetView from "../components/InvitarSheet";
 import { withModalProvider } from "../components/sheet/withModalProvider";
 import BlockedUsersSection from "../components/trust/BlockedUsersSection";
 import { useBottomSheetModal } from "../lib/hooks/useBottomSheetModal";
+import { requestPushNotificationPermission } from "../lib/hooks/useNotifications";
 import { useSuspenseProfile } from "../lib/hooks/useUser";
-import { useUserSettings } from "../lib/hooks/useUserSettings";
 import { removeCredentials } from "../lib/storage";
 import { supabase } from "../lib/supabase";
 import type { MainStackParamList } from "../types/navigation";
@@ -29,15 +29,14 @@ function Configuracion({ navigation }: Props) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordValid, setPasswordValid] = useState(true);
   const [passwordMatch, setPasswordMatch] = useState(true);
+  const [enablingNotifications, setEnablingNotifications] = useState(false);
   const { rol } = useSuspenseProfile();
   const { present, dismiss, modalProps } = useBottomSheetModal({
     snapPoints: ["90%"],
   });
 
-  const { settings } = useUserSettings();
-
   const validarContrasena = (password: string) => {
-    const minLength = 8;
+    const minLength = 12;
     const hasUpperCase = /[A-Z]/.test(password);
     const hasNumber = /\d/.test(password);
     const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
@@ -88,6 +87,24 @@ function Configuracion({ navigation }: Props) {
 
   const invitarAmigo = () => {
     present();
+  };
+
+  const enableNotifications = async () => {
+    setEnablingNotifications(true);
+    try {
+      await requestPushNotificationPermission();
+      Alert.alert(
+        "Notificaciones activadas",
+        "Vas a recibir novedades de pedidos, presupuestos y mensajes.",
+      );
+    } catch (cause) {
+      Alert.alert(
+        "No pudimos activar las notificaciones",
+        cause instanceof Error ? cause.message : "Intent\u00e1 nuevamente.",
+      );
+    } finally {
+      setEnablingNotifications(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -186,10 +203,10 @@ function Configuracion({ navigation }: Props) {
                 <Text
                   style={[
                     styles.requisito,
-                    password.length >= 8 ? styles.valid : styles.invalid,
+                    password.length >= 12 ? styles.valid : styles.invalid,
                   ]}
                 >
-                  {password.length >= 8 ? "✔" : "○"} Al menos 8 caracteres.
+                  {password.length >= 12 ? "✔" : "○"} Al menos 12 caracteres.
                 </Text>
                 <Text
                   style={[
@@ -246,6 +263,26 @@ function Configuracion({ navigation }: Props) {
                     onPress={invitarAmigo}
                   >
                     <Text style={styles.buttonText}>Invitar</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {rol !== "guest" && (
+                <View style={styles.section}>
+                  <Text style={styles.optionText}>Notificaciones</Text>
+                  <Text style={styles.optionDescription}>
+                    {"Android te pedir\u00e1 permiso solamente cuando toques este bot\u00f3n."}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.buttonTurquoise}
+                    disabled={enablingNotifications}
+                    onPress={() => void enableNotifications()}
+                  >
+                    <Text style={styles.buttonText}>
+                      {enablingNotifications
+                        ? "Activando..."
+                        : "Activar notificaciones"}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -331,6 +368,14 @@ function Configuracion({ navigation }: Props) {
                     onPress={() => navigation.navigate("OperationalDashboard")}
                   >
                     <Text style={styles.buttonText}>Abrir panel operativo</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.adminButton, { marginTop: 10 }]}
+                    onPress={() => navigation.navigate("PerfilesPendientes")}
+                  >
+                    <Text style={styles.buttonText}>
+                      Revisar verificaciones de identidad
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}

@@ -25,21 +25,13 @@ function LocationInput({
   const bottomNavBarHeight = insets.bottom;
   const [_locationText, setLocationText] = useState(locationText);
   const bottomSheetModalRef = useRef<BottomSheetModal>(null);
-  const [selectedItem, setSelectedItem] = useState<LocationItem>();
   const [initialLocation, setInitialLocation] = useState<LocationItem | null>(
     null,
   );
 
   const handlePresentModalPress = useCallback(() => {
-    console.log("handlePresentModalPress");
     bottomSheetModalRef.current?.present();
   }, []);
-
-  const handleOnInputPress = () => {
-    if (selectedItem && onChange) {
-      onChange(selectedItem);
-    }
-  };
 
   const handleLocationSelected = useCallback(
     (location: LocationItem) => {
@@ -47,7 +39,7 @@ function LocationInput({
       onChange?.(location);
       bottomSheetModalRef.current?.dismiss();
     },
-    [setSelectedItem, setLocationText],
+    [onChange],
   );
 
   useEffect(() => {

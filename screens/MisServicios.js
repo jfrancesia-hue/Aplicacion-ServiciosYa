@@ -5,7 +5,7 @@ import BottomSheet, {
 } from "@gorhom/bottom-sheet";
 import { useNavigation } from "@react-navigation/native";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import React, { useRef, useMemo, useCallback } from "react";
+import React, { useRef, useMemo, useCallback, useEffect } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -19,8 +19,17 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BotonVolver from "../components/BotonVolver";
 import PedidosMicaSection from "../components/serviciosYa/PedidosMicaSection";
-import { misServicionQueryOptions } from "../lib/queryOptions";
+import {
+  misServicionQueryOptions,
+  perfilQueryOptions,
+} from "../lib/queryOptions";
 import { supabase } from "../lib/supabase";
+
+const normalizeServiceState = (value) =>
+  String(value ?? "activo")
+    .trim()
+    .replace(/^'+|'+$/g, "")
+    .toLowerCase();
 
 export default function MisServicios() {
   const navigation = useNavigation();
@@ -29,6 +38,22 @@ export default function MisServicios() {
   const [selectedService, setSelectedService] = React.useState(null);
 
   const snapPoints = useMemo(() => ["30%"], []);
+  const {
+    data: profile,
+    isLoading: profileLoading,
+    isError: profileIsError,
+    refetch: refetchProfile,
+  } = useQuery(perfilQueryOptions);
+
+  useEffect(() => {
+    if (!profileLoading && profile && profile.rol !== "worker") {
+      Alert.alert(
+        "Acceso para prestadores",
+        "Esta sección contiene únicamente las publicaciones del prestador.",
+        [{ text: "Volver", onPress: () => navigation.replace("Home") }],
+      );
+    }
+  }, [navigation, profile, profileLoading]);
 
   const {
     data: serviciosPublicados = [],
@@ -59,7 +84,8 @@ export default function MisServicios() {
 
   const toggleEstadoMutation = useMutation({
     mutationFn: async ({ id, estadoActual }) => {
-      const nuevoEstado = estadoActual === "pausado" ? "'activo'" : "pausado";
+      const nuevoEstado =
+        normalizeServiceState(estadoActual) === "pausado" ? "activo" : "pausado";
       const { error } = await supabase
         .from("servicios")
         .update({ estado: nuevoEstado })
@@ -85,6 +111,7 @@ export default function MisServicios() {
   };
 
   const eliminarServicio = () => {
+    if (!selectedService || deleteMutation.isPending) return;
     handleCloseMenu();
     setTimeout(() => {
       Alert.alert(
@@ -103,6 +130,7 @@ export default function MisServicios() {
   };
 
   const pausarServicio = () => {
+    if (!selectedService || toggleEstadoMutation.isPending) return;
     handleCloseMenu();
     setTimeout(() => {
       toggleEstadoMutation.mutate({
@@ -132,8 +160,8 @@ export default function MisServicios() {
   );
 
   const getEstadoColor = (estado) => {
-    switch (estado) {
-      case "'activo'":
+    switch (normalizeServiceState(estado)) {
+      case "activo":
         return "#10B981";
       case "pausado":
         return "#F59E0B";
@@ -143,8 +171,8 @@ export default function MisServicios() {
   };
 
   const getEstadoIcon = (estado) => {
-    switch (estado) {
-      case "'activo'":
+    switch (normalizeServiceState(estado)) {
+      case "activo":
         return "checkmark-circle";
       case "pausado":
         return "pause-circle";
@@ -236,6 +264,26 @@ export default function MisServicios() {
       </View>
     );
   }
+
+  if (profileLoading) {
+    return <ActivityIndicator style={{ flex: 1 }} color="#069eb3" size="large" />;
+  }
+
+  if (profileIsError) {
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyText}>No pudimos validar tu perfil.</Text>
+        <TouchableOpacity
+          style={styles.primaryButton}
+          onPress={() => void refetchProfile()}
+        >
+          <Text style={styles.primaryButtonText}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  if (profile?.rol !== "worker") return null;
 
   return (
     <GestureHandlerRootView style={styles.container}>
@@ -529,6 +577,18 @@ const styles = StyleSheet.create({
     color: "#9CA3AF",
     marginTop: 8,
     textAlign: "center",
+  },
+  primaryButton: {
+    marginTop: 20,
+    borderRadius: 12,
+    backgroundColor: "#069eb3",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+  },
+  primaryButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
   },
   loadingText: {
     fontSize: 16,

@@ -1,6 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
 import { getUserID } from "../store/authStore";
-import type { Coords } from "../types/location";
 import { supabase } from "./supabase";
 
 export const sessionQueryKey = ["session"];
@@ -108,7 +107,6 @@ export const workerStatusQueryOptions = queryOptions({
       .select("status,last_seen_at,available_until,availability_duration_hours")
       .eq("user_id", getUserID())
       .maybeSingle();
-    console.log(`Worker status: ${data?.status}`);
     return {
       status: data?.status ?? "OFFLINE",
       lastSeenAt: data?.last_seen_at ?? null,
@@ -118,41 +116,13 @@ export const workerStatusQueryOptions = queryOptions({
   },
 });
 
-export const locationIpInfoQueryOptions = queryOptions<Coords>({
-  queryKey: ["user", "location", "api"],
-  queryFn: async () => {
-    const response = await fetch("https://ipwho.is/");
-    if (!response.ok) {
-      throw new Error(`ipwho.is returned ${response.status}`);
-    }
-    const data = await response.json();
-    if (
-      data.success !== true ||
-      typeof data.latitude !== "number" ||
-      typeof data.longitude !== "number"
-    ) {
-      throw new Error(data.message || "No se pudo estimar la ubicación por IP.");
-    }
-    return {
-      latitude: data.latitude,
-      longitude: data.longitude,
-      city: data.city || "N/A",
-      province: data.region || null,
-      locality: data.city || null,
-      country: data.country_code || "N/A",
-    };
-  },
-
-  staleTime: 120 * 1000,
-});
-
 export const userServiceCountQueryOptions = (id: string) =>
   queryOptions({
     queryKey: ["user", "services", "count", id],
     queryFn: async () => {
       const { count, error } = await supabase
-        .from("servicios")
-        .select("*", { count: "exact", head: true })
+        .from("servicios_public")
+        .select("id", { count: "exact", head: true })
         .eq("user_id", id);
 
       if (error) {
@@ -167,7 +137,7 @@ export const userServiceListQueryOptions = (id: string) =>
     queryKey: ["user", "services", "list", id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("servicios")
+        .from("servicios_public")
         .select("*")
         .eq("user_id", id);
 
@@ -199,12 +169,8 @@ export const misServicionQueryOptions = queryOptions({
   queryKey: ["user", "mis_servicios"],
   queryFn: async () => {
     const userId = getUserID();
-    const { data } = await supabase
-      .from("servicios_with_coords")
-      .select("*")
-      .eq("user_id", userId)
-      .order("id", { ascending: false })
-      .throwOnError();
+    const { data, error } = await supabase.rpc("get_my_services_with_coords");
+    if (error) throw error;
     return data;
   },
 });
