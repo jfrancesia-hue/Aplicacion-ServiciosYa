@@ -1,5 +1,10 @@
-import Anthropic from "npm:@anthropic-ai/sdk@0.72.0";
+import type AnthropicClient from "npm:@anthropic-ai/sdk@0.72.0";
+// El submodulo evita cargar helpers opcionales de Zod en Supabase Edge Runtime.
+// @ts-expect-error El paquete no publica declaraciones para este subpath Deno.
+import { Anthropic as AnthropicRuntime } from "npm:@anthropic-ai/sdk@0.72.0/client.mjs";
 import { createClient } from "npm:@supabase/supabase-js@2";
+
+const Anthropic = AnthropicRuntime as typeof AnthropicClient;
 
 declare const Deno: {
   env: { get(name: string): string | undefined };
