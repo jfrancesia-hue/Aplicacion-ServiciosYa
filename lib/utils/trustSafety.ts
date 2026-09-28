@@ -82,16 +82,20 @@ export async function unblockUser(blockedId: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function getBlockedUserIds() {
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return new Set<string>();
+export async function getBlockedUserIds(authenticatedUserId?: string) {
+  let userId = authenticatedUserId;
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id;
+  }
+  if (!userId) return new Set<string>();
 
   const { data, error } = await supabase
     .from("user_blocks")
     .select("blocked_id")
-    .eq("blocker_id", user.id);
+    .eq("blocker_id", userId);
 
   if (error) {
     console.warn("[trustSafety] no se pudieron cargar los bloqueos:", error);

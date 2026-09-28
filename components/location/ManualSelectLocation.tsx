@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import type { LocationItem } from "../../types/location";
 import * as Location from "expo-location";
+import { buildApproximateCityLocation } from "../../lib/utils/manualLocation";
 
 interface ManualSelectLocationProps {
   onChange: (location: LocationItem | null) => void;
@@ -26,6 +27,19 @@ export function ManualSelectLocation({
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const useCityFallback = (city: City, enteredAddress: string) => {
+    const location = buildApproximateCityLocation(city, enteredAddress);
+    if (!location) return false;
+
+    onChange(location);
+    setError(null);
+    setNotice(
+      `No pudimos ubicar la calle exacta. Usaremos ${city.name} como zona aproximada; podés continuar o probar otra dirección.`,
+    );
+    return true;
+  };
 
   const confirmAddress = async () => {
     if (!selectedCity || !address.trim()) {
@@ -36,12 +50,16 @@ export function ManualSelectLocation({
 
     setLoading(true);
     setError(null);
+    setNotice(null);
     try {
       const matches = await Location.geocodeAsync(
         `${address.trim()}, ${selectedCity.name}, Argentina`,
       );
       const match = matches[0];
-      if (!match) throw new Error("No encontramos esa dirección.");
+      if (!match) {
+        if (useCityFallback(selectedCity, address.trim())) return;
+        throw new Error("No encontramos esa dirección.");
+      }
       onChange({
         name: `${address.trim()}, ${selectedCity.name}`,
         lat: match.latitude,
@@ -49,12 +67,14 @@ export function ManualSelectLocation({
         isoCountryCode: "AR",
       });
     } catch (cause) {
-      onChange(null);
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "No pudimos ubicar esa dirección.",
-      );
+      if (!useCityFallback(selectedCity, address.trim())) {
+        onChange(null);
+        setError(
+          cause instanceof Error
+            ? cause.message
+            : "No pudimos ubicar esa dirección.",
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -75,6 +95,7 @@ export function ManualSelectLocation({
         countryCode="AR"
         onSelectCity={(city) => {
           setSelectedCity(city || null);
+          setNotice(null);
           onChange(null);
         }}
         placeholder="Seleccioná una ciudad"
@@ -84,6 +105,7 @@ export function ManualSelectLocation({
         value={address}
         onChangeText={(value) => {
           setAddress(value);
+          setNotice(null);
           onChange(null);
         }}
         placeholder="Calle y número, barrio o referencia"
@@ -91,6 +113,7 @@ export function ManualSelectLocation({
         style={styles.input}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       <TouchableOpacity
         activeOpacity={0.82}
         disabled={loading}
@@ -128,6 +151,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   error: { color: "#9a3412", fontSize: 12, marginTop: 8 },
+  notice: { color: "#7a5300", fontSize: 12, lineHeight: 17, marginTop: 8 },
   button: {
     minHeight: 48,
     marginTop: 12,

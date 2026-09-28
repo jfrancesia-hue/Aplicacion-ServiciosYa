@@ -13,7 +13,9 @@ import {
   type StyleProp,
   StyleSheet,
   Text,
+  TextInput,
   View,
+  Platform,
   type ViewStyle,
 } from "react-native";
 import { AutocompleteDropdown } from "react-native-autocomplete-dropdown";
@@ -22,12 +24,12 @@ import type {
   IAutocompleteDropdownProps,
   IAutocompleteDropdownRef,
 } from "react-native-autocomplete-dropdown";
-import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 
 // Extend the type to include selectedItem
 type ExtendedAutocompleteProps = IAutocompleteDropdownProps & {
   selectedItem?: AutocompleteDropdownItem | null;
 };
+import { BottomSheetTextInput } from "@gorhom/bottom-sheet";
 
 interface GenericAutocompleteProps<T> {
   label?: string;
@@ -96,7 +98,9 @@ const GenericAutocomplete = forwardRef(function GenericAutocomplete<T>(
         clearOnFocus={false}
         closeOnBlur={true}
         useFilter={true}
-        InputComponent={BottomSheetTextInput}
+        InputComponent={
+          Platform.OS === "web" ? TextInput : BottomSheetTextInput
+        }
         textInputProps={{
           placeholder,
           style: styles.textInput,

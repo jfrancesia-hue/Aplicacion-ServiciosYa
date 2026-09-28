@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { StyleSheet, View, Text, FlatList, TouchableOpacity, Image } from "react-native";
 import BotonVolver from "../components/BotonVolver";
 import { Ionicons } from "@expo/vector-icons";
-import { getUserID } from "../store/authStore";
+import { useAuthStore } from "../store/authStore";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { MainStackParamList } from "../types/navigation";
@@ -16,19 +16,21 @@ type NavigationProp = NativeStackNavigationProp<MainStackParamList>;
 
 function ChatList() {
     const navigation = useNavigation<NavigationProp>();
-    const { data, refetch, isLoading, isError, error } = useQuery({
-        ...fetchUserChatQueryOptions,
+    const userId = useAuthStore((state) => state.user?.id ?? null);
+    const { data, refetch, isLoading, isFetching, isError, error } = useQuery({
+        ...fetchUserChatQueryOptions(userId),
         staleTime: 5_000,
+        retry: 1,
     });
 
     useFocusEffect(
         useCallback(() => {
-            refetch();
-        }, [refetch])
+            if (userId) void refetch();
+        }, [refetch, userId])
     );
 
     useEffect(() => {
-        const userId = getUserID();
+        if (!userId) return;
         const channel = supabase.channel(`realtime-chats-${userId}`);
         const messagesChannel = supabase.channel(`realtime-mensajes-${userId}`);
         let refetchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -80,7 +82,7 @@ function ChatList() {
             supabase.removeChannel(channel);
             supabase.removeChannel(messagesChannel);
         };
-    }, [data, refetch]);
+    }, [data, refetch, userId]);
 
     const renderItem = ({ item }: { item: ChatItem }) => {
         return (
@@ -120,6 +122,7 @@ function ChatList() {
 
     return (
         <FlatList
+            style={styles.list}
             data={data ?? []}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
@@ -147,7 +150,12 @@ function ChatList() {
                     </View>
                 )
             }
-            contentContainerStyle={{ paddingBottom: 20 }}
+            refreshing={isFetching && !isLoading}
+            onRefresh={() => void refetch()}
+            contentContainerStyle={[
+                styles.listContent,
+                (data?.length ?? 0) === 0 && styles.emptyListContent,
+            ]}
         />
     );
 }
@@ -170,6 +178,16 @@ const styles = StyleSheet.create({
         backgroundColor: '#E8FAF7',
         paddingTop: 46,
         paddingHorizontal: 12
+    },
+    list: {
+        flex: 1,
+    },
+    listContent: {
+        paddingBottom: 20,
+    },
+    emptyListContent: {
+        flexGrow: 1,
+        justifyContent: "center",
     },
     titulo: {
         fontSize: 32,
@@ -213,7 +231,7 @@ const styles = StyleSheet.create({
         alignItems: "center",
         justifyContent: "center",
         paddingHorizontal: 28,
-        paddingVertical: 64,
+        paddingVertical: 32,
     },
     emptyTitle: {
         marginTop: 14,

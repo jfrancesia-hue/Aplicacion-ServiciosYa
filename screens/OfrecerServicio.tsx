@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Dimensions, // Keep platform for potential future use
@@ -22,6 +22,7 @@ import GenericAutocomplete from "../components/GenericAutocomplete";
 import { withDropDownProvider } from "../components/forms/withDropDownProvider";
 import LocationInput from "../components/location/LocationInput";
 import { withModalProvider } from "../components/sheet/withModalProvider";
+import { clearMicaDraft } from "../lib/micaDraft";
 import { supabase } from "../lib/supabase";
 import { perfilQueryOptions } from "../lib/queryOptions";
 import showToast from "../lib/toast";
@@ -35,7 +36,7 @@ import { parseMoneyInput } from "../lib/utils/money";
 import vexo from "../lib/vexo";
 import { getUserID } from "../store/authStore";
 import type { LocationItem } from "../types/location";
-import type { MainStackParamList } from "../types/navigation";
+import type { MainStackParamList, MicaServiceDraft } from "../types/navigation";
 
 type Props = NativeStackScreenProps<MainStackParamList, "OfrecerServicio">;
 
@@ -50,15 +51,52 @@ function normalizeOficios(values: Array<string | string[] | null | undefined>) {
   );
 }
 
-function OfrecerServicio({ navigation }: Props) {
-  // ... (all your state and functions remain exactly the same)
-  const [titulo, setTitulo] = useState("");
-  const [categoria, setCategoria] = useState("");
+function resolveDraftCategory(service?: string) {
+  if (!service?.trim()) return "";
+  const normalized = service.trim().toLocaleLowerCase("es-AR");
+  const aliases: Record<string, string> = {
+    plomería: "Plomero",
+    electricidad: "Electricista",
+    pintura: "Pintor",
+    cerrajería: "Cerrajero",
+    limpieza: "Servicio de limpieza",
+    jardinería: "Jardinero",
+    albañilería: "Albañil",
+    refrigeración: "Técnico en refrigeración",
+  };
+  const aliased = aliases[normalized];
+  if (aliased && categoriasDisponibles.includes(aliased)) return aliased;
+
+  return (
+    categoriasDisponibles.find(
+      (category) => category.toLocaleLowerCase("es-AR") === normalized,
+    ) ?? ""
+  );
+}
+
+function draftDescription(draft?: MicaServiceDraft) {
+  return [draft?.presentation, draft?.experience, draft?.coverage]
+    .map((value) => value?.trim())
+    .filter(Boolean)
+    .join(" · ")
+    .slice(0, 300);
+}
+
+function OfrecerServicio({ navigation, route }: Props) {
+  const micaDraft = route.params?.micaDraft;
+  const initialCategory = resolveDraftCategory(micaDraft?.service);
+  const [titulo, setTitulo] = useState(
+    initialCategory ? `${initialCategory} a domicilio` : "",
+  );
+  const [categoria, setCategoria] = useState(initialCategory);
   const [horario, setHorario] = useState("");
   const [precio, setPrecio] = useState("");
-  const [descripcion, setDescripcion] = useState("");
+  const [descripcion, setDescripcion] = useState(() =>
+    draftDescription(micaDraft),
+  );
   const [ubicacion, setUbicacion] = useState<LocationItem>();
   const [submitting, setSubmitting] = useState(false);
+  const ignoreInitialCategoryClear = useRef(Boolean(initialCategory));
   const {
     data: profile,
     isLoading: profileLoading,
@@ -162,7 +200,13 @@ function OfrecerServicio({ navigation }: Props) {
         "Éxito",
         "Servicio creado y vinculado al flujo Servicios Ya/Mica.",
       );
-      navigation.goBack();
+      if (route.params?.micaDraftOwnerId) {
+        await clearMicaDraft(
+          route.params.micaDraftOwnerId,
+          "ofrecer-servicio",
+        );
+      }
+      navigation.replace("Home", { workerTab: "calendario" });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Error desconocido";
       console.error("Error al insertar el servicio:", message);
@@ -214,6 +258,16 @@ function OfrecerServicio({ navigation }: Props) {
           Publicar un Servicio
         </Text>
 
+        {micaDraft ? (
+          <View style={styles.micaDraftNotice}>
+            <Text style={styles.micaDraftTitle}>Borrador preparado por MICA</Text>
+            <Text style={styles.micaDraftText}>
+              Revisá y completá los datos. El servicio recién queda publicado
+              cuando tocás “Publicar servicio” y ves la confirmación.
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.inputContainer}>
           {/* All your inputs remain the same */}
           <Text style={styles.label}>Título del servicio</Text>
@@ -228,8 +282,23 @@ function OfrecerServicio({ navigation }: Props) {
           <GenericAutocomplete<string>
             label="Categoría"
             data={categoriasDisponibles}
-            onSelectItem={(value) => setCategoria(value ?? "")}
-            placeholder="Ej: Categoria"
+            onSelectItem={(value) => {
+              if (value) {
+                ignoreInitialCategoryClear.current = false;
+                setCategoria(value);
+                return;
+              }
+              if (ignoreInitialCategoryClear.current) {
+                ignoreInitialCategoryClear.current = false;
+                return;
+              }
+              setCategoria("");
+            }}
+            placeholder={
+              initialCategory
+                ? `Preseleccionada: ${initialCategory}`
+                : "Ej: Categoría"
+            }
             itemToDropdownItem={(value) => ({
               id: value,
               title: value,
@@ -242,6 +311,11 @@ function OfrecerServicio({ navigation }: Props) {
               suggestionsListMaxHeight: Dimensions.get("window").height * 0.4,
             }}
           />
+          {initialCategory && categoria === initialCategory ? (
+            <Text style={styles.prefilledCategory}>
+              Categoría cargada por MICA: {initialCategory}
+            </Text>
+          ) : null}
 
           <Text style={styles.label}>Horario</Text>
           <TextInput
@@ -326,6 +400,32 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     color: "#19D4C6",
     letterSpacing: 0.5,
+  },
+  micaDraftNotice: {
+    backgroundColor: "#fff7e9",
+    borderColor: "#f2b86c",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  micaDraftTitle: {
+    color: "#8b510d",
+    fontSize: 15,
+    fontWeight: "900",
+    marginBottom: 4,
+  },
+  micaDraftText: {
+    color: "#684b28",
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  prefilledCategory: {
+    color: "#315e67",
+    fontSize: 13,
+    fontWeight: "800",
+    marginTop: 6,
+    marginBottom: 8,
   },
   // ... rest of the styles are unchanged
   inputContainer: {
