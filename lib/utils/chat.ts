@@ -1,5 +1,4 @@
 import { queryOptions } from "@tanstack/react-query";
-import { getUserID } from "../../store/authStore";
 import { supabase } from "../supabase";
 import type { ServicioRow } from "../../types/db.overrides.types";
 import { getChatMessagePreview } from "./audioMessage";
@@ -27,9 +26,25 @@ function getPartner(
   return user_1 === userId ? user_2 : user_1;
 }
 
-async function fetchUserChats() {
-  const userId = getUserID();
-  const blockedIds = await getBlockedUserIds();
+async function withTimeout<T>(promise: PromiseLike<T>, timeoutMs: number) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      Promise.resolve(promise),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("La carga de chats tardó demasiado.")),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function fetchUserChats(userId: string) {
+  const blockedIds = await withTimeout(getBlockedUserIds(userId), 10_000);
 
   type ChatWithSummary = {
     id: string;
@@ -47,9 +62,10 @@ async function fetchUserChats() {
 
   // PostgREST resuelve el último mensaje y los no leídos sin descargar
   // historiales completos en el teléfono.
-  const { data: rawChats } = await supabase
-    .from("chats")
-    .select(`
+  const { data: rawChats } = await withTimeout(
+    supabase
+      .from("chats")
+      .select(`
       id,
       participant_a,
       participant_b,
@@ -66,8 +82,10 @@ async function fetchUserChats() {
     .limit(1, { referencedTable: "latest" })
     .eq("unread.leido", false)
     .neq("unread.remitente_id", userId)
-    .limit(60)
-    .throwOnError();
+      .limit(60)
+      .throwOnError(),
+    10_000,
+  );
 
   const chatsData = (rawChats ?? []) as unknown as ChatWithSummary[];
   const visibleChats = chatsData.filter((chat) => {
@@ -133,8 +151,14 @@ async function fetchUserChats() {
   });
 }
 
-export const fetchUserChatQueryOptions = queryOptions({
-  queryKey: ["user", "chats"],
-  queryFn: fetchUserChats,
-  structuralSharing: true,
-});
+export function fetchUserChatQueryOptions(userId: string | null) {
+  return queryOptions({
+    queryKey: ["user", userId, "chats"],
+    queryFn: () => {
+      if (!userId) throw new Error("La sesión no está disponible.");
+      return fetchUserChats(userId);
+    },
+    enabled: Boolean(userId),
+    structuralSharing: true,
+  });
+}

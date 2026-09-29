@@ -6,6 +6,14 @@ import type { ServicioRow } from "./db.overrides.types";
 
 export type MicaChatMode = "buscar-servicio" | "ofrecer-servicio" | "b2b";
 
+export type MicaServiceDraft = {
+  service?: string;
+  coverage?: string;
+  experience?: string;
+  price?: string;
+  presentation?: string;
+};
+
 export type MainStackParamList = {
   AuthStack: { screen?: keyof AuthStackParamList } | undefined;
   InicioRouter: undefined;
@@ -15,7 +23,9 @@ export type MainStackParamList = {
   Home: { workerTab?: "calendario" | "ofertas" | "contratar" } | undefined;
   CrearPerfil: undefined;
   Perfil: undefined;
-  OfrecerServicio: undefined;
+  OfrecerServicio:
+    | { micaDraft?: MicaServiceDraft; micaDraftOwnerId?: string }
+    | undefined;
   PublicarNecesidad: { view?: "history" | "new" } | undefined;
   TrabajosPendientes: undefined;
   Configuracion: undefined;

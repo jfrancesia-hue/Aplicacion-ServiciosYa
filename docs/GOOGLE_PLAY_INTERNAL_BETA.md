@@ -1,7 +1,7 @@
-# Beta interna Android · versión 97
+# Beta interna Android · versión 98
 
 La configuración del repositorio ya apunta a `com.alex_6775.appTrabajo`, versión
-`97.0.0` y `versionCode 97`. El perfil `internal` genera el AAB firmado contra
+`98.0.0` y `versionCode 98`. El perfil `internal` genera el AAB firmado contra
 Supabase de producción y el perfil de submit `internal` lo publica únicamente
 en la pista de pruebas internas de Google Play.
 

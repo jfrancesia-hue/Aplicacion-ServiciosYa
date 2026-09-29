@@ -34,6 +34,13 @@ import {
   getMicaOrderStatus,
   selectMicaOrderQuote,
 } from "../lib/micaOrder";
+import {
+  clearMicaDraft,
+  loadMicaDraft,
+  saveMicaDraft,
+  type MicaDraftInsight,
+  type MicaDraftMessage,
+} from "../lib/micaDraft";
 import { supabase } from "../lib/supabase";
 import { inferMicaSearchTiming } from "../lib/utils/micaConversation";
 import {
@@ -48,29 +55,13 @@ import {
 } from "../lib/utils/quotePricing";
 import { repairSpanishMojibake } from "../lib/utils/textEncoding";
 import { useLocationStore } from "../store/locationStore";
+import { useAuthStore } from "../store/authStore";
 import type { MainStackParamList, MicaChatMode } from "../types/navigation";
 
 type Props = NativeStackScreenProps<MainStackParamList, "MicaChat">;
-type Message = {
-  id: string;
-  author: "mica" | "user";
-  text: string;
-};
+type Message = MicaDraftMessage;
 type SearchStage = "intake" | "submitted" | "quotes" | "selected" | "closed";
-type AgentInsight = {
-  issue?: string;
-  service?: string;
-  location?: string;
-  urgency?: string;
-  timeframe?: string;
-  media?: string;
-  experience?: string;
-  coverage?: string;
-  price?: string;
-  companyType?: string;
-  units?: string;
-  contactIntent?: string;
-};
+type AgentInsight = MicaDraftInsight;
 
 function micaQuotePricingSummary(quote: MicaOrderQuote) {
   return `${pricingModeLabel(quote.pricingMode ?? "project")} · ${quotePricingSummary(
@@ -753,6 +744,7 @@ function MicaChat({ navigation, route }: Props) {
   const scrollRef = useRef<ScrollView>(null);
   const locationSheetRef = useRef<BottomSheetModal>(null);
   const hasHydratedOrderRef = useRef(false);
+  const authUserId = useAuthStore((state) => state.user?.id ?? null);
   const [input, setInput] = useState("");
   const [insight, setInsight] = useState<AgentInsight>({});
   const [messages, setMessages] = useState<Message[]>(() =>
@@ -771,6 +763,8 @@ function MicaChat({ navigation, route }: Props) {
     useState(false);
   const [selectingQuoteId, setSelectingQuoteId] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
   const [profileFallback, setProfileFallback] =
     useState<MicaProfileFallback | null>(null);
   const effectiveLocation = useLocationStore(
@@ -928,10 +922,78 @@ function MicaChat({ navigation, route }: Props) {
   );
 
   useEffect(() => {
-    if (mode !== "buscar-servicio") return;
+    let isMounted = true;
     hasHydratedOrderRef.current = false;
-    refreshOrderStatus(route.params.offerId ?? null, false, true);
-  }, [mode, refreshOrderStatus, route.params.offerId]);
+    setDraftHydrated(false);
+    setDraftRestored(false);
+
+    const hydrate = async () => {
+      if (!authUserId) {
+        if (isMounted) setDraftHydrated(true);
+        return;
+      }
+
+      if (mode === "buscar-servicio" && route.params.offerId) {
+        if (isMounted) setDraftHydrated(true);
+        await refreshOrderStatus(route.params.offerId, false, true);
+        return;
+      }
+
+      const draft = await loadMicaDraft(authUserId, mode);
+      if (!isMounted) return;
+
+      if (draft) {
+        setInsight(draft.insight);
+        setMessages(draft.messages);
+        setSearchStage("intake");
+        setDraftRestored(true);
+        hasHydratedOrderRef.current = true;
+        setDraftHydrated(true);
+        return;
+      }
+
+      setDraftHydrated(true);
+      if (mode === "buscar-servicio") {
+        await refreshOrderStatus(null, false, true);
+      }
+    };
+
+    void hydrate().catch((error) => {
+      console.warn("[MICA] no se pudo recuperar el borrador:", error);
+      if (isMounted) setDraftHydrated(true);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authUserId, mode, refreshOrderStatus, route.params.offerId]);
+
+  useEffect(() => {
+    if (
+      !draftHydrated ||
+      !authUserId ||
+      searchStage !== "intake" ||
+      route.params.offerId
+    ) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      void saveMicaDraft(authUserId, mode, { messages, insight }).catch(
+        (error) => console.warn("[MICA] no se pudo guardar el borrador:", error),
+      );
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [
+    authUserId,
+    draftHydrated,
+    insight,
+    messages,
+    mode,
+    route.params.offerId,
+    searchStage,
+  ]);
 
   useEffect(() => {
     if (
@@ -954,7 +1016,7 @@ function MicaChat({ navigation, route }: Props) {
     (quote) => quote.id === selectedQuoteId,
   );
   const canContinueIntake =
-    mode !== "buscar-servicio" || searchStage === "intake";
+    draftHydrated && (mode !== "buscar-servicio" || searchStage === "intake");
   const searchStepIndex =
     searchStage === "selected" || searchStage === "closed"
       ? 2
@@ -984,6 +1046,10 @@ function MicaChat({ navigation, route }: Props) {
         });
         setCreatedOfertaId(request.oferta_id);
         setSearchStage("submitted");
+        if (authUserId) {
+          await clearMicaDraft(authUserId, mode);
+          setDraftRestored(false);
+        }
         addMicaMessage(
           `Listo, ya envié tu pedido a prestadores compatibles. Cuando respondan con presupuestos, vas a poder compararlos y confirmar el que prefieras.\n\nSeguimiento: ${request.oferta_id}`,
         );
@@ -1172,9 +1238,20 @@ function MicaChat({ navigation, route }: Props) {
 
     if (mode === "ofrecer-servicio") {
       return {
-        label: progress >= 70 ? "Publicar mi servicio" : "Completar formulario",
+        label:
+          progress >= 70 ? "Continuar al formulario" : "Completar formulario",
         icon: "add-circle" as const,
-        onPress: () => navigation.navigate("OfrecerServicio"),
+        onPress: () =>
+          navigation.navigate("OfrecerServicio", {
+            micaDraft: {
+              service: insight.service,
+              coverage: insight.coverage || insight.location,
+              experience: insight.experience,
+              price: insight.price,
+              presentation: insight.issue,
+            },
+            micaDraftOwnerId: authUserId ?? undefined,
+          }),
       };
     }
 
@@ -1193,6 +1270,7 @@ function MicaChat({ navigation, route }: Props) {
     };
   }, [
     activeOrder,
+    authUserId,
     insight,
     isCreatingRequest,
     isRefreshingQuotes,
@@ -1205,9 +1283,21 @@ function MicaChat({ navigation, route }: Props) {
     selectingQuoteId,
   ]);
 
+  const handleDiscardDraft = useCallback(async () => {
+    if (authUserId) await clearMicaDraft(authUserId, mode);
+    setInsight({});
+    setMessages(createInitialMessages(mode));
+    setDraftRestored(false);
+    setSearchStage("intake");
+    setActiveOrder(null);
+    setCreatedOfertaId(null);
+    setRealQuotes([]);
+    setSelectedQuoteId(null);
+  }, [authUserId, mode]);
+
   const sendMessage = async (text: string) => {
     const cleanText = text.trim();
-    if (!cleanText || isThinking) return;
+    if (!cleanText || isThinking || !draftHydrated) return;
 
     const timestamp = Date.now();
     const thinkingId = `mica-thinking-${timestamp}`;
@@ -1432,6 +1522,21 @@ function MicaChat({ navigation, route }: Props) {
               </View>
             ))}
           </View>
+          {draftRestored ? (
+            <View style={styles.draftNotice}>
+              <Ionicons name="save-outline" size={16} color="#315e67" />
+              <Text style={styles.draftNoticeText}>
+                Retomamos el borrador que dejaste pendiente.
+              </Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Descartar borrador de MICA"
+                onPress={() => void handleDiscardDraft()}
+              >
+                <Text style={styles.discardDraftText}>Empezar de nuevo</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
         {mode === "buscar-servicio" && (
@@ -1870,7 +1975,10 @@ function MicaChat({ navigation, route }: Props) {
           activeOpacity={0.9}
           onPress={primaryAction.onPress}
           disabled={
-            isCreatingRequest || isRefreshingQuotes || Boolean(selectingQuoteId)
+            !draftHydrated ||
+            isCreatingRequest ||
+            isRefreshingQuotes ||
+            Boolean(selectingQuoteId)
           }
         >
           <LinearGradient
@@ -1879,7 +1987,8 @@ function MicaChat({ navigation, route }: Props) {
             end={{ x: 1, y: 1 }}
             style={[
               styles.primaryAction,
-              (isCreatingRequest ||
+              (!draftHydrated ||
+                isCreatingRequest ||
                 isRefreshingQuotes ||
                 Boolean(selectingQuoteId)) &&
                 styles.primaryActionDisabled,
@@ -2165,6 +2274,28 @@ const styles = StyleSheet.create({
   },
   checkTextDone: {
     color: "#20323a",
+  },
+  draftNotice: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 12,
+    paddingTop: 11,
+    borderTopWidth: 1,
+    borderTopColor: "#e0ebe8",
+  },
+  draftNoticeText: {
+    flex: 1,
+    minWidth: 150,
+    color: "#315e67",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  discardDraftText: {
+    color: "#8b4a38",
+    fontSize: 12,
+    fontWeight: "900",
   },
   searchFlowCard: {
     backgroundColor: "#ffffff",

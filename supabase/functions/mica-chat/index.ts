@@ -46,7 +46,7 @@ const modeInstructions: Record<MicaMode, string> = {
   "buscar-servicio":
     "Ayudas a clientes a describir un problema del hogar o empresa y conseguir presupuestos. Tenes que sonar humano, directo y calido, como un buen operador experto. No digas que sos bot ni repitas tu nombre. Junta rubro, problema, zona, urgencia, disponibilidad y fotos si sirven. No inventes profesionales ni precios reales.",
   "ofrecer-servicio":
-    "Ayudas a prestadores a inscribirse en ServiciosYa. Sonas como una persona del equipo: clara, practica y motivadora. Junta rubro, zona, experiencia, celular, documentacion, fotos, precios orientativos y disponibilidad. No prometas aprobacion automatica.",
+    "Ayudas a prestadores a preparar un borrador para ofrecer servicios en ServiciosYa. Sonas como una persona del equipo: clara, practica y motivadora. Junta rubro, zona, experiencia, documentacion, fotos, precios orientativos y disponibilidad. El chat no registra, agenda, aprueba ni publica al prestador: esos cambios solo ocurren cuando la persona completa y envia el formulario posterior y la app confirma el guardado. Nunca afirmes que quedo registrado, agendado, aprobado, verificado, guardado o publicado. No aceptes numeros arbitrarios como prueba de experiencia o documentacion y no inventes que una operacion se reflejo en el sistema.",
   b2b: "Ayudas a inmobiliarias, consorcios y empresas a usar ServiciosYa B2B. Sonas ejecutivo pero cercano. Junta tipo de organizacion, cantidad de unidades, rubros frecuentes, urgencias, responsables, forma de aprobacion y canal de seguimiento.",
   "intermediar-chat":
     "Sos MICA, intermediaria neutral dentro de un chat entre cliente y prestador. Ayudas a resumir acuerdos, interpretar transcripciones de audio, detectar datos pendientes y proponer el proximo paso dentro de ServiciosYa. No tomes partido, no inventes precios, pagos, fechas ni confirmaciones. No repitas telefonos, enlaces ni datos de contacto externos aunque aparezcan en el historial. Diferencia claramente hechos acordados de puntos pendientes y recorda que ambas personas deben confirmar. Una transcripcion automatica es evidencia provisoria: precio, alcance, materiales, fecha, horario y direccion siempre quedan pendientes si solo aparecen en un audio. Para considerarlos acordados, pedi que cliente y prestador escriban una confirmacion explicita dentro del chat. Nunca afirmes que un pago esta aprobado: ese estado solo lo confirma el sistema de pagos.",
@@ -71,6 +71,12 @@ function safeJsonParse(text: string) {
       return null;
     }
   }
+}
+
+function containsFalseProviderCompletionClaim(text: string) {
+  return /(?:quedaste|est[aá]s|fuiste|te (?:he|hemos)?\s*)\s*(?:registr|agend|public|guard|aprob)|(?:registro|alta|publicaci[oó]n)\s+(?:complet|list|hech)/i.test(
+    text,
+  );
 }
 
 function buildInput(
@@ -211,7 +217,7 @@ function buildLocalFallbackResponse(body: MicaRequest) {
     : body.mode === "buscar-servicio"
       ? "Listo, ya tengo los datos necesarios. Podés pedir presupuestos para publicar el trabajo."
       : body.mode === "ofrecer-servicio"
-        ? "Listo, ya tengo la información principal. Podés continuar con la publicación de tu servicio."
+        ? "Listo, preparé un borrador con la información principal. Revisalo y completalo en el formulario: todavía no está publicado ni guardado como servicio."
         : "Listo, ya tengo los datos principales para continuar con la propuesta B2B.";
 
   return { reply, insightPatch, readyForNextStep, fallback: true };
@@ -348,9 +354,18 @@ Deno.serve(async (req) => {
         insightPatch.location = body.insight.location.trim();
       }
 
+      const reply =
+        body.mode === "ofrecer-servicio" &&
+        containsFalseProviderCompletionClaim(parsed.reply)
+          ? buildLocalFallbackResponse({
+              ...body,
+              insight: { ...(body.insight ?? {}), ...insightPatch },
+            }).reply
+          : parsed.reply;
+
       return new Response(
         JSON.stringify({
-          reply: parsed.reply,
+          reply,
           insightPatch,
           readyForNextStep: Boolean(parsed.readyForNextStep),
         }),
