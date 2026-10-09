@@ -24,12 +24,14 @@ interface SideQuickAccessMenuProps {
   onPublicarNecesidadPress?: () => void;
   onBuscarServicioPress?: () => void;
   onOfrecerServicioPress?: () => void;
+  offerServiceMode?: "publish" | "register";
 }
 
 const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
   onPublicarNecesidadPress,
   onBuscarServicioPress,
   onOfrecerServicioPress,
+  offerServiceMode = "publish",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const progress = useRef(new Animated.Value(0)).current;
@@ -111,41 +113,58 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
 
   const items: QuickAccessItem[] = [
     ...(onPublicarNecesidadPress
-      ? [{
-          label: "Publicar necesidad",
-          subtitle: "Recibí propuestas de prestadores",
-          icon: "megaphone-outline" as const,
-          gradient: ["#25b5c5", "#07899d", "#056374"] as [string, string, string],
-          badge: "CLIENTE",
-          onPress: onPublicarNecesidadPress,
-        }]
+      ? [
+          {
+            label: "Publicar necesidad",
+            subtitle: "Recibí propuestas de prestadores",
+            icon: "megaphone-outline" as const,
+            gradient: ["#25b5c5", "#07899d", "#056374"] as [
+              string,
+              string,
+              string,
+            ],
+            badge: "CLIENTE",
+            onPress: onPublicarNecesidadPress,
+          },
+        ]
       : []),
     ...(onBuscarServicioPress
-      ? [{
-          label: "Buscar servicio",
-          subtitle: "Contale a MICA qué necesitás",
-          icon: "search-outline" as const,
-          gradient: ["#12c7dd", "#069eb3", "#047486"] as [
-            string,
-            string,
-            string,
-          ],
-          badge: "CLIENTE",
-          onPress: onBuscarServicioPress,
-        }]
+      ? [
+          {
+            label: "Buscar servicio",
+            subtitle: "Contale a MICA qué necesitás",
+            icon: "search-outline" as const,
+            gradient: ["#12c7dd", "#069eb3", "#047486"] as [
+              string,
+              string,
+              string,
+            ],
+            badge: "CLIENTE",
+            onPress: onBuscarServicioPress,
+          },
+        ]
       : []),
     ...(onOfrecerServicioPress
-      ? [{
-          label: "Publicar un servicio",
-          subtitle: "Mostrá tu trabajo a nuevos clientes",
-          icon: "briefcase-outline" as const,
-          gradient: ["#ffb04a", "#fe971a", "#d86f00"] as [
-            string,
-            string,
-            string,
-          ],
-          onPress: onOfrecerServicioPress,
-        }]
+      ? [
+          {
+            label:
+              offerServiceMode === "register"
+                ? "Quiero ofrecer servicios"
+                : "Publicar un servicio",
+            subtitle:
+              offerServiceMode === "register"
+                ? "Completá tu perfil de prestador"
+                : "Mostrá tu trabajo a nuevos clientes",
+            icon: "briefcase-outline" as const,
+            gradient: ["#ffb04a", "#fe971a", "#d86f00"] as [
+              string,
+              string,
+              string,
+            ],
+            badge: offerServiceMode === "register" ? "PRESTADOR" : undefined,
+            onPress: onOfrecerServicioPress,
+          },
+        ]
       : []),
   ];
 
@@ -219,132 +238,132 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
   });
 
   return (
-      <View
-        pointerEvents="box-none"
-        style={[styles.container, { height: 96 + items.length * 78 }]}
-      >
-        {isOpen &&
-          items.map((item, index) => {
-            const verticalOffset = -(84 + index * 78);
+    <View
+      pointerEvents="box-none"
+      style={[styles.container, { height: 96 + items.length * 78 }]}
+    >
+      {isOpen &&
+        items.map((item, index) => {
+          const verticalOffset = -(84 + index * 78);
 
-            const translateY = progress.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0, verticalOffset],
-            });
-            const scale = progress.interpolate({
-              inputRange: [0, 0.5, 1],
-              outputRange: [0.2, 0.85, 1],
-            });
-            const opacity = progress.interpolate({
-              inputRange: [0, 0.25 + index * 0.12, 1],
-              outputRange: [0, 0.4, 1],
-            });
+          const translateY = progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0, verticalOffset],
+          });
+          const scale = progress.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [0.2, 0.85, 1],
+          });
+          const opacity = progress.interpolate({
+            inputRange: [0, 0.25 + index * 0.12, 1],
+            outputRange: [0, 0.4, 1],
+          });
 
-            return (
-              <Animated.View
-                key={item.label}
-                style={[
-                  styles.menuItem,
-                  {
-                    opacity,
-                    transform: [{ translateY }, { scale }],
-                  },
-                ]}
-              >
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => handleItemPress(item.onPress)}
-                  style={styles.itemRow}
-                >
-                  <LinearGradient
-                    colors={item.gradient}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.itemCard}
-                  >
-                    <View style={styles.iconCircle}>
-                      <Ionicons name={item.icon} size={21} color="#fff" />
-                    </View>
-                    <View style={styles.itemCopy}>
-                      {item.badge && (
-                        <View style={styles.itemHeader}>
-                          <Text style={styles.badgeText}>{item.badge}</Text>
-                        </View>
-                      )}
-                      <Text style={styles.labelText} numberOfLines={1}>
-                        {item.label}
-                      </Text>
-                      <Text style={styles.subtitleText} numberOfLines={1}>
-                        {item.subtitle}
-                      </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={19} color="#fff" />
-                  </LinearGradient>
-                </TouchableOpacity>
-              </Animated.View>
-            );
-          })}
-
-        <Animated.View
-          style={[
-            styles.glowHalo,
-            {
-              opacity: Animated.multiply(glowOpacity, idleActive),
-              transform: [{ scale: glowScale }],
-            },
-          ]}
-          pointerEvents="none"
-        />
-
-        <Animated.View
-          style={[
-            styles.mainButtonWrapper,
-            { transform: [{ scale: Animated.multiply(pulse, breathScale) }] },
-          ]}
-        >
-          {!isOpen && (
+          return (
             <Animated.View
-              style={[styles.mainCallout, { opacity: idleActive }]}
-              pointerEvents="none"
+              key={item.label}
+              style={[
+                styles.menuItem,
+                {
+                  opacity,
+                  transform: [{ translateY }, { scale }],
+                },
+              ]}
             >
-              <Text style={styles.mainCalloutTitle}>MICA</Text>
-              <Text style={styles.mainCalloutText}>empezá acá</Text>
-            </Animated.View>
-          )}
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={toggleMenu}
-            style={styles.mainButtonTouch}
-          >
-            <LinearGradient
-              colors={["#1ed4e8", "#069eb3", "#045e6e"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.mainButton}
-            >
-              <Animated.View
-                style={{
-                  transform: [
-                    { rotate: rotateInterpolate },
-                    { rotate: wiggleRotate },
-                  ],
-                }}
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => handleItemPress(item.onPress)}
+                style={styles.itemRow}
               >
-                <Ionicons
-                  name={isOpen ? "close" : "chatbubble-ellipses"}
-                  size={29}
-                  color="#fff"
-                />
-              </Animated.View>
-              {!isOpen && (
-                <View style={styles.spark}>
-                  <Ionicons name="sparkles" size={12} color="#ffffff" />
-                </View>
-              )}
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
+                <LinearGradient
+                  colors={item.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.itemCard}
+                >
+                  <View style={styles.iconCircle}>
+                    <Ionicons name={item.icon} size={21} color="#fff" />
+                  </View>
+                  <View style={styles.itemCopy}>
+                    {item.badge && (
+                      <View style={styles.itemHeader}>
+                        <Text style={styles.badgeText}>{item.badge}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.labelText} numberOfLines={1}>
+                      {item.label}
+                    </Text>
+                    <Text style={styles.subtitleText} numberOfLines={1}>
+                      {item.subtitle}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={19} color="#fff" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </Animated.View>
+          );
+        })}
+
+      <Animated.View
+        style={[
+          styles.glowHalo,
+          {
+            opacity: Animated.multiply(glowOpacity, idleActive),
+            transform: [{ scale: glowScale }],
+          },
+        ]}
+        pointerEvents="none"
+      />
+
+      <Animated.View
+        style={[
+          styles.mainButtonWrapper,
+          { transform: [{ scale: Animated.multiply(pulse, breathScale) }] },
+        ]}
+      >
+        {!isOpen && (
+          <Animated.View
+            style={[styles.mainCallout, { opacity: idleActive }]}
+            pointerEvents="none"
+          >
+            <Text style={styles.mainCalloutTitle}>MICA</Text>
+            <Text style={styles.mainCalloutText}>empezá acá</Text>
+          </Animated.View>
+        )}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={toggleMenu}
+          style={styles.mainButtonTouch}
+        >
+          <LinearGradient
+            colors={["#1ed4e8", "#069eb3", "#045e6e"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.mainButton}
+          >
+            <Animated.View
+              style={{
+                transform: [
+                  { rotate: rotateInterpolate },
+                  { rotate: wiggleRotate },
+                ],
+              }}
+            >
+              <Ionicons
+                name={isOpen ? "close" : "chatbubble-ellipses"}
+                size={29}
+                color="#fff"
+              />
+            </Animated.View>
+            {!isOpen && (
+              <View style={styles.spark}>
+                <Ionicons name="sparkles" size={12} color="#ffffff" />
+              </View>
+            )}
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
   );
 };
 

@@ -1,6 +1,8 @@
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Application from "expo-application";
+import Constants from "expo-constants";
 import React, { useState } from "react";
 import {
   Alert,
@@ -34,6 +36,10 @@ function Configuracion({ navigation }: Props) {
   const { present, dismiss, modalProps } = useBottomSheetModal({
     snapPoints: ["90%"],
   });
+  const appVersion = Constants.expoConfig?.version ?? "desconocida";
+  const buildVersion =
+    Application.nativeBuildVersion ??
+    String(Constants.expoConfig?.android?.versionCode ?? "desconocida");
 
   const validarContrasena = (password: string) => {
     const minLength = 12;
@@ -401,6 +407,9 @@ function Configuracion({ navigation }: Props) {
                   <Text style={styles.buttonText}>Eliminar Cuenta</Text>
                 </TouchableOpacity>
               </View>
+              <Text style={styles.versionText}>
+                Servicios Ya v{appVersion} · build {buildVersion}
+              </Text>
             </View>
           </View>
           <BottomSheetModal {...modalProps}>
@@ -524,5 +533,12 @@ const styles = StyleSheet.create({
   },
   icon: {
     marginRight: 6,
+  },
+  versionText: {
+    marginBottom: 12,
+    color: "#71868a",
+    fontSize: 12,
+    fontWeight: "700",
+    textAlign: "center",
   },
 });

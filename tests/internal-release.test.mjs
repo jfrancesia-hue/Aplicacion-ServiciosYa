@@ -30,6 +30,7 @@ const internalBetaGuide = fs.readFileSync(
   "docs/GOOGLE_PLAY_INTERNAL_BETA.md",
   "utf8",
 );
+const settingsScreen = fs.readFileSync("screens/Configuracion.tsx", "utf8");
 
 test("la prueba interna genera un AAB y apunta al track internal", () => {
   assert.equal(eas.build.internal.distribution, "store");
@@ -58,10 +59,11 @@ test("la build interna exige una selección explícita del entorno de datos", ()
   );
 });
 
-test("la próxima compilación usa una versión posterior a la build 96 existente", () => {
-  assert.equal(app.expo.version, "98.0.0");
-  assert.equal(app.expo.android.versionCode, 98);
-  assert.equal(app.expo.ios.buildNumber, "98");
+test("la próxima compilación usa la build 99", () => {
+  assert.equal(app.expo.version, "99.0.0");
+  assert.equal(app.expo.android.versionCode, 99);
+  assert.equal(app.expo.ios.buildNumber, "99");
+  assert.match(settingsScreen, /Servicios Ya v\{appVersion\} · build \{buildVersion\}/);
 });
 
 test("la guía interna usa el perfil correcto y aísla las pruebas QA", () => {

@@ -42,7 +42,10 @@ import {
   type MicaDraftMessage,
 } from "../lib/micaDraft";
 import { supabase } from "../lib/supabase";
-import { inferMicaSearchTiming } from "../lib/utils/micaConversation";
+import {
+  guardUnpersistedMicaReply,
+  inferMicaSearchTiming,
+} from "../lib/utils/micaConversation";
 import {
   type MicaRequestLocationStatus,
   asksForKnownLocation,
@@ -934,8 +937,8 @@ function MicaChat({ navigation, route }: Props) {
       }
 
       if (mode === "buscar-servicio" && route.params.offerId) {
-        if (isMounted) setDraftHydrated(true);
         await refreshOrderStatus(route.params.offerId, false, true);
+        if (isMounted) setDraftHydrated(true);
         return;
       }
 
@@ -953,9 +956,13 @@ function MicaChat({ navigation, route }: Props) {
       }
 
       setDraftHydrated(true);
-      if (mode === "buscar-servicio") {
-        await refreshOrderStatus(null, false, true);
-      }
+      setInsight({});
+      setMessages(createInitialMessages(mode));
+      setSearchStage("intake");
+      setActiveOrder(null);
+      setCreatedOfertaId(null);
+      setRealQuotes([]);
+      setSelectedQuoteId(null);
     };
 
     void hydrate().catch((error) => {
@@ -1341,7 +1348,13 @@ function MicaChat({ navigation, route }: Props) {
         fallbackProvince: confirmedFallback?.province,
       });
       const knownLocation = apiLocationStatus.label || undefined;
-      const apiReply = repairSpanishMojibake(apiAnswer.reply ?? "");
+      const apiReply =
+        mode === "buscar-servicio"
+          ? guardUnpersistedMicaReply(
+              repairSpanishMojibake(apiAnswer.reply ?? ""),
+              Boolean(createdOfertaId),
+            )
+          : repairSpanishMojibake(apiAnswer.reply ?? "");
       const reply =
         mode === "buscar-servicio" && !apiLocationStatus.isComplete
           ? buildReply(
@@ -1428,27 +1441,41 @@ function MicaChat({ navigation, route }: Props) {
           </View>
         </View>
         {mode === "buscar-servicio" ? (
-          <TouchableOpacity
-            style={styles.locationControl}
-            activeOpacity={0.82}
-            accessibilityRole="button"
-            accessibilityLabel="Cambiar ubicación del pedido"
-            onPress={() => locationSheetRef.current?.present()}
-          >
-            <Ionicons name="location-outline" size={16} color="#ffffff" />
-            <Text style={styles.locationControlText} numberOfLines={1}>
-              {locationStatus.label ||
-                (approximateIpLocation
-                  ? `Aprox. ${approximateIpLocation} (sin confirmar)`
-                  : null) ||
-                (locationIsLoading
-                  ? "Detectando tu ubicación"
-                  : "Confirmá la ubicación exacta")}
-            </Text>
-            <Text style={styles.locationControlAction}>
-              {locationStatus.isComplete ? "Cambiar" : "Confirmar"}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.searchHeaderActions}>
+            <TouchableOpacity
+              style={styles.locationControl}
+              activeOpacity={0.82}
+              accessibilityRole="button"
+              accessibilityLabel="Cambiar ubicación del pedido"
+              onPress={() => locationSheetRef.current?.present()}
+            >
+              <Ionicons name="location-outline" size={16} color="#ffffff" />
+              <Text style={styles.locationControlText} numberOfLines={1}>
+                {locationStatus.label ||
+                  (approximateIpLocation
+                    ? `Aprox. ${approximateIpLocation} (sin confirmar)`
+                    : null) ||
+                  (locationIsLoading
+                    ? "Detectando tu ubicación"
+                    : "Confirmá la ubicación exacta")}
+              </Text>
+              <Text style={styles.locationControlAction}>
+                {locationStatus.isComplete ? "Cambiar" : "Confirmar"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.requestsShortcut}
+              activeOpacity={0.82}
+              accessibilityRole="button"
+              accessibilityLabel="Ver mis búsquedas y pedidos guardados"
+              onPress={() =>
+                navigation.navigate("PublicarNecesidad", { view: "history" })
+              }
+            >
+              <Ionicons name="documents-outline" size={17} color="#ffffff" />
+              <Text style={styles.requestsShortcutText}>Mis búsquedas</Text>
+            </TouchableOpacity>
+          </View>
         ) : null}
       </LinearGradient>
 
@@ -2068,6 +2095,10 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     paddingHorizontal: 16,
   },
+  searchHeaderActions: {
+    alignItems: "center",
+    gap: 8,
+  },
   locationControl: {
     alignSelf: "center",
     maxWidth: "100%",
@@ -2081,6 +2112,22 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.16)",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.28)",
+  },
+  requestsShortcut: {
+    minHeight: 34,
+    borderRadius: 17,
+    paddingHorizontal: 13,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.32)",
+  },
+  requestsShortcutText: {
+    color: "#ffffff",
+    fontSize: 12,
+    fontWeight: "900",
   },
   locationControlText: {
     flexShrink: 1,
