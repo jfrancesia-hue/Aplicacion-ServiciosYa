@@ -1,9 +1,5 @@
 import { useIsFocused } from "@react-navigation/native";
-import React, {
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -57,6 +53,8 @@ function Home({ navigation, route }: Props) {
     refetchProfile,
   } = useHomeData();
   const isWorker = rol === "worker";
+  const canPublishService = isWorker || rol === "admin";
+  const canBecomeProvider = !isGuest && rol === "user";
   const isFocused = useIsFocused();
   const { setHomeVisible, setHomeDataReady } = useHomeEventsStore();
 
@@ -98,7 +96,9 @@ function Home({ navigation, route }: Props) {
   if (!isGuest && profileIsError) {
     return (
       <View style={styles.profileState}>
-        <Text style={styles.profileStateTitle}>No pudimos cargar tu perfil</Text>
+        <Text style={styles.profileStateTitle}>
+          No pudimos cargar tu perfil
+        </Text>
         <Text style={styles.profileStateText}>
           {profileError instanceof Error
             ? profileError.message
@@ -182,8 +182,13 @@ function Home({ navigation, route }: Props) {
             !isWorker ? () => handleMicaModePress("buscar-servicio") : undefined
           }
           onOfrecerServicioPress={
-            isWorker ? () => navigation.navigate("OfrecerServicio") : undefined
+            canPublishService
+              ? () => navigation.navigate("OfrecerServicio")
+              : canBecomeProvider
+                ? () => navigation.navigate("RegistroTrabajador")
+                : undefined
           }
+          offerServiceMode={canBecomeProvider ? "register" : "publish"}
         />
       </View>
 
