@@ -8,7 +8,7 @@
       "android",
       "web"
     ],
-    "version": "98.0.0",
+    "version": "99.0.0",
     "orientation": "portrait",
     "icon": "./assets/serviciosya-logo-2026.png",
     "userInterfaceStyle": "light",
@@ -30,7 +30,7 @@
       "reactCompiler": true
     },
     "ios": {
-      "buildNumber": "98",
+      "buildNumber": "99",
       "associatedDomains": [
         "applinks:serviciosya.site"
       ],
@@ -53,7 +53,7 @@
       "appleTeamId": "HHY5MJ22J3"
     },
     "android": {
-      "versionCode": 98,
+      "versionCode": 99,
       "adaptiveIcon": {
         "foregroundImage": "./assets/serviciosya-logo-2026.png",
         "backgroundColor": "#20231f"

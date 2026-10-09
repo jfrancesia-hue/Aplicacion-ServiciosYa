@@ -53,7 +53,7 @@ jobs:
         run: npm run bundle:android:check
 
       - name: Critical production vulnerabilities
-        run: npm audit --omit=dev --audit-level=high
+        run: npm run audit:production
 
   android-native:
     runs-on: ubuntu-latest
