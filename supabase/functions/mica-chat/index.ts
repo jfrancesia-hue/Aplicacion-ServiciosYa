@@ -44,7 +44,7 @@ const jsonHeaders = {
 
 const modeInstructions: Record<MicaMode, string> = {
   "buscar-servicio":
-    "Ayudas a clientes a describir un problema del hogar o empresa y conseguir presupuestos. Tenes que sonar humano, directo y calido, como un buen operador experto. No digas que sos bot ni repitas tu nombre. Junta rubro, problema, zona, urgencia, disponibilidad y fotos si sirven. No inventes profesionales ni precios reales.",
+    "Ayudas a clientes a describir un problema del hogar o empresa y conseguir presupuestos. Tenes que sonar humano, directo y calido, como un buen operador experto. No digas que sos bot ni repitas tu nombre. Junta rubro, problema, zona, urgencia, disponibilidad y fotos si sirven. No inventes profesionales ni precios reales. Este chat solamente prepara los datos: nunca registra, guarda, crea, publica ni envia un pedido. Eso ocurre unicamente cuando la persona toca el boton Pedir presupuestos y la app devuelve un numero de seguimiento. Nunca afirmes que el pedido ya quedo registrado, guardado, publicado o enviado, ni que pronto lo contactaran.",
   "ofrecer-servicio":
     "Ayudas a prestadores a preparar un borrador para ofrecer servicios en ServiciosYa. Sonas como una persona del equipo: clara, practica y motivadora. Junta rubro, zona, experiencia, documentacion, fotos, precios orientativos y disponibilidad. El chat no registra, agenda, aprueba ni publica al prestador: esos cambios solo ocurren cuando la persona completa y envia el formulario posterior y la app confirma el guardado. Nunca afirmes que quedo registrado, agendado, aprobado, verificado, guardado o publicado. No aceptes numeros arbitrarios como prueba de experiencia o documentacion y no inventes que una operacion se reflejo en el sistema.",
   b2b: "Ayudas a inmobiliarias, consorcios y empresas a usar ServiciosYa B2B. Sonas ejecutivo pero cercano. Junta tipo de organizacion, cantidad de unidades, rubros frecuentes, urgencias, responsables, forma de aprobacion y canal de seguimiento.",
@@ -77,6 +77,19 @@ function containsFalseProviderCompletionClaim(text: string) {
   return /(?:quedaste|est[aá]s|fuiste|te (?:he|hemos)?\s*)\s*(?:registr|agend|public|guard|aprob)|(?:registro|alta|publicaci[oó]n)\s+(?:complet|list|hech)/i.test(
     text,
   );
+}
+
+function containsFalseRequestCompletionClaim(text: string) {
+  const normalized = text
+    .normalize("NFD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase();
+  return [
+    /(?:ya\s+)?quedo\s+(?:todo\s+)?registrad/,
+    /(?:ya\s+)?(?:registre|registramos|guardamos|publique|publicamos|envie|enviamos)\s+(?:tu|el)\s+(?:pedido|solicitud|trabajo)/,
+    /(?:tu|el)\s+(?:pedido|solicitud|trabajo)\s+(?:ya\s+)?(?:quedo|esta|fue)\s+(?:registrad|guardad|publicad|enviad|cread)/,
+    /(?:en breve|pronto)\s+te\s+(?:van a contactar|contactaran)/,
+  ].some((pattern) => pattern.test(normalized));
 }
 
 function buildInput(
@@ -354,14 +367,17 @@ Deno.serve(async (req) => {
         insightPatch.location = body.insight.location.trim();
       }
 
-      const reply =
-        body.mode === "ofrecer-servicio" &&
-        containsFalseProviderCompletionClaim(parsed.reply)
-          ? buildLocalFallbackResponse({
-              ...body,
-              insight: { ...(body.insight ?? {}), ...insightPatch },
-            }).reply
-          : parsed.reply;
+      const mustUseSafeFallback =
+        (body.mode === "ofrecer-servicio" &&
+          containsFalseProviderCompletionClaim(parsed.reply)) ||
+        (body.mode === "buscar-servicio" &&
+          containsFalseRequestCompletionClaim(parsed.reply));
+      const reply = mustUseSafeFallback
+        ? buildLocalFallbackResponse({
+            ...body,
+            insight: { ...(body.insight ?? {}), ...insightPatch },
+          }).reply
+        : parsed.reply;
 
       return new Response(
         JSON.stringify({

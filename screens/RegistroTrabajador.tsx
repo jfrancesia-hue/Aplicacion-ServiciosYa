@@ -24,6 +24,8 @@ import {
 } from "react-native";
 import { recordCurrentLegalAcceptance } from "../lib/legal/acceptance";
 import { VERIFICATION_DOCUMENTS_BUCKET } from "../lib/legal/verificationDocuments";
+import { perfilQueryKey } from "../lib/queryOptions";
+import queryClient from "../lib/reactQuery";
 import { supabase } from "../lib/supabase";
 import { syncPrestadorConServiciosYa } from "../lib/serviciosYaApi";
 import LocationInput from "../components/location/LocationInput";
@@ -377,10 +379,25 @@ function RegistroTrabajadorSimplificado() {
         documentos_cargados: matriculaUrls.length > 0,
       });
 
+      queryClient.setQueryData(perfilQueryKey, (currentProfile) =>
+        currentProfile
+          ? {
+              ...currentProfile,
+              ...updateData,
+            }
+          : currentProfile,
+      );
+
       Alert.alert(
         "Perfil publicado",
         "Ya podés recibir consultas. Completá tus datos opcionales cuando quieras para sumar confianza.",
-        [{ text: "OK", onPress: () => navigation.navigate("Home") }],
+        [
+          {
+            text: "OK",
+            onPress: () =>
+              navigation.reset({ index: 0, routes: [{ name: "Home" }] }),
+          },
+        ],
       );
     } catch (err) {
       Alert.alert("Error", "Ocurrió un error al registrar tus datos.");
