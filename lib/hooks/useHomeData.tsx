@@ -4,15 +4,14 @@ import { Alert, BackHandler } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  perfilQueryOptions,
-  servicesCountQuerKey,
-} from "../queryOptions";
+import { perfilQueryOptions, servicesCountQuerKey } from "../queryOptions";
 import queryClient from "../reactQuery";
 import { getProviderProfileCompleteness } from "../utils/providerProfile";
+import { hasProviderCapability } from "../utils/user";
 
 interface UserData {
   rol: string;
+  provider_enabled: boolean;
   perfilCompleto: boolean;
   notificacionesNoLeidas: number;
   foto_perfil: string | null;
@@ -30,9 +29,10 @@ export const useHomeData = () => {
     error: profileError,
     refetch: refetchProfile,
   } = useQuery(perfilQueryOptions);
+  const isProvider = hasProviderCapability(userData);
   const profileCompleteness = getProviderProfileCompleteness(userData);
   const askProviderProfileCompletion =
-    userData?.rol === "worker" && profileCompleteness.score < 100;
+    isProvider && profileCompleteness.score < 100;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -64,15 +64,14 @@ export const useHomeData = () => {
       perfil_completo = perfil_completo ?? false;
       dni_verificado = dni_verificado ?? false;
 
-      setAskDniVerification(
-        userData.rol === "worker" && perfil_completo && !dni_verificado,
-      );
+      setAskDniVerification(isProvider && perfil_completo && !dni_verificado);
       setAskProfileCompletion(!perfil_completo);
     }
-  }, [userData]);
+  }, [isProvider, userData]);
 
   return {
     ...userData,
+    isProvider,
     askDniVerification,
     askProfileCompletion,
     askProviderProfileCompletion,

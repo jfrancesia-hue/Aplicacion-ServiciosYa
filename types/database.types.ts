@@ -4881,6 +4881,7 @@ export type Database = {
           nombre: string | null
           perfil_publico: boolean
           precio: string | null
+          provider_enabled: boolean
           provincia: string | null
           rol: Database["public"]["Enums"]["user_role"]
           suscriptor: boolean | null
@@ -4904,6 +4905,7 @@ export type Database = {
           nombre?: string | null
           perfil_publico?: boolean
           precio?: string | null
+          provider_enabled?: boolean
           provincia?: string | null
           rol?: Database["public"]["Enums"]["user_role"]
           suscriptor?: boolean | null
@@ -4927,6 +4929,7 @@ export type Database = {
           nombre?: string | null
           perfil_publico?: boolean
           precio?: string | null
+          provider_enabled?: boolean
           provincia?: string | null
           rol?: Database["public"]["Enums"]["user_role"]
           suscriptor?: boolean | null
@@ -5029,6 +5032,7 @@ export type Database = {
           perfil_completo: boolean
           perfilPublico: boolean
           precio: string | null
+          provider_enabled: boolean
           provincia: string | null
           ranking: Json | null
           referencias: string | null
@@ -5086,6 +5090,7 @@ export type Database = {
           perfil_completo?: boolean
           perfilPublico?: boolean
           precio?: string | null
+          provider_enabled?: boolean
           provincia?: string | null
           ranking?: Json | null
           referencias?: string | null
@@ -5143,6 +5148,7 @@ export type Database = {
           perfil_completo?: boolean
           perfilPublico?: boolean
           precio?: string | null
+          provider_enabled?: boolean
           provincia?: string | null
           ranking?: Json | null
           referencias?: string | null

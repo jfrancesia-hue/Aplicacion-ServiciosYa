@@ -20,6 +20,7 @@ type UserRow = {
   provincia: string | null;
   barrio: string | null;
   rol: string | null;
+  provider_enabled: boolean | null;
   categoria: string[] | string | null;
   horarios: string | null;
   celular: string | number | null;
@@ -402,7 +403,7 @@ async function loadData(admin: ReturnType<typeof createClient>) {
     fetchAll<UserRow>(
       admin,
       "usuarios",
-      "id,nombre,apellido,edad,foto_perfil,ciudad,provincia,barrio,rol,categoria,horarios,celular,matricula,verificado,suscriptor,antiguedad,perfilPublico",
+      "id,nombre,apellido,edad,foto_perfil,ciudad,provincia,barrio,rol,provider_enabled,categoria,horarios,celular,matricula,verificado,suscriptor,antiguedad,perfilPublico",
     ),
     fetchAll<ServiceRow>(
       admin,
@@ -592,7 +593,8 @@ function buildProviders(data: CachedData) {
     const campaignProfiles = campaignByUser.get(user.id) ?? [];
     const currentCategories = parseCategories(user.categoria);
     const isCurrentPublicProvider =
-      normalizeText(user.rol) === "worker" &&
+      (user.provider_enabled === true ||
+        normalizeText(user.rol) === "worker") &&
       user.perfilPublico === true &&
       currentCategories.length > 0;
     if (
@@ -683,7 +685,8 @@ function buildProviders(data: CachedData) {
         ? pointCoordinates(workerState?.location ?? null)
         : null;
     const legacy =
-      normalizeText(draft.user.rol) !== "worker" ||
+      (draft.user.provider_enabled !== true &&
+        normalizeText(draft.user.rol) !== "worker") ||
       draft.user.perfilPublico !== true ||
       parseCategories(draft.user.categoria).length === 0;
     const trust = trustByUser.get(draft.id);
@@ -760,7 +763,8 @@ function providerMatchesLocation(
   // city/location text when the province field is genuinely empty.
   const providerProvince = explicitProvince
     ? resolveProvince(explicitProvince)
-    : resolveProvince(provider.ciudad) || resolveProvince(provider.locationText);
+    : resolveProvince(provider.ciudad) ||
+      resolveProvince(provider.locationText);
   const targetProvince =
     resolveProvince(target.province) ||
     resolveProvince(target.city) ||
@@ -817,7 +821,10 @@ function pointCoordinates(value: WorkerStateRow["location"]) {
 }
 
 function providerDistanceKm(
-  provider: { locationLatitude?: number | null; locationLongitude?: number | null },
+  provider: {
+    locationLatitude?: number | null;
+    locationLongitude?: number | null;
+  },
   target: LocationInput,
 ) {
   if (
@@ -970,8 +977,11 @@ Deno.serve(async (req) => {
       })
       .slice(0, 300);
     const matchingProviders = matchingProvidersWithLocation.map(
-      ({ locationLatitude: _latitude, locationLongitude: _longitude, ...provider }) =>
-        provider,
+      ({
+        locationLatitude: _latitude,
+        locationLongitude: _longitude,
+        ...provider
+      }) => provider,
     );
 
     return json({

@@ -24,6 +24,7 @@ import {
   perfilQueryOptions,
 } from "../lib/queryOptions";
 import { supabase } from "../lib/supabase";
+import { hasProviderCapability } from "../lib/utils/user";
 
 const normalizeServiceState = (value) =>
   String(value ?? "activo")
@@ -46,7 +47,7 @@ export default function MisServicios() {
   } = useQuery(perfilQueryOptions);
 
   useEffect(() => {
-    if (!profileLoading && profile && profile.rol !== "worker") {
+    if (!profileLoading && profile && !hasProviderCapability(profile)) {
       Alert.alert(
         "Acceso para prestadores",
         "Esta sección contiene únicamente las publicaciones del prestador.",
@@ -85,7 +86,9 @@ export default function MisServicios() {
   const toggleEstadoMutation = useMutation({
     mutationFn: async ({ id, estadoActual }) => {
       const nuevoEstado =
-        normalizeServiceState(estadoActual) === "pausado" ? "activo" : "pausado";
+        normalizeServiceState(estadoActual) === "pausado"
+          ? "activo"
+          : "pausado";
       const { error } = await supabase
         .from("servicios")
         .update({ estado: nuevoEstado })
@@ -266,7 +269,9 @@ export default function MisServicios() {
   }
 
   if (profileLoading) {
-    return <ActivityIndicator style={{ flex: 1 }} color="#069eb3" size="large" />;
+    return (
+      <ActivityIndicator style={{ flex: 1 }} color="#069eb3" size="large" />
+    );
   }
 
   if (profileIsError) {
@@ -283,7 +288,7 @@ export default function MisServicios() {
     );
   }
 
-  if (profile?.rol !== "worker") return null;
+  if (!hasProviderCapability(profile)) return null;
 
   return (
     <GestureHandlerRootView style={styles.container}>

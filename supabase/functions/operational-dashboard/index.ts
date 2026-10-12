@@ -266,7 +266,11 @@ async function buildSummary(
       .from("service_job_reviews")
       .select("id", { count: "exact", head: true })
       .gte("created_at", periodStart),
-    admin.from("usuarios").select("provincia").eq("rol", "worker").limit(5000),
+    admin
+      .from("usuarios")
+      .select("provincia")
+      .eq("provider_enabled", true)
+      .limit(5000),
     admin
       .from("provider_trust_summary")
       .select(
@@ -790,9 +794,7 @@ async function getNotificationHealth(admin: ReturnType<typeof createClient>) {
   };
 }
 
-async function getCancellationRequests(
-  admin: ReturnType<typeof createClient>,
-) {
+async function getCancellationRequests(admin: ReturnType<typeof createClient>) {
   const { data, error } = await admin
     .from("service_cancellation_requests")
     .select(
@@ -880,8 +882,13 @@ async function resolveCancellation(
 ) {
   const cleanRequestId = String(requestId ?? "").trim();
   const cleanDecision = String(decision ?? "").trim();
-  const cleanNote = String(resolutionNote ?? "").trim().slice(0, 800);
-  if (!isUuid(cleanRequestId) || !["refund", "reject"].includes(cleanDecision)) {
+  const cleanNote = String(resolutionNote ?? "")
+    .trim()
+    .slice(0, 800);
+  if (
+    !isUuid(cleanRequestId) ||
+    !["refund", "reject"].includes(cleanDecision)
+  ) {
     return json({ error: "Resolución de cancelación inválida." }, 400);
   }
 
@@ -947,7 +954,9 @@ async function resolveCancellation(
         String(providerPayment?.status ?? "") !== "refunded"
       ) {
         throw new Error(
-          String(providerRefund?.message ?? "Mercado Pago rechazó el reintegro."),
+          String(
+            providerRefund?.message ?? "Mercado Pago rechazó el reintegro.",
+          ),
         );
       }
       const refunds = Array.isArray(providerPayment?.refunds)

@@ -23,6 +23,7 @@ import { useSuspenseProfile } from "../lib/hooks/useUser";
 import { removeCredentials } from "../lib/storage";
 import { supabase } from "../lib/supabase";
 import type { MainStackParamList } from "../types/navigation";
+import { hasProviderCapability } from "../lib/utils/user";
 
 type Props = NativeStackScreenProps<MainStackParamList, "Configuracion">;
 
@@ -32,7 +33,9 @@ function Configuracion({ navigation }: Props) {
   const [passwordValid, setPasswordValid] = useState(true);
   const [passwordMatch, setPasswordMatch] = useState(true);
   const [enablingNotifications, setEnablingNotifications] = useState(false);
-  const { rol } = useSuspenseProfile();
+  const profile = useSuspenseProfile();
+  const { rol } = profile;
+  const isProvider = hasProviderCapability(profile);
   const { present, dismiss, modalProps } = useBottomSheetModal({
     snapPoints: ["90%"],
   });
@@ -174,13 +177,14 @@ function Configuracion({ navigation }: Props) {
           <View style={styles.container}>
             <Text style={styles.title}>Configuración</Text>
 
-            {/* Mostrar el rol */}
+            {/* Mostrar capacidades de la cuenta, no el rol tecnico legado. */}
             {rol && (
-              <View style={{ marginBottom: 20 }}>
-                <Text
-                  style={{ fontWeight: "700", fontSize: 16, color: "#555" }}
-                >
-                  Rol: <Text style={{ color: "#19D4C6" }}>{rol}</Text>
+              <View style={styles.accountSummary}>
+                <Text style={styles.accountSummaryTitle}>Tu cuenta</Text>
+                <Text style={styles.accountSummaryText}>
+                  {isProvider
+                    ? "Podés solicitar trabajos y ofrecer servicios."
+                    : "Podés buscar y publicar trabajos. Si querés, también podés activar tu perfil de prestador."}
                 </Text>
               </View>
             )}
@@ -277,7 +281,9 @@ function Configuracion({ navigation }: Props) {
                 <View style={styles.section}>
                   <Text style={styles.optionText}>Notificaciones</Text>
                   <Text style={styles.optionDescription}>
-                    {"Android te pedir\u00e1 permiso solamente cuando toques este bot\u00f3n."}
+                    {
+                      "Android te pedir\u00e1 permiso solamente cuando toques este bot\u00f3n."
+                    }
                   </Text>
                   <TouchableOpacity
                     style={styles.buttonTurquoise}
@@ -296,19 +302,35 @@ function Configuracion({ navigation }: Props) {
               {/* Soporte dentro de la app */}
               <View style={styles.section}>
                 <Text style={styles.optionText}>¿Necesitás ayuda?</Text>
+                <Text style={styles.optionDescription}>
+                  Elegí qué querés resolver con MICA.
+                </Text>
                 <TouchableOpacity
                   style={styles.buttonTurquoise}
                   onPress={() =>
                     navigation.navigate("MicaChat", {
-                      mode:
-                        rol === "worker"
-                          ? "ofrecer-servicio"
-                          : "buscar-servicio",
+                      mode: "buscar-servicio",
                     })
                   }
                 >
-                  <Text style={styles.buttonText}>Abrir MICA</Text>
+                  <Text style={styles.buttonText}>
+                    Buscar o publicar un trabajo
+                  </Text>
                 </TouchableOpacity>
+                {isProvider && (
+                  <TouchableOpacity
+                    style={styles.buttonProvider}
+                    onPress={() =>
+                      navigation.navigate("MicaChat", {
+                        mode: "ofrecer-servicio",
+                      })
+                    }
+                  >
+                    <Text style={styles.buttonText}>
+                      Gestionar mi oferta con MICA
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {rol !== "guest" && <BlockedUsersSection />}
@@ -451,6 +473,25 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: 34,
   },
+  accountSummary: {
+    marginBottom: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#cfe7eb",
+    backgroundColor: "#f0fafa",
+    padding: 16,
+  },
+  accountSummaryTitle: {
+    color: "#047a8f",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 5,
+  },
+  accountSummaryText: {
+    color: "#52666a",
+    fontSize: 13,
+    lineHeight: 19,
+  },
   optionText: {
     fontSize: 17,
     fontWeight: "700",
@@ -508,6 +549,18 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     elevation: 3,
     shadowColor: "#047a8f",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 7,
+  },
+  buttonProvider: {
+    backgroundColor: "#e98212",
+    paddingVertical: 14,
+    borderRadius: 24,
+    alignItems: "center",
+    marginBottom: 10,
+    elevation: 3,
+    shadowColor: "#b96810",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 7,

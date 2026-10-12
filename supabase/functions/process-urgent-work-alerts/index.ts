@@ -161,7 +161,7 @@ async function createReplacement(
     supabase
       .from("usuarios")
       .select("id,nombre,categoria,expo_token,ciudad,provincia")
-      .eq("rol", "worker")
+      .eq("provider_enabled", true)
       .eq("perfilPublico", true)
       .limit(100),
   ]);

@@ -1,11 +1,6 @@
 import type React from "react";
 import { memo, useContext } from "react";
-import {
-  View,
-  StyleSheet,
-  Pressable,
-  Text,
-} from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -15,33 +10,39 @@ import { AuthContext } from "../../lib/context/AppContext";
 
 interface NavButtonProps {
   name: React.ComponentProps<typeof Ionicons>["name"];
+  label: string;
 }
 
 function NavButton({
   name,
+  label,
   ...linkProps
 }: NavButtonProps & LinkProps<MainStackParamList>) {
   const props = useLinkProps(linkProps);
   return (
     <Pressable
       {...props}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => [
-        {
-          backgroundColor: pressed ? "rgba(255,255,255,0.2)" : "transparent",
-          borderRadius: 20,
-          padding: 8,
-          marginHorizontal: 2,
-          transform: [{ scale: pressed ? 0.95 : 1 }],
-        },
+        styles.navButton,
+        pressed
+          ? {
+              backgroundColor: "rgba(255,255,255,0.2)",
+              transform: [{ scale: 0.95 }],
+            }
+          : null,
       ]}
     >
-      <Ionicons name={name} size={30} color="#fff" />
+      <Ionicons name={name} size={24} color="#fff" />
+      <Text style={styles.navLabel}>{label}</Text>
     </Pressable>
   );
 }
 
 function BadgeNavButton({
   name,
+  label,
   badgeCount = 0,
   ...linkProps
 }: NavButtonProps & LinkProps<MainStackParamList> & { badgeCount?: number }) {
@@ -49,17 +50,20 @@ function BadgeNavButton({
   return (
     <Pressable
       {...props}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={({ pressed }) => [
-        {
-          backgroundColor: pressed ? "rgba(255,255,255,0.2)" : "transparent",
-          borderRadius: 20,
-          padding: 8,
-          marginHorizontal: 2,
-          transform: [{ scale: pressed ? 0.95 : 1 }],
-        },
+        styles.navButton,
+        pressed
+          ? {
+              backgroundColor: "rgba(255,255,255,0.2)",
+              transform: [{ scale: 0.95 }],
+            }
+          : null,
       ]}
     >
-      <Ionicons name={name} size={30} color="#fff" />
+      <Ionicons name={name} size={24} color="#fff" />
+      <Text style={styles.navLabel}>{label}</Text>
       {badgeCount > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>
@@ -91,17 +95,32 @@ const BottomNavBar = ({
       end={{ x: 1, y: 0 }}
       style={[styles.navContainer, { paddingBottom: insets.bottom }]}
     >
-      <NavButton name="home-outline" screen="Home" />
-      {isWorker ? <NavButton name="list-outline" screen="MisServicios" /> : null}
-      <NavButton name="calendar-outline" screen="TrabajosPendientes" />
+      <NavButton name="home-outline" label="Inicio" screen="Home" />
+      {isWorker ? (
+        <NavButton
+          name="list-outline"
+          label="Servicios"
+          screen="MisServicios"
+        />
+      ) : null}
+      <NavButton
+        name="calendar-outline"
+        label="Trabajos"
+        screen="TrabajosPendientes"
+      />
 
       <BadgeNavButton
         name="chatbubble-ellipses-outline"
+        label="Chats"
         screen="ChatIA"
         badgeCount={unreadMessagesCount}
       />
 
-      <NavButton name="settings-outline" screen="Configuracion" />
+      <NavButton
+        name="settings-outline"
+        label="Ajustes"
+        screen="Configuracion"
+      />
     </LinearGradient>
   );
 };
@@ -117,6 +136,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
+    paddingTop: 6,
     backgroundColor: "transparent",
     borderTopWidth: 0,
     borderTopColor: "transparent",
@@ -126,23 +146,20 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 8,
   },
+  navLabel: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+    marginTop: 2,
+  },
   navButton: {
     position: "relative",
-    padding: 6,
-  },
-  publishButton: {
-    backgroundColor: "#069eb3",
-    padding: 12,
-    borderRadius: 30,
-    top: -25,
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  disabledButton: {
-    backgroundColor: "#ccc",
+    minWidth: 54,
+    borderRadius: 18,
+    paddingHorizontal: 6,
+    paddingVertical: 7,
+    marginHorizontal: 1,
+    alignItems: "center",
   },
   badge: {
     position: "absolute",

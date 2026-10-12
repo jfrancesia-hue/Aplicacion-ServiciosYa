@@ -271,6 +271,8 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
               ]}
             >
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`${item.label}. ${item.subtitle}`}
                 activeOpacity={0.85}
                 onPress={() => handleItemPress(item.onPress)}
                 style={styles.itemRow}
@@ -331,6 +333,11 @@ const SideQuickAccessMenu: React.FC<SideQuickAccessMenuProps> = ({
           </Animated.View>
         )}
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={
+            isOpen ? "Cerrar accesos rápidos" : "Abrir accesos rápidos"
+          }
+          accessibilityState={{ expanded: isOpen }}
           activeOpacity={0.9}
           onPress={toggleMenu}
           style={styles.mainButtonTouch}

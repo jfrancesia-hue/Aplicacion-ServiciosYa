@@ -416,7 +416,7 @@ Deno.serve(async (req) => {
 
       const { data: appProfile } = await admin
         .from("usuarios")
-        .select("id,rol")
+        .select("id,rol,provider_enabled")
         .eq("id", user.id)
         .maybeSingle();
       const { data: marketplaceProfile } = await admin
@@ -425,6 +425,7 @@ Deno.serve(async (req) => {
         .eq("id", user.id)
         .maybeSingle();
       const isWorker =
+        appProfile?.provider_enabled === true ||
         String(appProfile?.rol ?? "").toLowerCase() === "worker" ||
         String(marketplaceProfile?.rol ?? "").toLowerCase() === "prestador";
       if (!isWorker) {

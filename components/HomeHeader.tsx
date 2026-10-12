@@ -38,18 +38,14 @@ function HomeHeader({
   const [busqueda, setBusqueda] = useState("");
 
   const handleGuestProfileClick = React.useCallback(() => {
-    Alert.alert(
-      "Acceso restringido",
-      "Registrate para acceder a tu perfil.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Registrarme",
-          onPress: () =>
-            navigation.navigate("AuthStack", { screen: "LoginSelect" }),
-        },
-      ],
-    );
+    Alert.alert("Acceso restringido", "Registrate para acceder a tu perfil.", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Registrarme",
+        onPress: () =>
+          navigation.navigate("AuthStack", { screen: "LoginSelect" }),
+      },
+    ]);
   }, [navigation]);
 
   useEffect(() => {
@@ -77,6 +73,8 @@ function HomeHeader({
 
           <View style={styles.iconsContainer}>
             <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Ver notificaciones"
               onPress={() => navigation.navigate("NotificacionesScreen")}
               style={styles.iconButton}
             >
@@ -90,6 +88,8 @@ function HomeHeader({
 
             {isGuest ? (
               <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Iniciar sesión o registrarme"
                 onPress={handleGuestProfileClick}
                 style={styles.iconButton}
               >
@@ -191,7 +191,12 @@ function ProfileAvatar() {
   }, [perfil?.perfil_completo, navigation]);
 
   return (
-    <TouchableOpacity onPress={handlePress} style={styles.iconButton}>
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel="Abrir mi perfil"
+      onPress={handlePress}
+      style={styles.iconButton}
+    >
       {perfil?.foto_perfil ? (
         <Image source={{ uri: perfil.foto_perfil }} style={styles2.avatar} />
       ) : (
@@ -343,10 +348,10 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   publishButton: {
-    flex: 1,
+    flex: 1.2,
     minHeight: 50,
-    paddingLeft: 16,
-    paddingRight: 8,
+    paddingLeft: 10,
+    paddingRight: 6,
     borderRadius: 25,
     backgroundColor: "rgba(0, 0, 0, 0.14)",
     flexDirection: "row",
@@ -354,11 +359,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   requestActions: {
-    flexDirection: "column",
-    alignItems: "stretch",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   requestsButton: {
+    flex: 0.8,
     minHeight: 50,
     borderRadius: 25,
     paddingHorizontal: 14,
@@ -372,23 +378,23 @@ const styles = StyleSheet.create({
   },
   requestsButtonText: {
     color: "#fff",
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
   },
   publishButtonCopy: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 6,
   },
   publishButtonText: {
     color: "#fff",
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: "700",
   },
   publishButtonIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: "rgba(0, 0, 0, 0.18)",
     alignItems: "center",
     justifyContent: "center",

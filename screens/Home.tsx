@@ -47,14 +47,14 @@ function Home({ navigation, route }: Props) {
     providerProfileScore,
     providerMissingFields,
     rol,
+    isProvider,
     profileLoading,
     profileIsError,
     profileError,
     refetchProfile,
   } = useHomeData();
-  const isWorker = rol === "worker";
-  const canPublishService = isWorker || rol === "admin";
-  const canBecomeProvider = !isGuest && rol === "user";
+  const canPublishService = isProvider || rol === "admin";
+  const canBecomeProvider = !isGuest && !isProvider && rol !== "admin";
   const isFocused = useIsFocused();
   const { setHomeVisible, setHomeDataReady } = useHomeEventsStore();
 
@@ -120,37 +120,32 @@ function Home({ navigation, route }: Props) {
       <View style={styles.container}>
         <HomeHeader
           onSearch={setBusqueda}
-          publishLabel={isWorker ? "Publicar servicio" : "Publicar trabajo"}
-          onRequestsPress={
-            !isWorker
-              ? () =>
-                  navigation.navigate("PublicarNecesidad", {
-                    view: "history",
-                  })
-              : undefined
+          publishLabel="Publicar trabajo"
+          onRequestsPress={() =>
+            navigation.navigate("PublicarNecesidad", { view: "history" })
           }
           onPublishPress={() =>
-            isWorker
-              ? navigation.navigate("OfrecerServicio")
-              : navigation.navigate("PublicarNecesidad", { view: "new" })
+            navigation.navigate("PublicarNecesidad", { view: "new" })
           }
         />
 
         {!isGuest &&
-          (isWorker ? askProviderProfileCompletion : askProfileCompletion) && (
+          (isProvider
+            ? askProviderProfileCompletion
+            : askProfileCompletion) && (
             <ProfileIncompleteWarning
-              isProvider={isWorker}
+              isProvider={isProvider}
               score={providerProfileScore}
               missingFields={providerMissingFields}
               onPress={() =>
-                navigation.navigate(isWorker ? "Perfil" : "CrearPerfil")
+                navigation.navigate(isProvider ? "Perfil" : "CrearPerfil")
               }
             />
           )}
 
         {!isGuest && askDniVerification && <DniPendingWarning />}
 
-        {isWorker ? (
+        {isProvider ? (
           <WorkerHomeView
             navigation={navigation}
             onCategoryPress={handleCategoryPress}
@@ -165,36 +160,34 @@ function Home({ navigation, route }: Props) {
           />
         )}
 
-        {!isWorker && (
+        {isGuest && (
           <FloatingActionButtonMenu
             onHelpPress={() => navigation.navigate("Configuracion")}
             onChatPress={() => handleMicaModePress("buscar-servicio")}
           />
         )}
 
-        <SideQuickAccessMenu
-          onPublicarNecesidadPress={
-            !isWorker
-              ? () => navigation.navigate("PublicarNecesidad", { view: "new" })
-              : undefined
-          }
-          onBuscarServicioPress={
-            !isWorker ? () => handleMicaModePress("buscar-servicio") : undefined
-          }
-          onOfrecerServicioPress={
-            canPublishService
-              ? () => navigation.navigate("OfrecerServicio")
-              : canBecomeProvider
-                ? () => navigation.navigate("RegistroTrabajador")
-                : undefined
-          }
-          offerServiceMode={canBecomeProvider ? "register" : "publish"}
-        />
+        {!isGuest && (
+          <SideQuickAccessMenu
+            onPublicarNecesidadPress={() =>
+              navigation.navigate("PublicarNecesidad", { view: "new" })
+            }
+            onBuscarServicioPress={() => handleMicaModePress("buscar-servicio")}
+            onOfrecerServicioPress={
+              canPublishService
+                ? () => navigation.navigate("OfrecerServicio")
+                : canBecomeProvider
+                  ? () => navigation.navigate("RegistroTrabajador")
+                  : undefined
+            }
+            offerServiceMode={canBecomeProvider ? "register" : "publish"}
+          />
+        )}
       </View>
 
       <BottomNavBar
         unreadMessagesCount={unreadMessagesCount}
-        isWorker={isWorker}
+        isWorker={isProvider}
       />
     </SafeAreaView>
   );

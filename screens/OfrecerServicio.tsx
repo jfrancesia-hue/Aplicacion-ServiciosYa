@@ -35,6 +35,7 @@ import { locationQueryString } from "../lib/utils/location";
 import { parseMoneyInput } from "../lib/utils/money";
 import vexo from "../lib/vexo";
 import { getUserID } from "../store/authStore";
+import { hasProviderCapability } from "../lib/utils/user";
 import type { LocationItem } from "../types/location";
 import type { MainStackParamList, MicaServiceDraft } from "../types/navigation";
 
@@ -105,7 +106,7 @@ function OfrecerServicio({ navigation, route }: Props) {
   } = useQuery(perfilQueryOptions);
 
   useEffect(() => {
-    if (!profileLoading && profile && profile.rol !== "worker") {
+    if (!profileLoading && profile && !hasProviderCapability(profile)) {
       Alert.alert(
         "Acceso para prestadores",
         "Para publicar servicios primero tenés que completar un perfil de prestador.",
@@ -201,10 +202,7 @@ function OfrecerServicio({ navigation, route }: Props) {
         "Servicio creado y vinculado al flujo Servicios Ya/Mica.",
       );
       if (route.params?.micaDraftOwnerId) {
-        await clearMicaDraft(
-          route.params.micaDraftOwnerId,
-          "ofrecer-servicio",
-        );
+        await clearMicaDraft(route.params.micaDraftOwnerId, "ofrecer-servicio");
       }
       navigation.replace("Home", { workerTab: "calendario" });
     } catch (err: unknown) {
@@ -238,7 +236,7 @@ function OfrecerServicio({ navigation, route }: Props) {
     );
   }
 
-  if (profile?.rol !== "worker") return null;
+  if (!hasProviderCapability(profile)) return null;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#E8FAF7" }}>
@@ -260,7 +258,9 @@ function OfrecerServicio({ navigation, route }: Props) {
 
         {micaDraft ? (
           <View style={styles.micaDraftNotice}>
-            <Text style={styles.micaDraftTitle}>Borrador preparado por MICA</Text>
+            <Text style={styles.micaDraftTitle}>
+              Borrador preparado por MICA
+            </Text>
             <Text style={styles.micaDraftText}>
               Revisá y completá los datos. El servicio recién queda publicado
               cuando tocás “Publicar servicio” y ves la confirmación.

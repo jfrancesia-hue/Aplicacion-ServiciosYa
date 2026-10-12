@@ -243,7 +243,7 @@ test("el radio y la distancia real llegan al buscador sin exponer coordenadas", 
   assert.match(availableProvidersFunction, /distanceKm: providerDistanceKm/);
   assert.match(
     availableProvidersFunction,
-    /locationLatitude: _latitude, locationLongitude: _longitude/,
+    /locationLatitude:\s*_latitude,\s*locationLongitude:\s*_longitude/,
   );
   assert.match(providersScreen, /radiusMeters: searchRadius/);
   assert.match(providersScreen, /worker\.distanceKm/);

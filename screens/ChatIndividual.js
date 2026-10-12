@@ -89,7 +89,8 @@ function ChatIndividual({ route }) {
   const [visitTime, setVisitTime] = useState("");
   const [visitNote, setVisitNote] = useState("");
   const [savingVisit, setSavingVisit] = useState(false);
-  const [cancellationModalVisible, setCancellationModalVisible] = useState(false);
+  const [cancellationModalVisible, setCancellationModalVisible] =
+    useState(false);
   const [cancellationReason, setCancellationReason] = useState("");
   const [cancellationDetail, setCancellationDetail] = useState("");
   const [cancellingReservation, setCancellingReservation] = useState(false);
@@ -144,7 +145,9 @@ function ChatIndividual({ route }) {
         .order("version", { ascending: true });
       if (error) throw error;
       setQuoteStates(
-        Object.fromEntries((data ?? []).map((quote) => [quote.message_id, quote])),
+        Object.fromEntries(
+          (data ?? []).map((quote) => [quote.message_id, quote]),
+        ),
       );
     } catch (error) {
       console.warn("[chat] propuestas no disponibles:", error);
@@ -299,7 +302,7 @@ function ChatIndividual({ route }) {
         await Promise.all([
           supabase
             .from("usuarios")
-            .select("rol")
+            .select("rol,provider_enabled")
             .eq("id", user.id)
             .maybeSingle(),
           supabase
@@ -309,6 +312,7 @@ function ChatIndividual({ route }) {
             .maybeSingle(),
         ]);
       const hasProviderProfile =
+        appProfile?.provider_enabled === true ||
         String(appProfile?.rol ?? "").toLowerCase() === "worker" ||
         String(marketplaceProfile?.rol ?? "").toLowerCase() === "prestador";
       const currentUserIsProvider = conversationProviderId
@@ -451,8 +455,11 @@ function ChatIndividual({ route }) {
           }
           void cargarPresupuestosChat();
           void cargarEstadoTrabajo();
-          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-        }
+          setTimeout(
+            () => flatListRef.current?.scrollToEnd({ animated: true }),
+            100,
+          );
+        },
       )
       .subscribe();
 
@@ -486,8 +493,7 @@ function ChatIndividual({ route }) {
           p_unit_rate: quote.unitRate ?? quote.amount,
           p_estimated_units: quote.estimatedUnits ?? 1,
           p_reference_type: quote.referenceType ?? "fixed",
-          p_operational_notice_version:
-            quote.operationalNoticeVersion ?? null,
+          p_operational_notice_version: quote.operationalNoticeVersion ?? null,
           p_operational_notice_accepted_at:
             quote.operationalNoticeAcceptedAt ?? null,
         });
@@ -543,7 +549,6 @@ function ChatIndividual({ route }) {
           100,
         );
       }
-
     },
     [
       usuarioId,
@@ -671,7 +676,6 @@ function ChatIndividual({ route }) {
           duracion_segundos: Math.round(durationMs / 1000),
         });
       }
-
     },
     [chatId, usuarioId, jobStatus?.status, jobStatus?.job_status],
   );
@@ -688,7 +692,9 @@ function ChatIndividual({ route }) {
 
     return Promise.all(
       recentMessages.map(async (message) => {
-        const serviceSystemMessage = parseServiceSystemMessage(message.contenido);
+        const serviceSystemMessage = parseServiceSystemMessage(
+          message.contenido,
+        );
         if (serviceSystemMessage) {
           return {
             author: "system",
@@ -913,7 +919,9 @@ function ChatIndividual({ route }) {
                 },
               );
               if (error || !data?.ok) {
-                throw new Error(error?.message || "No se pudo pedir el cambio.");
+                throw new Error(
+                  error?.message || "No se pudo pedir el cambio.",
+                );
               }
               await cargarPresupuestosChat();
             } catch (error) {
@@ -1115,7 +1123,7 @@ function ChatIndividual({ route }) {
         ? Number.parseFloat(montoMatch[1].replace(/\./g, "").replace(",", "."))
         : 0);
     const esPresupuesto = Boolean(quote) || esPresupuestoTexto;
-    const quoteState = quote ? quoteStates[item.id] ?? null : null;
+    const quoteState = quote ? (quoteStates[item.id] ?? null) : null;
     const providerAmount = Number(quoteState?.amount_provider ?? montoNumerico);
     const feeAmount = Number(
       quoteState?.fee_amount ??
@@ -1123,7 +1131,9 @@ function ChatIndividual({ route }) {
         calculateServiceConfirmationFee(providerAmount),
     );
     const clientTotal = Number(
-      quoteState?.client_total ?? quote?.clientTotal ?? providerAmount + feeAmount,
+      quoteState?.client_total ??
+        quote?.clientTotal ??
+        providerAmount + feeAmount,
     );
     const canReserve =
       Boolean(quoteState) &&
@@ -1155,7 +1165,8 @@ function ChatIndividual({ route }) {
               <View>
                 <Text style={styles.quoteEyebrow}>Propuesta de trabajo</Text>
                 <Text style={styles.quoteTitle}>
-                  Propuesta {quoteState?.version || quote.version
+                  Propuesta{" "}
+                  {quoteState?.version || quote.version
                     ? `v${quoteState?.version ?? quote.version}`
                     : "segura"}
                 </Text>
@@ -1178,15 +1189,24 @@ function ChatIndividual({ route }) {
             </Text>
             <View style={styles.quotePaymentBreakdown}>
               <View style={styles.quotePaymentRow}>
-                <Text style={styles.quotePaymentLabel}>Reserva ServiciosYa (10%)</Text>
-                <Text style={styles.quotePaymentValue}>{formatQuoteAmount(feeAmount)}</Text>
+                <Text style={styles.quotePaymentLabel}>
+                  Reserva ServiciosYa (10%)
+                </Text>
+                <Text style={styles.quotePaymentValue}>
+                  {formatQuoteAmount(feeAmount)}
+                </Text>
               </View>
-              <View style={[styles.quotePaymentRow, styles.quotePaymentTotalRow]}>
+              <View
+                style={[styles.quotePaymentRow, styles.quotePaymentTotalRow]}
+              >
                 <Text style={styles.quotePaymentTotalLabel}>Costo total</Text>
-                <Text style={styles.quotePaymentTotalValue}>{formatQuoteAmount(clientTotal)}</Text>
+                <Text style={styles.quotePaymentTotalValue}>
+                  {formatQuoteAmount(clientTotal)}
+                </Text>
               </View>
               <Text style={styles.quotePaymentHint}>
-                Se paga ahora solo la reserva. El trabajo se paga directamente al prestador al finalizar.
+                Se paga ahora solo la reserva. El trabajo se paga directamente
+                al prestador al finalizar.
               </Text>
             </View>
 
@@ -1231,7 +1251,14 @@ function ChatIndividual({ route }) {
           <View style={styles.quoteActions}>
             <TouchableOpacity
               style={styles.pagarBtn}
-              onPress={() => confirmarReserva(item.id, providerAmount, feeAmount, clientTotal)}
+              onPress={() =>
+                confirmarReserva(
+                  item.id,
+                  providerAmount,
+                  feeAmount,
+                  clientTotal,
+                )
+              }
               disabled={pagando}
               activeOpacity={0.8}
             >
@@ -1251,9 +1278,15 @@ function ChatIndividual({ route }) {
                 disabled={requestingQuoteChanges === quoteState.id}
                 activeOpacity={0.8}
               >
-                <Ionicons name="chatbubble-ellipses-outline" size={15} color="#047a8f" />
+                <Ionicons
+                  name="chatbubble-ellipses-outline"
+                  size={15}
+                  color="#047a8f"
+                />
                 <Text style={styles.requestChangesText}>
-                  {requestingQuoteChanges === quoteState.id ? "Actualizando..." : "Pedir cambios"}
+                  {requestingQuoteChanges === quoteState.id
+                    ? "Actualizando..."
+                    : "Pedir cambios"}
                 </Text>
               </TouchableOpacity>
             ) : null}
@@ -1261,7 +1294,8 @@ function ChatIndividual({ route }) {
         ) : null}
         {quote && !quoteState && !esMio ? (
           <Text style={styles.legacyQuoteHint}>
-            Esta propuesta es anterior al sistema de reserva. Pedile al prestador una nueva versión para poder aceptarla.
+            Esta propuesta es anterior al sistema de reserva. Pedile al
+            prestador una nueva versión para poder aceptarla.
           </Text>
         ) : null}
       </View>
@@ -1712,8 +1746,12 @@ function ChatIndividual({ route }) {
                   <Ionicons name="calendar-outline" size={22} color="#fff" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.visitModalTitle}>Proponer fecha de visita</Text>
-                  <Text style={styles.visitModalHint}>El cliente deberá confirmar esta fecha dentro del chat.</Text>
+                  <Text style={styles.visitModalTitle}>
+                    Proponer fecha de visita
+                  </Text>
+                  <Text style={styles.visitModalHint}>
+                    El cliente deberá confirmar esta fecha dentro del chat.
+                  </Text>
                 </View>
               </View>
               <Text style={styles.visitFieldLabel}>Fecha</Text>
@@ -1754,7 +1792,9 @@ function ChatIndividual({ route }) {
                 {savingVisit ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.visitSaveText}>Enviar fecha al cliente</Text>
+                  <Text style={styles.visitSaveText}>
+                    Enviar fecha al cliente
+                  </Text>
                 )}
               </TouchableOpacity>
               <TouchableOpacity
@@ -1849,7 +1889,11 @@ function ChatIndividual({ route }) {
               />
 
               <View style={styles.cancellationPolicyBox}>
-                <Ionicons name="information-circle-outline" size={17} color="#8b5a18" />
+                <Ionicons
+                  name="information-circle-outline"
+                  size={17}
+                  color="#8b5a18"
+                />
                 <Text style={styles.cancellationPolicyText}>
                   La acreditación de una devolución puede demorar según el medio
                   de pago. Recibirás un código de seguimiento inmediatamente.
@@ -2017,16 +2061,14 @@ function JobStatusBanner({
   );
   const cancelled =
     status.job_status === "cancelled" || status.status === "refunded";
-  const cancellationStatus =
-    status.cancellation_status ?? "not_requested";
+  const cancellationStatus = status.cancellation_status ?? "not_requested";
   const cancellationRejected = cancellationStatus === "review_rejected";
   const cancellationVisible = cancellationStatus !== "not_requested";
   const cancellationActive =
     cancellationVisible && !cancellationRejected && !cancelled;
-  const cancellationReview = [
-    "review_required",
-    "refund_failed",
-  ].includes(cancellationStatus);
+  const cancellationReview = ["review_required", "refund_failed"].includes(
+    cancellationStatus,
+  );
   const amount = Number(status.amount_total ?? 0);
   const feeAmount = Number(status.commission_amount ?? 0);
   const refundAmount = Number(status.refund_amount ?? feeAmount);
@@ -2233,7 +2275,7 @@ function JobStatusBanner({
                     : cancellationRejected
                       ? status.cancellation_resolution_note ||
                         "La reserva volvió a quedar activa."
-                    : "No hace falta iniciar otra solicitud."}
+                      : "No hace falta iniciar otra solicitud."}
             </Text>
           </View>
         ) : null}
@@ -2333,9 +2375,7 @@ function JobStatusBanner({
               style={jobStyles.cancelButton}
             >
               <Ionicons name="close-circle-outline" size={15} color="#9a4c22" />
-              <Text style={jobStyles.cancelButtonText}>
-                Cancelar reserva
-              </Text>
+              <Text style={jobStyles.cancelButtonText}>Cancelar reserva</Text>
             </TouchableOpacity>
           ) : null}
         </View>
@@ -2823,12 +2863,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  quotePaymentLabel: { flex: 1, color: "#5d7479", fontSize: 11, fontWeight: "700" },
+  quotePaymentLabel: {
+    flex: 1,
+    color: "#5d7479",
+    fontSize: 11,
+    fontWeight: "700",
+  },
   quotePaymentValue: { color: "#1d4148", fontSize: 12, fontWeight: "900" },
-  quotePaymentTotalRow: { marginTop: 7, paddingTop: 7, borderTopWidth: 1, borderTopColor: "#cde7e2" },
+  quotePaymentTotalRow: {
+    marginTop: 7,
+    paddingTop: 7,
+    borderTopWidth: 1,
+    borderTopColor: "#cde7e2",
+  },
   quotePaymentTotalLabel: { color: "#173f46", fontSize: 12, fontWeight: "900" },
   quotePaymentTotalValue: { color: "#047a8f", fontSize: 15, fontWeight: "900" },
-  quotePaymentHint: { marginTop: 7, color: "#698084", fontSize: 9.5, lineHeight: 13.5 },
+  quotePaymentHint: {
+    marginTop: 7,
+    color: "#698084",
+    fontSize: 9.5,
+    lineHeight: 13.5,
+  },
   quoteDivider: {
     height: 1,
     backgroundColor: "#e5f2f4",
@@ -2995,16 +3050,61 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: "#fff",
   },
-  visitModalHeader: { flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 12 },
-  visitModalIcon: { width: 42, height: 42, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#047a8f" },
+  visitModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    marginBottom: 12,
+  },
+  visitModalIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#047a8f",
+  },
   visitModalTitle: { color: "#173f46", fontSize: 17, fontWeight: "900" },
-  visitModalHint: { marginTop: 2, color: "#71868a", fontSize: 10.5, lineHeight: 14 },
-  visitFieldLabel: { marginTop: 8, marginBottom: 5, color: "#38515d", fontSize: 11, fontWeight: "900" },
-  visitInput: { minHeight: 44, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: "#b9deda", backgroundColor: "#f8fcfb", color: "#25464c", fontSize: 14, fontWeight: "700" },
+  visitModalHint: {
+    marginTop: 2,
+    color: "#71868a",
+    fontSize: 10.5,
+    lineHeight: 14,
+  },
+  visitFieldLabel: {
+    marginTop: 8,
+    marginBottom: 5,
+    color: "#38515d",
+    fontSize: 11,
+    fontWeight: "900",
+  },
+  visitInput: {
+    minHeight: 44,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#b9deda",
+    backgroundColor: "#f8fcfb",
+    color: "#25464c",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   visitNoteInput: { minHeight: 76, paddingTop: 11 },
-  visitSaveButton: { minHeight: 46, marginTop: 15, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#047a8f" },
+  visitSaveButton: {
+    minHeight: 46,
+    marginTop: 15,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#047a8f",
+  },
   visitSaveText: { color: "#fff", fontSize: 14, fontWeight: "900" },
-  visitCancelButton: { minHeight: 40, marginTop: 5, alignItems: "center", justifyContent: "center" },
+  visitCancelButton: {
+    minHeight: 40,
+    marginTop: 5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   visitCancelText: { color: "#66777a", fontSize: 13, fontWeight: "800" },
   cancellationModalOverlay: {
     flex: 1,

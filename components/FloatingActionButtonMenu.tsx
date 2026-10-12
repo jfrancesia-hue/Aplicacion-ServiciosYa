@@ -1,11 +1,6 @@
 import type React from "react";
 import { useState, useRef } from "react";
-import {
-  View,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-} from "react-native";
+import { View, StyleSheet, TouchableOpacity, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 interface FloatingActionButtonMenuProps {
@@ -64,69 +59,79 @@ const FloatingActionButtonMenu: React.FC<FloatingActionButtonMenuProps> = ({
   };
 
   return (
-      <View pointerEvents="box-none" style={styles.container}>
-        {/* Botones del menú */}
-        {isOpen && (
-          <>
-            {/* Botón de ayuda */}
-            <Animated.View
-              style={[
-                styles.menuItem,
-                styles.helpItem,
-                {
-                  opacity: fadeAnim,
-                  transform: [
-                    {
-                      translateY: translateYAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [12, 0],
-                      }),
-                    },
-                  ],
-                },
-              ]}
+    <View pointerEvents="box-none" style={styles.container}>
+      {/* Botones del menú */}
+      {isOpen && (
+        <>
+          {/* Botón de ayuda */}
+          <Animated.View
+            style={[
+              styles.menuItem,
+              styles.helpItem,
+              {
+                opacity: fadeAnim,
+                transform: [
+                  {
+                    translateY: translateYAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Abrir ayuda"
+              onPress={() => handleButtonPress(onHelpPress)}
+              style={[styles.button, { backgroundColor: "#19D4C6" }]}
             >
-              <TouchableOpacity
-                onPress={() => handleButtonPress(onHelpPress)}
-                style={[styles.button, { backgroundColor: "#19D4C6" }]}
-              >
-                <Ionicons name="help" size={24} color="#fff" />
-              </TouchableOpacity>
-            </Animated.View>
+              <Ionicons name="help" size={24} color="#fff" />
+            </TouchableOpacity>
+          </Animated.View>
 
-            {/* Botón de chat */}
-            <Animated.View
-              style={[
-                styles.menuItem,
-                styles.chatItem,
-                {
-                  opacity: fadeAnim,
-                  transform: [
-                    {
-                      translateY: translateYAnim.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [12, 0],
-                      }),
-                    },
-                  ],
-                },
-              ]}
+          {/* Botón de chat */}
+          <Animated.View
+            style={[
+              styles.menuItem,
+              styles.chatItem,
+              {
+                opacity: fadeAnim,
+                transform: [
+                  {
+                    translateY: translateYAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [12, 0],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Consultar a MICA"
+              onPress={() => handleButtonPress(onChatPress)}
+              style={[styles.button, { backgroundColor: "#fe971a" }]}
             >
-              <TouchableOpacity
-                onPress={() => handleButtonPress(onChatPress)}
-                style={[styles.button, { backgroundColor: "#fe971a" }]}
-              >
-                <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
-              </TouchableOpacity>
-            </Animated.View>
-          </>
-        )}
+              <Ionicons name="chatbubble-ellipses" size={24} color="#fff" />
+            </TouchableOpacity>
+          </Animated.View>
+        </>
+      )}
 
-        {/* Botón principal */}
-        <TouchableOpacity onPress={toggleMenu} style={styles.mainButton}>
-          <Ionicons name={isOpen ? "close" : "menu"} size={28} color="#fff" />
-        </TouchableOpacity>
-      </View>
+      {/* Botón principal */}
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={isOpen ? "Cerrar menú" : "Abrir menú"}
+        accessibilityState={{ expanded: isOpen }}
+        onPress={toggleMenu}
+        style={styles.mainButton}
+      >
+        <Ionicons name={isOpen ? "close" : "menu"} size={28} color="#fff" />
+      </TouchableOpacity>
+    </View>
   );
 };
 

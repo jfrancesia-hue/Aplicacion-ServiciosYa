@@ -115,7 +115,10 @@ function RegistroTrabajadorSimplificado() {
     try {
       const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permiso.granted) {
-        Alert.alert("Permiso requerido", "Tenés que permitir acceso a la galería.");
+        Alert.alert(
+          "Permiso requerido",
+          "Tenés que permitir acceso a la galería.",
+        );
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -301,6 +304,7 @@ function RegistroTrabajadorSimplificado() {
 
       const updateData: RegistrationUpdate = {
         rol: "worker",
+        provider_enabled: true,
         nombre: nombre.trim(),
         celular: numeroCelular.trim(),
         categoria: categoriasSeleccionadas,
