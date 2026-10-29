@@ -6,7 +6,6 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { perfilQueryOptions, servicesCountQuerKey } from "../queryOptions";
 import queryClient from "../reactQuery";
-import { getProviderProfileCompleteness } from "../utils/providerProfile";
 import { hasProviderCapability } from "../utils/user";
 
 interface UserData {
@@ -30,9 +29,6 @@ export const useHomeData = () => {
     refetch: refetchProfile,
   } = useQuery(perfilQueryOptions);
   const isProvider = hasProviderCapability(userData);
-  const profileCompleteness = getProviderProfileCompleteness(userData);
-  const askProviderProfileCompletion =
-    isProvider && profileCompleteness.score < 100;
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -74,9 +70,6 @@ export const useHomeData = () => {
     isProvider,
     askDniVerification,
     askProfileCompletion,
-    askProviderProfileCompletion,
-    providerProfileScore: profileCompleteness.score,
-    providerMissingFields: profileCompleteness.missingLabels,
     profileLoading,
     profileIsError,
     profileError,

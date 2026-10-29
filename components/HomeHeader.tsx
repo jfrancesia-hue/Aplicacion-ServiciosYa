@@ -23,6 +23,9 @@ interface HomeHeaderProps {
   onSearch: (query: string) => void;
   onPublishPress: () => void;
   onRequestsPress?: () => void;
+  onMicaPress: () => void;
+  onProviderActionPress?: () => void;
+  providerActionLabel?: string;
   publishLabel: string;
 }
 
@@ -30,6 +33,9 @@ function HomeHeader({
   onSearch,
   onPublishPress,
   onRequestsPress,
+  onMicaPress,
+  onProviderActionPress,
+  providerActionLabel,
   publishLabel,
 }: HomeHeaderProps) {
   const navigation = useMainNavigation();
@@ -167,6 +173,35 @@ function HomeHeader({
             </TouchableOpacity>
           </View>
         )}
+
+        <View style={styles.quickActions}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Consultar a MICA"
+            activeOpacity={0.85}
+            onPress={onMicaPress}
+            style={styles.micaButton}
+          >
+            <Ionicons name="sparkles" size={18} color="#047a8f" />
+            <Text style={styles.micaButtonText} numberOfLines={1}>
+              Consultar a MICA
+            </Text>
+          </TouchableOpacity>
+          {onProviderActionPress && providerActionLabel ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={providerActionLabel}
+              activeOpacity={0.85}
+              onPress={onProviderActionPress}
+              style={styles.providerActionButton}
+            >
+              <Ionicons name="briefcase-outline" size={18} color="#fff" />
+              <Text style={styles.providerActionText} numberOfLines={1}>
+                {providerActionLabel}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
     </LinearGradient>
   );
@@ -209,8 +244,12 @@ function ProfileAvatar() {
 const styles2 = StyleSheet.create({
   iconButton: {
     marginLeft: 12,
+    minWidth: 44,
+    minHeight: 44,
     padding: 6,
-    position: "relative",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatar: {
     width: 38,
@@ -329,9 +368,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   badge: {
-    position: "absolute",
-    top: 0,
-    right: 0,
     backgroundColor: "#ff5b5b",
     borderRadius: 10,
     minWidth: 20,
@@ -340,6 +376,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#fff",
+    marginLeft: 3,
   },
   searchBarContainer: {
     flexDirection: "row",
@@ -398,5 +435,47 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.18)",
     alignItems: "center",
     justifyContent: "center",
+  },
+  quickActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 8,
+  },
+  micaButton: {
+    minHeight: 44,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: 22,
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+  },
+  micaButtonText: {
+    flexShrink: 1,
+    color: "#047a8f",
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  providerActionButton: {
+    minHeight: 44,
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.45)",
+    backgroundColor: "rgba(0,0,0,0.14)",
+    paddingHorizontal: 12,
+  },
+  providerActionText: {
+    flexShrink: 1,
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "800",
   },
 });

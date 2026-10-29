@@ -1,5 +1,6 @@
 import React, {
   type ComponentProps,
+  type ReactNode,
   useState,
   useEffect,
   useRef,
@@ -49,17 +50,28 @@ type WorkerOffer = ServiciosYaBridgePedido & {
   metadata?: WorkerServiceRequest["metadata"];
   nombre_cliente?: string | null;
 };
+const WORKER_TABS: {
+  id: Tab;
+  label: string;
+  icon: ComponentProps<typeof MaterialIcons>["name"];
+}[] = [
+  { id: "calendario", label: "Calendario", icon: "calendar-today" },
+  { id: "ofertas", label: "Ofertas", icon: "work-outline" },
+  { id: "contratar", label: "Contratar", icon: "person-add-alt" },
+];
 
 export default function WorkerHomeView({
   navigation,
   onCategoryPress,
   busqueda = "",
   initialTab,
+  header,
 }: {
   navigation: WorkerHomeNavigation;
   onCategoryPress: (cat: string) => void;
   busqueda?: string;
   initialTab?: Tab;
+  header?: ReactNode;
 }) {
   const [activeTab, setActiveTab] = useState<Tab>("calendario");
 
@@ -71,25 +83,17 @@ export default function WorkerHomeView({
     if (busqueda.trim().length > 0) setActiveTab("contratar");
   }, [busqueda]);
 
-  const tabs: {
-    id: Tab;
-    label: string;
-    icon: ComponentProps<typeof MaterialIcons>["name"];
-  }[] = [
-    { id: "calendario", label: "Calendario", icon: "calendar-today" },
-    { id: "ofertas", label: "Ofertas", icon: "work-outline" },
-    { id: "contratar", label: "Contratar", icon: "person-add-alt" },
-  ];
-
-  return (
-    <View style={styles.container}>
+  const workerHeader = (
+    <>
+      {header}
       <WorkerState style={styles.availabilityCard} />
-      {/* Tab buttons */}
       <View style={styles.tabBar}>
-        {tabs.map((tab) => {
+        {WORKER_TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <TouchableOpacity
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
               key={tab.id}
               style={[styles.tabButton, isActive && styles.tabButtonActive]}
               onPress={() => setActiveTab(tab.id)}
@@ -109,24 +113,29 @@ export default function WorkerHomeView({
           );
         })}
       </View>
+    </>
+  );
 
-      {/* Content */}
+  return (
+    <View style={styles.container}>
       {activeTab === "contratar" ? (
         <ContratarView
-          navigation={navigation}
           onCategoryPress={onCategoryPress}
           busqueda={busqueda}
+          header={workerHeader}
         />
+      ) : activeTab === "ofertas" ? (
+        <OfertasView navigation={navigation} header={workerHeader} />
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          bounces={true}
+          bounces
         >
-          {activeTab === "calendario" && (
+          {workerHeader}
+          <View style={styles.content}>
             <CalendarioView navigation={navigation} />
-          )}
-          {activeTab === "ofertas" && <OfertasView navigation={navigation} />}
+          </View>
         </ScrollView>
       )}
     </View>
@@ -137,7 +146,13 @@ function CalendarioView({ navigation }: { navigation: WorkerHomeNavigation }) {
   return <JobsOverview navigation={navigation} compact />;
 }
 
-function OfertasView({ navigation }: { navigation: WorkerHomeNavigation }) {
+function OfertasView({
+  navigation,
+  header,
+}: {
+  navigation: WorkerHomeNavigation;
+  header?: ReactNode;
+}) {
   const [ofertas, setOfertas] = useState<WorkerOffer[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -389,6 +404,7 @@ function OfertasView({ navigation }: { navigation: WorkerHomeNavigation }) {
 
   return (
     <ScrollView
+      contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -398,366 +414,374 @@ function OfertasView({ navigation }: { navigation: WorkerHomeNavigation }) {
         />
       }
     >
-      <ProviderUrgentOffers />
-      {/* Ofertas disponibles */}
-      <Text style={styles.seccionTitle}>
-        <MaterialIcons name="bolt" size={16} color="#069eb3" /> Publicaciones
-        compatibles
-      </Text>
-      <Text style={styles.seccionSubtitle}>
-        Necesidades de clientes que coinciden con tu profesión y tu zona
-      </Text>
+      {header}
+      <View style={styles.content}>
+        <ProviderUrgentOffers />
+        {/* Ofertas disponibles */}
+        <Text style={styles.seccionTitle}>
+          <MaterialIcons name="bolt" size={16} color="#069eb3" /> Publicaciones
+          compatibles
+        </Text>
+        <Text style={styles.seccionSubtitle}>
+          Necesidades de clientes que coinciden con tu profesión y tu zona
+        </Text>
 
-      {loading ? (
-        <>
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </>
-      ) : error ? (
-        <View style={styles.ofertasInfoBox}>
-          <MaterialIcons name="error-outline" size={20} color="#d32f2f" />
-          <Text style={[styles.ofertasInfoText, { color: "#d32f2f" }]}>
-            {error}
-          </Text>
-        </View>
-      ) : ofertas.length === 0 ? (
-        <>
+        {loading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : error ? (
           <View style={styles.ofertasInfoBox}>
-            <MaterialIcons name="info-outline" size={20} color="#047a8f" />
-            <Text style={styles.ofertasInfoText}>
-              Estamos buscando ofertas para tus profesiones. Si no ves ninguna,
-              no te desesperes, es normal que no hayan tantas ofertas
-              disponibles en tu zona.
+            <MaterialIcons name="error-outline" size={20} color="#d32f2f" />
+            <Text style={[styles.ofertasInfoText, { color: "#d32f2f" }]}>
+              {error}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.soporteButton}
-            activeOpacity={0.8}
-            onPress={() =>
-              navigation.navigate("MicaChat", { mode: "ofrecer-servicio" })
-            }
-          >
-            <MaterialIcons name="support-agent" size={20} color="#fff" />
-            <Text style={styles.soporteButtonText}>Consultar a MICA</Text>
-          </TouchableOpacity>
-        </>
-      ) : (
-        ofertas.map((oferta) => (
-          <TouchableOpacity
-            key={oferta.id}
-            style={styles.ofertaCard}
-            activeOpacity={0.85}
-            onPress={() => enviarPresupuesto(oferta)}
-          >
-            <View style={styles.ofertaBadge}>
-              <Text style={styles.ofertaBadgeText}>
-                {oferta.categoria || "Sin categoría"}
+        ) : ofertas.length === 0 ? (
+          <>
+            <View style={styles.ofertasInfoBox}>
+              <MaterialIcons name="info-outline" size={20} color="#047a8f" />
+              <Text style={styles.ofertasInfoText}>
+                Estamos buscando ofertas para tus profesiones. Si no ves
+                ninguna, no te desesperes, es normal que no hayan tantas ofertas
+                disponibles en tu zona.
               </Text>
             </View>
-            <Text style={styles.ofertaTitulo}>
-              {oferta.descripcion || "Sin descripción"}
-            </Text>
-            {!!oferta.nombre_cliente && (
-              <Text style={styles.ofertaMeta}>👤 {oferta.nombre_cliente}</Text>
-            )}
-            {!!oferta.zona && (
-              <Text style={styles.ofertaMeta}>📍 {oferta.zona}</Text>
-            )}
-            <View style={styles.ofertaFooter}>
-              <Text style={styles.ofertaFooterText}>
-                🕐 {(() => {
-                  const d = new Date(oferta.createdAt || Date.now());
-                  return d.toLocaleString("es-AR");
-                })()}
-              </Text>
-              <View style={styles.presupuestosBadge}>
-                <MaterialIcons name="send" size={12} color="#fff" />
-                <Text style={styles.presupuestosBadgeText}>
-                  {oferta.source === "manual_app"
-                    ? "Publicación"
-                    : "Pedido MICA"}
-                </Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))
-      )}
-
-      <View style={{ height: 20 }} />
-
-      {/* Modal presupuesto */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalBox}>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
+            <TouchableOpacity
+              style={styles.soporteButton}
+              activeOpacity={0.8}
+              onPress={() =>
+                navigation.navigate("MicaChat", { mode: "ofrecer-servicio" })
+              }
             >
-              <Text style={styles.modalTitle}>Presupuesto profesional</Text>
-              {ofertaSeleccionada && (
-                <View style={[styles.ofertasInfoBox, { marginBottom: 16 }]}>
-                  <MaterialIcons
-                    name="work-outline"
-                    size={18}
-                    color="#047a8f"
-                  />
-                  <Text style={styles.ofertasInfoText} numberOfLines={3}>
-                    {ofertaSeleccionada.descripcion}
-                  </Text>
-                </View>
-              )}
-
-              <Text style={styles.modalLabel}>Modalidad</Text>
-              <View style={styles.quoteModeRow}>
-                {(["project", "hour", "day"] as QuotePricingMode[]).map(
-                  (mode) => (
-                    <TouchableOpacity
-                      key={mode}
-                      style={[
-                        styles.quoteModeChip,
-                        modalidad === mode && styles.quoteModeChipActive,
-                      ]}
-                      onPress={() => setModalidad(mode)}
-                    >
-                      <Text
-                        style={[
-                          styles.quoteModeText,
-                          modalidad === mode && styles.quoteModeTextActive,
-                        ]}
-                      >
-                        {pricingModeLabel(mode)}
-                      </Text>
-                    </TouchableOpacity>
-                  ),
-                )}
-              </View>
-
-              <Text style={styles.modalLabel}>
-                {modalidad === "project"
-                  ? "Importe cerrado ($)"
-                  : modalidad === "hour"
-                    ? "Tarifa por hora ($)"
-                    : "Tarifa por día ($)"}
-              </Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Ej: 5000"
-                placeholderTextColor="#aaa"
-                keyboardType="numeric"
-                value={monto}
-                onChangeText={setMonto}
-              />
-
-              {modalidad !== "project" ? (
-                <>
-                  <Text style={styles.modalLabel}>
-                    {modalidad === "hour"
-                      ? "Horas estimadas"
-                      : "Días estimados"}
-                  </Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Ej: 3"
-                    placeholderTextColor="#aaa"
-                    keyboardType="decimal-pad"
-                    value={unidades}
-                    onChangeText={setUnidades}
-                  />
-                  <View style={styles.quoteModeRow}>
-                    {(["estimate", "cap"] as QuoteReferenceType[]).map(
-                      (kind) => (
-                        <TouchableOpacity
-                          key={kind}
-                          style={[
-                            styles.quoteModeChip,
-                            tipoReferencia === kind &&
-                              styles.quoteModeChipActive,
-                          ]}
-                          onPress={() => setTipoReferencia(kind)}
-                        >
-                          <Text
-                            style={[
-                              styles.quoteModeText,
-                              tipoReferencia === kind &&
-                                styles.quoteModeTextActive,
-                            ]}
-                          >
-                            {kind === "estimate"
-                              ? "Total estimado"
-                              : "Tope máximo"}
-                          </Text>
-                        </TouchableOpacity>
-                      ),
-                    )}
-                  </View>
-                </>
-              ) : null}
-
-              <View style={styles.quoteTotalBox}>
-                <Text style={styles.quoteTotalLabel}>Total de referencia</Text>
-                <Text style={styles.quoteTotalValue}>
-                  ${Math.round(pricing.amount).toLocaleString("es-AR")}
+              <MaterialIcons name="support-agent" size={20} color="#fff" />
+              <Text style={styles.soporteButtonText}>Consultar a MICA</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          ofertas.map((oferta) => (
+            <TouchableOpacity
+              key={oferta.id}
+              style={styles.ofertaCard}
+              activeOpacity={0.85}
+              onPress={() => enviarPresupuesto(oferta)}
+            >
+              <View style={styles.ofertaBadge}>
+                <Text style={styles.ofertaBadgeText}>
+                  {oferta.categoria || "Sin categoría"}
                 </Text>
               </View>
-
-              <Text style={styles.modalLabel}>Que incluye tu propuesta</Text>
-              <TextInput
-                style={[
-                  styles.modalInput,
-                  { height: 86, textAlignVertical: "top" },
-                ]}
-                placeholder="Ej: visita, diagnostico, reparacion, limpieza y prueba final"
-                placeholderTextColor="#aaa"
-                multiline
-                value={descripcion}
-                onChangeText={setDescripcion}
-              />
-
-              <Text style={styles.modalLabel}>Materiales</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Incluidos / aparte / a confirmar"
-                placeholderTextColor="#aaa"
-                value={materiales}
-                onChangeText={setMateriales}
-              />
-
-              <Text style={styles.modalLabel}>
-                Tiempo u horarios disponibles
+              <Text style={styles.ofertaTitulo}>
+                {oferta.descripcion || "Sin descripción"}
               </Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="Ej: Lunes a viernes de 9 a 18hs"
-                placeholderTextColor="#aaa"
-                value={horarios}
-                onChangeText={setHorarios}
-              />
-
-              <View style={styles.modalTwoColumns}>
-                <View style={styles.modalColumn}>
-                  <Text style={styles.modalLabel}>Garantia</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Ej: 7 dias"
-                    placeholderTextColor="#aaa"
-                    value={garantia}
-                    onChangeText={setGarantia}
-                  />
-                </View>
-                <View style={styles.modalColumn}>
-                  <Text style={styles.modalLabel}>Validez</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    placeholder="Ej: 24 horas"
-                    placeholderTextColor="#aaa"
-                    value={validez}
-                    onChangeText={setValidez}
-                  />
+              {!!oferta.nombre_cliente && (
+                <Text style={styles.ofertaMeta}>
+                  👤 {oferta.nombre_cliente}
+                </Text>
+              )}
+              {!!oferta.zona && (
+                <Text style={styles.ofertaMeta}>📍 {oferta.zona}</Text>
+              )}
+              <View style={styles.ofertaFooter}>
+                <Text style={styles.ofertaFooterText}>
+                  🕐 {(() => {
+                    const d = new Date(oferta.createdAt || Date.now());
+                    return d.toLocaleString("es-AR");
+                  })()}
+                </Text>
+                <View style={styles.presupuestosBadge}>
+                  <MaterialIcons name="send" size={12} color="#fff" />
+                  <Text style={styles.presupuestosBadgeText}>
+                    {oferta.source === "manual_app"
+                      ? "Publicación"
+                      : "Pedido MICA"}
+                  </Text>
                 </View>
               </View>
+            </TouchableOpacity>
+          ))
+        )}
 
-              <Text style={styles.modalLabel}>Notas para el cliente</Text>
-              <TextInput
-                style={[
-                  styles.modalInput,
-                  { height: 72, textAlignVertical: "top" },
-                ]}
-                placeholder="Ej: no incluye repuestos especiales si aparecen piezas rotas"
-                placeholderTextColor="#aaa"
-                multiline
-                value={notas}
-                onChangeText={setNotas}
-              />
+        <View style={{ height: 20 }} />
 
-              <TouchableOpacity
-                style={[styles.soporteButton, { marginTop: 8 }]}
-                activeOpacity={0.85}
-                onPress={() => {
-                  if (
-                    pricing.amount <= 0 ||
-                    !descripcion.trim() ||
-                    !horarios.trim()
-                  ) {
-                    Alert.alert(
-                      "Campos incompletos",
-                      "Completá todos los campos antes de enviar.",
-                    );
-                    return;
-                  }
-                  setModalVisible(false);
-                  setQuoteNoticeVisible(true);
-                }}
-                disabled={enviando}
+        {/* Modal presupuesto */}
+        <Modal
+          visible={modalVisible}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.modalOverlay}
+          >
+            <View style={styles.modalBox}>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
               >
-                {enviando ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <>
-                    <MaterialIcons name="send" size={18} color="#fff" />
-                    <Text style={styles.soporteButtonText}>
-                      Enviar presupuesto
+                <Text style={styles.modalTitle}>Presupuesto profesional</Text>
+                {ofertaSeleccionada && (
+                  <View style={[styles.ofertasInfoBox, { marginBottom: 16 }]}>
+                    <MaterialIcons
+                      name="work-outline"
+                      size={18}
+                      color="#047a8f"
+                    />
+                    <Text style={styles.ofertasInfoText} numberOfLines={3}>
+                      {ofertaSeleccionada.descripcion}
                     </Text>
-                  </>
+                  </View>
                 )}
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={confirmarNoDisponible}
-                disabled={enviando}
-              >
-                <Text style={styles.modalCancelText}>No puedo tomarlo</Text>
-              </TouchableOpacity>
+                <Text style={styles.modalLabel}>Modalidad</Text>
+                <View style={styles.quoteModeRow}>
+                  {(["project", "hour", "day"] as QuotePricingMode[]).map(
+                    (mode) => (
+                      <TouchableOpacity
+                        key={mode}
+                        style={[
+                          styles.quoteModeChip,
+                          modalidad === mode && styles.quoteModeChipActive,
+                        ]}
+                        onPress={() => setModalidad(mode)}
+                      >
+                        <Text
+                          style={[
+                            styles.quoteModeText,
+                            modalidad === mode && styles.quoteModeTextActive,
+                          ]}
+                        >
+                          {pricingModeLabel(mode)}
+                        </Text>
+                      </TouchableOpacity>
+                    ),
+                  )}
+                </View>
 
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setModalVisible(false)}
-                disabled={enviando}
-              >
-                <Text style={styles.modalCancelText}>Cerrar</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-      <QuoteOperationalNoticeModal
-        visible={quoteNoticeVisible}
-        mode="send"
-        amount={pricing.amount}
-        busy={enviando}
-        onClose={() => {
-          setQuoteNoticeVisible(false);
-          setModalVisible(true);
-        }}
-        onConfirm={confirmarPresupuesto}
-      />
+                <Text style={styles.modalLabel}>
+                  {modalidad === "project"
+                    ? "Importe cerrado ($)"
+                    : modalidad === "hour"
+                      ? "Tarifa por hora ($)"
+                      : "Tarifa por día ($)"}
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Ej: 5000"
+                  placeholderTextColor="#aaa"
+                  keyboardType="numeric"
+                  value={monto}
+                  onChangeText={setMonto}
+                />
+
+                {modalidad !== "project" ? (
+                  <>
+                    <Text style={styles.modalLabel}>
+                      {modalidad === "hour"
+                        ? "Horas estimadas"
+                        : "Días estimados"}
+                    </Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Ej: 3"
+                      placeholderTextColor="#aaa"
+                      keyboardType="decimal-pad"
+                      value={unidades}
+                      onChangeText={setUnidades}
+                    />
+                    <View style={styles.quoteModeRow}>
+                      {(["estimate", "cap"] as QuoteReferenceType[]).map(
+                        (kind) => (
+                          <TouchableOpacity
+                            key={kind}
+                            style={[
+                              styles.quoteModeChip,
+                              tipoReferencia === kind &&
+                                styles.quoteModeChipActive,
+                            ]}
+                            onPress={() => setTipoReferencia(kind)}
+                          >
+                            <Text
+                              style={[
+                                styles.quoteModeText,
+                                tipoReferencia === kind &&
+                                  styles.quoteModeTextActive,
+                              ]}
+                            >
+                              {kind === "estimate"
+                                ? "Total estimado"
+                                : "Tope máximo"}
+                            </Text>
+                          </TouchableOpacity>
+                        ),
+                      )}
+                    </View>
+                  </>
+                ) : null}
+
+                <View style={styles.quoteTotalBox}>
+                  <Text style={styles.quoteTotalLabel}>
+                    Total de referencia
+                  </Text>
+                  <Text style={styles.quoteTotalValue}>
+                    ${Math.round(pricing.amount).toLocaleString("es-AR")}
+                  </Text>
+                </View>
+
+                <Text style={styles.modalLabel}>Que incluye tu propuesta</Text>
+                <TextInput
+                  style={[
+                    styles.modalInput,
+                    { height: 86, textAlignVertical: "top" },
+                  ]}
+                  placeholder="Ej: visita, diagnostico, reparacion, limpieza y prueba final"
+                  placeholderTextColor="#aaa"
+                  multiline
+                  value={descripcion}
+                  onChangeText={setDescripcion}
+                />
+
+                <Text style={styles.modalLabel}>Materiales</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Incluidos / aparte / a confirmar"
+                  placeholderTextColor="#aaa"
+                  value={materiales}
+                  onChangeText={setMateriales}
+                />
+
+                <Text style={styles.modalLabel}>
+                  Tiempo u horarios disponibles
+                </Text>
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder="Ej: Lunes a viernes de 9 a 18hs"
+                  placeholderTextColor="#aaa"
+                  value={horarios}
+                  onChangeText={setHorarios}
+                />
+
+                <View style={styles.modalTwoColumns}>
+                  <View style={styles.modalColumn}>
+                    <Text style={styles.modalLabel}>Garantia</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Ej: 7 dias"
+                      placeholderTextColor="#aaa"
+                      value={garantia}
+                      onChangeText={setGarantia}
+                    />
+                  </View>
+                  <View style={styles.modalColumn}>
+                    <Text style={styles.modalLabel}>Validez</Text>
+                    <TextInput
+                      style={styles.modalInput}
+                      placeholder="Ej: 24 horas"
+                      placeholderTextColor="#aaa"
+                      value={validez}
+                      onChangeText={setValidez}
+                    />
+                  </View>
+                </View>
+
+                <Text style={styles.modalLabel}>Notas para el cliente</Text>
+                <TextInput
+                  style={[
+                    styles.modalInput,
+                    { height: 72, textAlignVertical: "top" },
+                  ]}
+                  placeholder="Ej: no incluye repuestos especiales si aparecen piezas rotas"
+                  placeholderTextColor="#aaa"
+                  multiline
+                  value={notas}
+                  onChangeText={setNotas}
+                />
+
+                <TouchableOpacity
+                  style={[styles.soporteButton, { marginTop: 8 }]}
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    if (
+                      pricing.amount <= 0 ||
+                      !descripcion.trim() ||
+                      !horarios.trim()
+                    ) {
+                      Alert.alert(
+                        "Campos incompletos",
+                        "Completá todos los campos antes de enviar.",
+                      );
+                      return;
+                    }
+                    setModalVisible(false);
+                    setQuoteNoticeVisible(true);
+                  }}
+                  disabled={enviando}
+                >
+                  {enviando ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <>
+                      <MaterialIcons name="send" size={18} color="#fff" />
+                      <Text style={styles.soporteButtonText}>
+                        Enviar presupuesto
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={confirmarNoDisponible}
+                  disabled={enviando}
+                >
+                  <Text style={styles.modalCancelText}>No puedo tomarlo</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={() => setModalVisible(false)}
+                  disabled={enviando}
+                >
+                  <Text style={styles.modalCancelText}>Cerrar</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+        <QuoteOperationalNoticeModal
+          visible={quoteNoticeVisible}
+          mode="send"
+          amount={pricing.amount}
+          busy={enviando}
+          onClose={() => {
+            setQuoteNoticeVisible(false);
+            setModalVisible(true);
+          }}
+          onConfirm={confirmarPresupuesto}
+        />
+      </View>
     </ScrollView>
   );
 }
 
 function ContratarView({
-  navigation,
   onCategoryPress,
   busqueda,
+  header,
 }: {
-  navigation: WorkerHomeNavigation;
   onCategoryPress: (cat: string) => void;
   busqueda: string;
+  header?: ReactNode;
 }) {
   return (
     <CategoryList
       busqueda={busqueda}
       onCategoryPress={onCategoryPress}
       isUserRestricted={false}
+      header={header}
     />
   );
 }
@@ -768,7 +792,7 @@ const styles = StyleSheet.create({
   },
   availabilityCard: {
     marginHorizontal: 16,
-    marginTop: 12,
+    marginTop: 8,
     marginBottom: 2,
   },
   tabBar: {
@@ -782,6 +806,7 @@ const styles = StyleSheet.create({
   },
   tabButton: {
     flex: 1,
+    minHeight: 44,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -807,7 +832,9 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 16,
-    paddingBottom: 100,
+  },
+  scrollContent: {
+    paddingBottom: 120,
   },
   // Placeholder views
   placeholderCard: {

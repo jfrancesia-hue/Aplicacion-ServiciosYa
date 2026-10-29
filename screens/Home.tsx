@@ -19,11 +19,8 @@ import HomeHeader from "../components/HomeHeader";
 import BottomNavBar from "../components/home/BottomNavBar";
 import CategoryList from "../components/home/CategoryList";
 import { DniPendingWarning } from "../components/home/DniPendingWarning";
-import { ProfileIncompleteWarning } from "../components/home/ProfileIncompleteWarning";
 
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import FloatingActionButtonMenu from "../components/FloatingActionButtonMenu";
-import SideQuickAccessMenu from "../components/SideQuickAccessMenu";
 import { withDropDownProvider } from "../components/forms/withDropDownProvider";
 import { HomeEventRenderer } from "../components/home/HomeEventRenderer";
 import WorkerHomeView from "../components/home/WorkerHomeView";
@@ -43,9 +40,6 @@ function Home({ navigation, route }: Props) {
   const {
     askDniVerification,
     askProfileCompletion,
-    askProviderProfileCompletion,
-    providerProfileScore,
-    providerMissingFields,
     rol,
     isProvider,
     profileLoading,
@@ -114,73 +108,56 @@ function Home({ navigation, route }: Props) {
     );
   }
 
+  const homeHeaderContent = (
+    <>
+      <HomeHeader
+        onSearch={setBusqueda}
+        publishLabel="Publicar trabajo"
+        onRequestsPress={() =>
+          navigation.navigate("PublicarNecesidad", { view: "history" })
+        }
+        onPublishPress={() =>
+          navigation.navigate("PublicarNecesidad", { view: "new" })
+        }
+        onMicaPress={() => handleMicaModePress("buscar-servicio")}
+        onProviderActionPress={
+          canPublishService
+            ? () => navigation.navigate("OfrecerServicio")
+            : canBecomeProvider
+              ? () => navigation.navigate("RegistroTrabajador")
+              : undefined
+        }
+        providerActionLabel={
+          canPublishService
+            ? "Publicar servicio"
+            : canBecomeProvider
+              ? "Ofrecer servicios"
+              : undefined
+        }
+      />
+
+      {!isGuest && askDniVerification && <DniPendingWarning />}
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <HomeEventRenderer />
       <View style={styles.container}>
-        <HomeHeader
-          onSearch={setBusqueda}
-          publishLabel="Publicar trabajo"
-          onRequestsPress={() =>
-            navigation.navigate("PublicarNecesidad", { view: "history" })
-          }
-          onPublishPress={() =>
-            navigation.navigate("PublicarNecesidad", { view: "new" })
-          }
-        />
-
-        {!isGuest &&
-          (isProvider
-            ? askProviderProfileCompletion
-            : askProfileCompletion) && (
-            <ProfileIncompleteWarning
-              isProvider={isProvider}
-              score={providerProfileScore}
-              missingFields={providerMissingFields}
-              onPress={() =>
-                navigation.navigate(isProvider ? "Perfil" : "CrearPerfil")
-              }
-            />
-          )}
-
-        {!isGuest && askDniVerification && <DniPendingWarning />}
-
         {isProvider ? (
           <WorkerHomeView
             navigation={navigation}
             onCategoryPress={handleCategoryPress}
             busqueda={busqueda}
             initialTab={route.params?.workerTab}
+            header={homeHeaderContent}
           />
         ) : (
           <CategoryList
             busqueda={busqueda}
             onCategoryPress={handleCategoryPress}
             isUserRestricted={isUserRestricted}
-          />
-        )}
-
-        {isGuest && (
-          <FloatingActionButtonMenu
-            onHelpPress={() => navigation.navigate("Configuracion")}
-            onChatPress={() => handleMicaModePress("buscar-servicio")}
-          />
-        )}
-
-        {!isGuest && (
-          <SideQuickAccessMenu
-            onPublicarNecesidadPress={() =>
-              navigation.navigate("PublicarNecesidad", { view: "new" })
-            }
-            onBuscarServicioPress={() => handleMicaModePress("buscar-servicio")}
-            onOfrecerServicioPress={
-              canPublishService
-                ? () => navigation.navigate("OfrecerServicio")
-                : canBecomeProvider
-                  ? () => navigation.navigate("RegistroTrabajador")
-                  : undefined
-            }
-            offerServiceMode={canBecomeProvider ? "register" : "publish"}
+            header={homeHeaderContent}
           />
         )}
       </View>
@@ -196,8 +173,8 @@ function Home({ navigation, route }: Props) {
 export default withDropDownProvider(withModalProvider(Home));
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f0f2f5" },
-  container: { flex: 1, backgroundColor: "#f0f2f5" },
+  safeArea: { flex: 1, backgroundColor: "#f4f8f8" },
+  container: { flex: 1, backgroundColor: "#f4f8f8" },
   profileState: {
     flex: 1,
     alignItems: "center",

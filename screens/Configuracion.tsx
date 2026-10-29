@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import BotonVolver from "../components/BotonVolver";
 import InviteSheetView from "../components/InvitarSheet";
 import { withModalProvider } from "../components/sheet/withModalProvider";
@@ -170,10 +171,10 @@ function Configuracion({ navigation }: Props) {
   };
 
   return (
-    <>
-      <BotonVolver />
+    <SafeAreaView style={styles.safeArea}>
       <LinearGradient colors={["#e8f8fb", "#f0f2f5"]} style={{ flex: 1 }}>
         <ScrollView style={styles.background}>
+          <BotonVolver />
           <View style={styles.container}>
             <Text style={styles.title}>Configuración</Text>
 
@@ -439,13 +440,17 @@ function Configuracion({ navigation }: Props) {
           </BottomSheetModal>
         </ScrollView>
       </LinearGradient>
-    </>
+    </SafeAreaView>
   );
 }
 
 export default withModalProvider(Configuracion);
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#e8f8fb",
+  },
   background: {
     flex: 1,
     backgroundColor: "transparent",

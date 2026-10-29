@@ -1471,18 +1471,18 @@ function ChatIndividual({ route }) {
   }, []);
 
   return (
-    <>
+    <SafeAreaView style={styles.container}>
       <MicaIncidentIntakeModal
         visible={incidentIntakeVisible}
         submitting={reportandoIncidente}
         onClose={() => setIncidentIntakeVisible(false)}
         onSubmit={reportarIncidente}
       />
-      <BotonVolver />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.container}
       >
+        <BotonVolver />
         <View style={styles.header}>
           <View style={styles.headerCopy}>
             <Text style={styles.titulo}>{nombre}</Text>
@@ -1616,11 +1616,22 @@ function ChatIndividual({ route }) {
         >
           <View style={styles.modalFondo}>
             <View style={styles.modalContainer}>
-              <Text style={styles.modalTitulo}>
-                {reviewTarget === "client"
-                  ? "Calificar al cliente"
-                  : "Finalizar y calificar"}
-              </Text>
+              <View style={styles.modalHeaderRow}>
+                <Text style={styles.modalTitulo}>
+                  {reviewTarget === "client"
+                    ? "Calificar al cliente"
+                    : "Finalizar y calificar"}
+                </Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Cerrar"
+                  disabled={enviandoCalificacion}
+                  style={styles.botonCerrarModal}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Ionicons name="close" size={26} color="#333" />
+                </TouchableOpacity>
+              </View>
               <Text style={styles.modalHint}>
                 {reviewTarget === "client"
                   ? "Contá cómo fue la coordinación con el cliente. Una reseña aislada no genera sanciones automáticas."
@@ -1661,13 +1672,6 @@ function ChatIndividual({ route }) {
                       : "Confirmar trabajo terminado"}
                   </Text>
                 )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                disabled={enviandoCalificacion}
-                style={styles.botonCerrarModal}
-                onPress={() => setModalVisible(false)}
-              >
-                <Ionicons name="close" size={28} color="#333" />
               </TouchableOpacity>
             </View>
           </View>
@@ -1971,7 +1975,7 @@ function ChatIndividual({ route }) {
           />
         ) : null}
       </KeyboardAvoidingView>
-    </>
+    </SafeAreaView>
   );
 }
 
@@ -2656,8 +2660,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#19D4C6", // Turquesa fuerte
-    paddingTop: 54,
-    paddingBottom: 16,
+    paddingVertical: 12,
     paddingHorizontal: 16,
     borderBottomLeftRadius: 20,
     borderBottomRightRadius: 20,
@@ -2976,11 +2979,18 @@ const styles = StyleSheet.create({
     shadowRadius: 18,
   },
   modalTitulo: {
+    flex: 1,
     fontSize: 22,
     fontWeight: "bold",
     marginBottom: 14,
     color: "#19D4C6",
     textAlign: "center",
+  },
+  modalHeaderRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
   },
   modalHint: {
     marginBottom: 14,
@@ -3029,12 +3039,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   botonCerrarModal: {
-    position: "absolute",
-    top: 10,
-    right: 14,
     backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 3,
+    borderRadius: 18,
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   visitModalOverlay: {
     flex: 1,

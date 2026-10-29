@@ -134,17 +134,6 @@ const styles = StyleSheet.create({
     height: "100%",
     backgroundColor: "#f3f4f6",
   },
-  favoriteIcon: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "rgba(255, 255, 255, 0.9)",
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   iconWrapper: {
     // width: 50,
     // height: 50,

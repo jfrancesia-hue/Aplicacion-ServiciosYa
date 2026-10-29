@@ -19,7 +19,8 @@ import Icon from "react-native-vector-icons/MaterialIcons";
 import BotonVolver from "../components/BotonVolver";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { AuthStackParamList } from "../types/navigation";
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view'
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useReferrer } from "../lib/hooks/useReferrer";
 import { ensureUserProfile } from "../lib/utils/ensureUserProfile";
 
@@ -163,7 +164,6 @@ export default function Login({ navigation }: Props) {
         // publica la nueva sesión. Forzar un replace desde el stack de acceso
         // apunta a una ruta inexistente y deja un warning/error de navegación.
       }
-
     } catch (error) {
       console.error("Error de inicio de sesión:", error);
       setErrorMessage(ERROR_MESSAGES.GENERAL_ERROR);
@@ -180,16 +180,17 @@ export default function Login({ navigation }: Props) {
       style={styles.background}
       resizeMode="cover"
     >
-      <BotonVolver />
-      <Animated.View
+      <SafeAreaView style={styles.safeArea}>
+        <BotonVolver />
+        <Animated.View
         style={[
           styles.container,
           { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
         ]}
       >
-        <KeyboardAwareScrollView style={{width:'100%'}}>
+        <KeyboardAwareScrollView style={{ width: "100%" }}>
           <View style={styles.logoLightWrapper}>
-          <Image source={logo} style={styles.logo} />
+            <Image source={logo} style={styles.logo} />
           </View>
           <Text style={styles.title}>Iniciar Sesión</Text>
 
@@ -215,13 +216,16 @@ export default function Login({ navigation }: Props) {
             />
             <TouchableOpacity
               onPress={() => navigation.navigate("Recuperar contraseña")}
-              style={{ alignSelf: "flex-end", marginTop: -10, marginBottom: 10 }}
+              style={{
+                alignSelf: "flex-end",
+                marginTop: -10,
+                marginBottom: 10,
+              }}
             >
               <Text style={{ color: "#19D4C6", fontSize: 13 }}>
                 ¿Olvidaste tu contraseña?
               </Text>
             </TouchableOpacity>
-
           </View>
 
           <TouchableOpacity
@@ -237,7 +241,8 @@ export default function Login({ navigation }: Props) {
             </Text>
           </TouchableOpacity>
         </KeyboardAwareScrollView>
-      </Animated.View>
+        </Animated.View>
+      </SafeAreaView>
     </ImageBackground>
   );
 }
@@ -245,39 +250,45 @@ export default function Login({ navigation }: Props) {
 const styles = StyleSheet.create({
   background: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#d6f0f5',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#d6f0f5",
+  },
+  safeArea: {
+    flex: 1,
+    width: "100%",
+    justifyContent: "center",
+    alignItems: "center",
   },
   container: {
-    width: '88%',
+    width: "88%",
     paddingVertical: 36,
     paddingHorizontal: 22,
     borderRadius: 40,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
     borderWidth: 1,
-    borderColor: 'rgba(6, 158, 179, 0.2)',
-    shadowColor: '#069eb3',
+    borderColor: "rgba(6, 158, 179, 0.2)",
+    shadowColor: "#069eb3",
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
     elevation: 15,
-    alignItems: 'center',
+    alignItems: "center",
   },
   orange: {
-    color: '#069eb3',
+    color: "#069eb3",
   },
   googleIcon: {
     width: 22,
     height: 22,
     marginRight: 12,
-    resizeMode: 'contain',
+    resizeMode: "contain",
   },
   logoLightWrapper: {
     marginBottom: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#069eb3',
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#069eb3",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 20,
@@ -286,7 +297,7 @@ const styles = StyleSheet.create({
   logo: {
     width: 150,
     height: 150,
-    resizeMode: 'contain',
+    resizeMode: "contain",
   },
   title: {
     fontSize: 28,
@@ -302,7 +313,7 @@ const styles = StyleSheet.create({
   },
   input: {
     borderBottomWidth: 1.5,
-    borderBottomColor: '#a8dfe8',
+    borderBottomColor: "#a8dfe8",
     paddingVertical: 10,
     marginBottom: 20,
     fontSize: 16,
@@ -324,24 +335,21 @@ const styles = StyleSheet.create({
     textAlign: "left",
   },
   passwordContainer: {
-    position: "relative",
-    justifyContent: "center",
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 20,
+    borderBottomWidth: 1.5,
+    borderBottomColor: "#a8dfe8",
   },
   passwordInput: {
-    borderBottomWidth: 1.5,
-    borderBottomColor: '#a8dfe8',
+    flex: 1,
     paddingVertical: 10,
     fontSize: 16,
     color: "#333",
-    paddingRight: 38,
   },
   eyeButton: {
-    position: "absolute",
-    right: 0,
-    top: 6,
-    height: 32,
-    width: 36,
+    minHeight: 44,
+    minWidth: 44,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -353,7 +361,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     width: "100%",
     elevation: 5,
-    shadowColor: '#069eb3',
+    shadowColor: "#069eb3",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,

@@ -1,29 +1,39 @@
 import React, { useState } from "react";
-import { Text, TouchableOpacity, StyleSheet, Image, View } from "react-native";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { iconosCategoria } from "../../lib/utils/categorias";
 
 const fallbackIcon = require("../../assets/serviciosya-logo-2026.png");
 
-const capitalize = (s: string) => {
-  const t = s.trim();
-  return t.length === 0 ? t : t.charAt(0).toUpperCase() + t.slice(1);
+const capitalize = (value: string) => {
+  const text = value.trim();
+  return text.length === 0
+    ? text
+    : text.charAt(0).toUpperCase() + text.slice(1);
 };
 
 interface CategoryIconProps {
   categoria: string;
   iconoUrl?: string | null;
+  width?: number;
+  height?: number;
 }
 
-export const CategoryIcon = ({ categoria, iconoUrl }: CategoryIconProps) => {
+export const CategoryIcon = ({
+  categoria,
+  iconoUrl,
+  width = 155,
+  height = 100,
+}: CategoryIconProps) => {
   const [remoteFailed, setRemoteFailed] = useState(false);
   const remote = iconoUrl && !remoteFailed ? { uri: iconoUrl } : null;
   const localIcons = iconosCategoria as Record<string, number>;
   const source = remote ?? localIcons[categoria] ?? fallbackIcon;
+
   return (
     <View renderToHardwareTextureAndroid>
       <Image
         source={source}
-        style={styles.iconImage}
+        style={[styles.iconImage, { width, height }]}
         fadeDuration={0}
         onError={() => setRemoteFailed(true)}
       />
@@ -37,6 +47,7 @@ interface CategoryItemProps {
   onPress: () => void;
   disabled?: boolean;
   iconoUrl?: string | null;
+  width?: number;
 }
 
 export const CategoryItem = ({
@@ -45,23 +56,36 @@ export const CategoryItem = ({
   onPress,
   disabled,
   iconoUrl,
+  width = 155,
 }: CategoryItemProps) => (
   <TouchableOpacity
-    style={[styles.container, disabled && styles.disabled]}
+    accessibilityRole="button"
+    accessibilityLabel={`${capitalize(categoria)}. ${
+      count > 0
+        ? `${count} profesional${count !== 1 ? "es" : ""}`
+        : "Aún no hay profesionales"
+    }`}
+    accessibilityState={{ disabled: Boolean(disabled) }}
+    style={[styles.container, { width }, disabled && styles.disabled]}
     onPress={onPress}
     disabled={disabled}
   >
-    <View style={styles.iconContainer}>
-      <CategoryIcon categoria={categoria} iconoUrl={iconoUrl} />
+    <View style={[styles.iconContainer, { width }]}>
+      <CategoryIcon categoria={categoria} iconoUrl={iconoUrl} width={width} />
     </View>
     <View style={styles.textContainer}>
       <Text style={styles.name} numberOfLines={3} ellipsizeMode="tail">
         {capitalize(categoria)}
       </Text>
-      {count > 0
-        ? <Text style={styles.count} numberOfLines={1}>{count} profesional{count !== 1 ? "es" : ""}</Text>
-        : <Text style={styles.countEmpty} numberOfLines={2}>Aún no hay{"\n"}profesionales</Text>
-      }
+      {count > 0 ? (
+        <Text style={styles.count} numberOfLines={1}>
+          {count} profesional{count !== 1 ? "es" : ""}
+        </Text>
+      ) : (
+        <Text style={styles.countEmpty} numberOfLines={2}>
+          Aún no hay{"\n"}profesionales
+        </Text>
+      )}
     </View>
   </TouchableOpacity>
 );
@@ -69,31 +93,27 @@ export const CategoryItem = ({
 const styles = StyleSheet.create({
   container: {
     alignItems: "center",
-    backgroundColor: "#fafafa",
-    borderRadius: 12,
-    elevation: 4,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#dcebed",
+    elevation: 2,
     shadowColor: "#000",
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
-    marginRight: 12,
-    marginVertical: 8,
-    width: 155,
-    minHeight: 200,
+    minHeight: 188,
     paddingBottom: 8,
     overflow: "hidden",
   },
   disabled: { opacity: 0.6 },
   iconContainer: {
     marginBottom: 8,
-    width: 155,
     height: 100,
   },
   iconImage: {
-    width: 155,
-    height: 100,
     resizeMode: "cover",
-    borderRadius: 12,
+    borderRadius: 16,
     borderBottomLeftRadius: 0,
     borderBottomRightRadius: 0,
   },
@@ -104,7 +124,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-start",
   },
   name: {
-    fontSize: 12,
+    fontSize: 13,
     textAlign: "center",
     color: "#333",
     fontWeight: "700",
@@ -120,7 +140,7 @@ const styles = StyleSheet.create({
   },
   countEmpty: {
     fontSize: 10,
-    color: "#aaa",
+    color: "#777",
     fontWeight: "500",
     marginTop: 2,
     textAlign: "center",

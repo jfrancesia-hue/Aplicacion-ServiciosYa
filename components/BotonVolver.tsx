@@ -1,14 +1,19 @@
-import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import React from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-const BotonVolver = ({ texto = 'Volver' }) => {
+const BotonVolver = ({ texto = "Volver" }: { texto?: string }) => {
   const navigation = useNavigation();
 
   return (
     <View style={styles.contenedor}>
-      <TouchableOpacity style={styles.boton} onPress={() => navigation.goBack()}>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={texto}
+        style={styles.boton}
+        onPress={() => navigation.goBack()}
+      >
         <Ionicons name="arrow-back" size={20} color="#4A7C84" />
         <Text style={styles.texto}>{texto}</Text>
       </TouchableOpacity>
@@ -18,19 +23,21 @@ const BotonVolver = ({ texto = 'Volver' }) => {
 
 const styles = StyleSheet.create({
   contenedor: {
-    position: 'absolute',
-    top: 40,
-    left: 10,
-    zIndex: 999,
+    alignSelf: "flex-start",
+    marginTop: 8,
+    marginLeft: 12,
+    marginBottom: 8,
+    zIndex: 5,
   },
   boton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#ffffff',
-    paddingVertical: 8,
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#ffffff",
+    paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.15,
     shadowRadius: 4,
@@ -38,9 +45,9 @@ const styles = StyleSheet.create({
   },
   texto: {
     marginLeft: 6,
-    color: '#4A7C84',
+    color: "#4A7C84",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
 

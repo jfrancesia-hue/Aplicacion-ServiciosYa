@@ -987,7 +987,8 @@ function MicaChat({ navigation, route }: Props) {
 
     const timer = setTimeout(() => {
       void saveMicaDraft(authUserId, mode, { messages, insight }).catch(
-        (error) => console.warn("[MICA] no se pudo guardar el borrador:", error),
+        (error) =>
+          console.warn("[MICA] no se pudo guardar el borrador:", error),
       );
     }, 250);
 
@@ -1099,12 +1100,7 @@ function MicaChat({ navigation, route }: Props) {
     const province = locationFallback?.province?.trim();
     const latitude = locationFallback?.latitude;
     const longitude = locationFallback?.longitude;
-    if (
-      !city ||
-      !province ||
-      latitude == null ||
-      longitude == null
-    ) {
+    if (!city || !province || latitude == null || longitude == null) {
       locationSheetRef.current?.present();
       addMicaMessage(
         "Para actualizar esta búsqueda anterior, confirmá la ubicación con GPS o ingresá una dirección exacta.",
@@ -1424,12 +1420,12 @@ function MicaChat({ navigation, route }: Props) {
         colors={config.gradient}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={styles.header}
+        style={[styles.header, { paddingTop: Math.max(insets.top + 8, 16) }]}
       >
         <BotonVolver />
         <View style={styles.headerCard}>
           <View style={styles.avatar}>
-            <Ionicons name={config.icon} size={26} color={config.accent} />
+            <Ionicons name={config.icon} size={22} color={config.accent} />
           </View>
           <View style={styles.headerText}>
             <View style={styles.statusBadge}>
@@ -1624,8 +1620,8 @@ function MicaChat({ navigation, route }: Props) {
                 Falta confirmar la ubicación exacta
               </Text>
               <Text style={styles.legacyLocationText}>
-                Esta búsqueda se creó con una versión anterior. Confirmala
-                para ordenar prestadores por distancia real.
+                Esta búsqueda se creó con una versión anterior. Confirmala para
+                ordenar prestadores por distancia real.
               </Text>
               <TouchableOpacity
                 activeOpacity={0.8}
@@ -2091,9 +2087,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#f3f7f5",
   },
   header: {
-    paddingTop: 72,
-    paddingBottom: 18,
-    paddingHorizontal: 16,
+    paddingBottom: 10,
+    paddingHorizontal: 12,
   },
   searchHeaderActions: {
     alignItems: "center",
@@ -2102,8 +2097,8 @@ const styles = StyleSheet.create({
   locationControl: {
     alignSelf: "center",
     maxWidth: "100%",
-    marginTop: 10,
-    minHeight: 38,
+    marginTop: 6,
+    minHeight: 36,
     borderRadius: 19,
     paddingHorizontal: 13,
     flexDirection: "row",
@@ -2114,7 +2109,7 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.28)",
   },
   requestsShortcut: {
-    minHeight: 34,
+    minHeight: 32,
     borderRadius: 17,
     paddingHorizontal: 13,
     flexDirection: "row",
@@ -2165,9 +2160,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   headerCard: {
-    minHeight: 112,
-    borderRadius: 8,
-    padding: 14,
+    minHeight: 82,
+    borderRadius: 12,
+    padding: 10,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.13)",
@@ -2175,13 +2170,13 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.28)",
   },
   avatar: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 13,
+    marginRight: 10,
     shadowColor: "#102030",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.16,
@@ -2193,13 +2188,13 @@ const styles = StyleSheet.create({
   },
   statusBadge: {
     alignSelf: "flex-start",
-    minHeight: 24,
+    minHeight: 20,
     borderRadius: 8,
     paddingHorizontal: 8,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.2)",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   statusDot: {
     width: 7,
@@ -2215,14 +2210,14 @@ const styles = StyleSheet.create({
   },
   title: {
     color: "#ffffff",
-    fontSize: 22,
+    fontSize: 19,
     fontWeight: "900",
   },
   subtitle: {
     color: "#eefcff",
-    fontSize: 14,
-    lineHeight: 20,
-    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 2,
   },
   messages: {
     flex: 1,

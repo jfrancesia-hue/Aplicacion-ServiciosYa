@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import JobsOverview from "../components/jobs/JobsOverview";
 import type { MainStackParamList } from "../types/navigation";
 
@@ -9,23 +10,29 @@ type Props = NativeStackScreenProps<MainStackParamList, "TrabajosPendientes">;
 
 export default function TrabajosPendientes({ navigation }: Props) {
   return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.back}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={22} color="#075f6f" />
-        </TouchableOpacity>
-        <View style={styles.headerCopy}>
-          <Text style={styles.title}>Mis trabajos</Text>
-          <Text style={styles.subtitle}>
-            Agenda, acciones, cierres y reclamos
-          </Text>
-        </View>
-      </View>
-      <JobsOverview navigation={navigation} />
-    </View>
+    <SafeAreaView style={styles.screen}>
+      <JobsOverview
+        navigation={navigation}
+        header={
+          <View style={styles.header}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Volver"
+              style={styles.back}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={22} color="#075f6f" />
+            </TouchableOpacity>
+            <View style={styles.headerCopy}>
+              <Text style={styles.title}>Mis trabajos</Text>
+              <Text style={styles.subtitle}>
+                Agenda, acciones, cierres y reclamos
+              </Text>
+            </View>
+          </View>
+        }
+      />
+    </SafeAreaView>
   );
 }
 
@@ -41,8 +48,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#dbe5e7",
   },
   back: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",

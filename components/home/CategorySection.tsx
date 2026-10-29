@@ -1,10 +1,9 @@
 import React from "react";
-import { View, Text, FlatList, StyleSheet } from "react-native";
+import { StyleSheet, useWindowDimensions, View } from "react-native";
 
 import { CategoryItem } from "./CategoryItem";
 
 interface CategorySectionProps {
-  title: string;
   categories: string[];
   conteos: Record<string, number>;
   onCategoryPress: (category: string) => void;
@@ -12,86 +11,53 @@ interface CategorySectionProps {
   iconUrls?: Record<string, string | null | undefined>;
 }
 
+const GRID_GAP = 12;
+const GRID_HORIZONTAL_PADDING = 16;
+
 export const CategorySection = ({
-  title,
   categories,
   conteos,
   onCategoryPress,
   disabled,
   iconUrls,
 }: CategorySectionProps) => {
+  const { width: screenWidth } = useWindowDimensions();
+
   if (categories.length === 0) return null;
+
+  const availableWidth = Math.max(
+    screenWidth - GRID_HORIZONTAL_PADDING * 2,
+    280,
+  );
+  const columnCount = availableWidth >= 720 ? 4 : availableWidth >= 520 ? 3 : 2;
+  const cardWidth =
+    (availableWidth - GRID_GAP * (columnCount - 1)) / columnCount;
 
   return (
     <View style={styles.container}>
-      <FlatList
-  horizontal
-  data={categories}
-  extraData={categories}
-  keyExtractor={(item) => item}
-  renderItem={({ item }) => (
-    <CategoryItem
-      categoria={item}
-      count={conteos[item] || 0}
-      onPress={() => onCategoryPress(item)}
-      disabled={disabled}
-      iconoUrl={iconUrls?.[item]}
-    />
-  )}
-  showsHorizontalScrollIndicator={false}
-  contentContainerStyle={styles.scrollContent}
-
-  // 🔥 CLAVES
-  initialNumToRender={4}
-  maxToRenderPerBatch={4}
-  windowSize={2}
-  removeClippedSubviews={true}
-  updateCellsBatchingPeriod={50}
-/>
-
-
+      <View style={styles.grid}>
+        {categories.map((category) => (
+          <CategoryItem
+            key={category}
+            categoria={category}
+            count={conteos[category] || 0}
+            onPress={() => onCategoryPress(category)}
+            disabled={disabled}
+            iconoUrl={iconUrls?.[category]}
+            width={cardWidth}
+          />
+        ))}
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: { marginBottom: 16 },
-  title: {
-    fontWeight: "900",
-    color: "#333",
-    backgroundColor: "white",
-    paddingVertical: 6,
-    paddingHorizontal: 26,
-    borderRadius: 10,
-    marginLeft: 16,
-    marginBottom: 8,
-    alignSelf: "flex-start",
-    elevation: 3,
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: GRID_GAP,
+    paddingHorizontal: GRID_HORIZONTAL_PADDING,
   },
-  scrollContent: { paddingLeft: 16 },
 });
-// {
-//   "backgroundColor": "white",
-//   "paddingVertical": 6,
-//   "paddingHorizontal": 26,
-//   "borderRadius": 10,
-//   "marginTop": 20,
-//   "marginLeft": 3,
-//   "alignSelf": "flex-start",
-//   "marginBottom": 8,
-//   "elevation": 3,
-//   "shadowOffset": {
-//     "width": 0,
-//     "height": 1
-//   },
-//   "shadowOpacity": 0.2,
-//   "shadowRadius": 2,
-//   "fontWeight": 900,
-//   "color": "#333"
-// }

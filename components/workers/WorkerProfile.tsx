@@ -85,14 +85,16 @@ const WorkerProfile: React.FC<Props> = ({
                                 onError={() => setImageError(true)}
                             />
                         )}
-                        {isVerified === true && (
+                    </View>
+
+                    <View style={styles.userNameRow}>
+                        <Text style={styles.userName}>{name}</Text>
+                        {isVerified === true ? (
                             <View style={styles.verifiedBadge}>
                                 <MaterialIcons name="check" size={16} color="#ffffff" />
                             </View>
-                        )}
+                        ) : null}
                     </View>
-
-                    <Text style={styles.userName}>{name}</Text>
                     {/* <Text style={styles.userDescription}>{user.description}</Text> */}
 
                     <View style={styles.servicesCountContainer}>
@@ -169,7 +171,6 @@ const styles = StyleSheet.create({
         backgroundColor: colors.background || "#ffffff",
     },
     profileImageContainer: {
-        position: "relative",
         marginBottom: 16,
     },
     profileImage: {
@@ -183,9 +184,6 @@ const styles = StyleSheet.create({
         justifyContent: "center",
     },
     verifiedBadge: {
-        position: "absolute",
-        bottom: 0,
-        right: 0,
         width: 24,
         height: 24,
         borderRadius: 12,
@@ -194,6 +192,12 @@ const styles = StyleSheet.create({
         justifyContent: "center",
         borderWidth: 2,
         borderColor: colors.background || "#ffffff",
+    },
+    userNameRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
     },
     userName: {
         fontSize: 20,

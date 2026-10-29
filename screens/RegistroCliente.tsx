@@ -17,6 +17,7 @@ import {
   View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { SafeAreaView } from "react-native-safe-area-context";
 import SelectDropdown from "react-native-select-dropdown";
 import uuid from "react-native-uuid";
 import BotonVolver from "../components/BotonVolver";
@@ -90,10 +91,7 @@ export default function RegistroCliente() {
         !direccionDni.trim() ||
         !fechaNacimiento.trim()
       ) {
-        Alert.alert(
-          "Faltan datos",
-          "Completá todos los campos del paso 2.",
-        );
+        Alert.alert("Faltan datos", "Completá todos los campos del paso 2.");
         return;
       }
       if (!/^\d{7,8}$/.test(numeroDni)) {
@@ -197,7 +195,9 @@ export default function RegistroCliente() {
       navigation.reset({ index: 0, routes: [{ name: "Home" }] });
     } catch (error: unknown) {
       const message =
-        error instanceof Error ? error.message : "Error de registro desconocido";
+        error instanceof Error
+          ? error.message
+          : "Error de registro desconocido";
       console.error("Error al registrar usuario:", message);
       Alert.alert(
         "Error",
@@ -212,8 +212,9 @@ export default function RegistroCliente() {
       style={styles.background}
       resizeMode="cover"
     >
-      <BotonVolver />
-      <View style={styles.overlay}>
+      <SafeAreaView style={styles.safeArea}>
+        <BotonVolver />
+        <View style={styles.overlay}>
         <Text style={styles.title}>Registro - Cliente (Paso {step} de 3)</Text>
 
         <KeyboardAwareScrollView style={{ width: "100%" }}>
@@ -259,7 +260,7 @@ export default function RegistroCliente() {
                             !selectedItem && { color: "#999" },
                           ]}
                         >
-                          {(selectedItem?.title) || "Sexo"}
+                          {selectedItem?.title || "Sexo"}
                         </Text>
                       </View>
                     );
@@ -372,7 +373,8 @@ export default function RegistroCliente() {
             </TouchableOpacity>
           </View>
         </KeyboardAwareScrollView>
-      </View>
+        </View>
+      </SafeAreaView>
     </ImageBackground>
   );
 }
@@ -381,15 +383,17 @@ const styles = StyleSheet.create({
   background: {
     flex: 1,
     width: "100%",
-    height: "130%",
+  },
+  safeArea: {
+    flex: 1,
   },
   overlay: {
-    marginTop: 100,
+    flex: 1,
     backgroundColor: "rgba(255,255,255,0.8)",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 24,
-    paddingVertical: 40,
+    paddingVertical: 16,
   },
   title: {
     fontSize: 24,

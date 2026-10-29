@@ -13,7 +13,6 @@ import Animated, {
   withTiming,
   Easing,
   cancelAnimation,
-  useDerivedValue,
 } from "react-native-reanimated";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import colors from "../../lib/constants/colors";
@@ -29,8 +28,6 @@ interface SheetButtonProps {
   textStyle?: TextStyle;
   testID?: string;
 }
-
-const FADE_DURATION = 200; // Animation duration for fade in/out
 
 export function SheetButton({
   onPress,
@@ -48,17 +45,9 @@ export function SheetButton({
   // Controls the rotation of the spinner icon
   const rotation = useSharedValue(0);
 
-  // Controls the fade-in/out of the spinner and text
-  const loadingProgress = useSharedValue(loading ? 1 : 0);
-
   // --- Animation Logic ---
 
   React.useEffect(() => {
-    // Animate the fade-in/out transition
-    loadingProgress.value = withTiming(loading ? 1 : 0, {
-      duration: FADE_DURATION,
-    });
-
     // Start or stop the repeating rotation animation
     if (loading) {
       rotation.value = withRepeat(
@@ -70,26 +59,13 @@ export function SheetButton({
       cancelAnimation(rotation);
       rotation.value = 0;
     }
-  }, [loading, loadingProgress, rotation]);
+  }, [loading, rotation]);
 
   // --- Animated Styles ---
 
   // Style for the spinner icon's rotation
   const animatedSpinnerStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
-  }));
-
-  // Style for the container that holds the spinner
-  // It fades in and is absolutely positioned to overlay the text
-  const spinnerContainerStyle = useAnimatedStyle(() => ({
-    opacity: loadingProgress.value,
-    position: "absolute", // Key for preventing layout jumps
-  }));
-
-  // Style for the text container
-  // It fades out by reacting to the same progress value
-  const textContainerStyle = useAnimatedStyle(() => ({
-    opacity: 1 - loadingProgress.value,
   }));
 
   const iconColor =
@@ -124,41 +100,28 @@ export function SheetButton({
       accessibilityRole="button"
       accessibilityState={{ disabled: disabled || loading, busy: loading }}
     >
-      {/* 
-        Always render the Text to reserve its space and maintain button width.
-        Its visibility is controlled by animation.
-      */}
-      <Animated.View style={textContainerStyle}>
+      {loading ? (
+        <Animated.View style={styles.spinner}>
+          <Animated.View style={animatedSpinnerStyle}>
+            <MaterialCommunityIcons
+              name="loading"
+              size={iconSize}
+              color={iconColor}
+            />
+          </Animated.View>
+        </Animated.View>
+      ) : (
         <Text
           style={[
             styles.buttonText,
             styles[`buttonText_${variant}`],
             styles[`buttonText_${size}`],
-            // Use a specific style to make text invisible but still take up space
-            loading && styles.textHidden,
             textStyle,
           ]}
-          // Make the text unreadable for screen readers when loading
-          accessibilityElementsHidden={loading}
-          importantForAccessibility={loading ? "no-hide-descendants" : "auto"}
         >
           {label}
         </Text>
-      </Animated.View>
-
-      {/* 
-        The Spinner container is positioned on top of the text space.
-        Its visibility is also controlled by animation.
-      */}
-      <Animated.View style={[styles.spinner, spinnerContainerStyle]}>
-        <Animated.View style={animatedSpinnerStyle}>
-          <MaterialCommunityIcons
-            name="loading"
-            size={iconSize}
-            color={iconColor}
-          />
-        </Animated.View>
-      </Animated.View>
+      )}
     </Pressable>
   );
 }
@@ -247,10 +210,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     textAlign: "center",
   },
-  textHidden: {
-    color: "transparent",
-  },
-
   // Text size variants
   buttonText_small: {
     fontSize: 14,

@@ -59,10 +59,10 @@ test("la build interna exige una selección explícita del entorno de datos", ()
   );
 });
 
-test("la próxima compilación usa la build 99", () => {
-  assert.equal(app.expo.version, "99.0.0");
-  assert.equal(app.expo.android.versionCode, 99);
-  assert.equal(app.expo.ios.buildNumber, "99");
+test("la próxima compilación usa la build 100", () => {
+  assert.equal(app.expo.version, "100.0.0");
+  assert.equal(app.expo.android.versionCode, 100);
+  assert.equal(app.expo.ios.buildNumber, "100");
   assert.match(settingsScreen, /Servicios Ya v\{appVersion\} · build \{buildVersion\}/);
 });
 

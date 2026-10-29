@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Icon from "react-native-vector-icons/FontAwesome";
 import BotonVolver from "../components/BotonVolver";
 import PedidosMicaSection from "../components/serviciosYa/PedidosMicaSection";
@@ -245,26 +246,26 @@ export default function MisServicios() {
 
   if (isLoading) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <BotonVolver />
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#0e7b78" />
           <Text style={styles.loadingText}>Cargando servicios...</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
   if (isError) {
     return (
-      <View style={styles.container}>
+      <SafeAreaView style={styles.container}>
         <BotonVolver />
         <View style={styles.centerContent}>
           <Icon name="exclamation-circle" size={48} color="#EF4444" />
           <Text style={styles.errorText}>Error al cargar los servicios</Text>
           <Text style={styles.errorSubtext}>{error?.message}</Text>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -292,128 +293,135 @@ export default function MisServicios() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <BotonVolver />
+      <SafeAreaView style={styles.container}>
+        <FlatList
+          data={serviciosPublicados}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          ListHeaderComponent={
+            <>
+              <BotonVolver />
+              <View style={styles.header}>
+                <Text style={styles.pageTitle}>Mis servicios</Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Hacer una publicación"
+                  activeOpacity={0.85}
+                  onPress={() => navigation.navigate("OfrecerServicio")}
+                  style={styles.publishButton}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={22}
+                    color="#FFFFFF"
+                  />
+                  <Text style={styles.publishButtonText}>
+                    Hacer una publicación
+                  </Text>
+                  <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+              <PedidosMicaSection />
+            </>
+          }
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Icon name="inbox" size={64} color="#D1D5DB" />
+              <Text style={styles.emptyText}>No has publicado ofertas aún</Text>
+              <Text style={styles.emptySubtext}>
+                Tus servicios aparecerán aquí una vez que los publiques
+              </Text>
+            </View>
+          }
+        />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.pageTitle}>Mis servicios</Text>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Hacer una publicación"
-          activeOpacity={0.85}
-          onPress={() => navigation.navigate("OfrecerServicio")}
-          style={styles.publishButton}
+        {/* Bottom Sheet for Actions */}
+        <BottomSheet
+          ref={bottomSheetRef}
+          index={-1}
+          snapPoints={snapPoints}
+          enablePanDownToClose
+          backdropComponent={renderBackdrop}
+          backgroundStyle={styles.bottomSheetBackground}
+          handleIndicatorStyle={styles.bottomSheetIndicator}
         >
-          <Ionicons name="add-circle-outline" size={22} color="#FFFFFF" />
-          <Text style={styles.publishButtonText}>Hacer una publicación</Text>
-          <Ionicons name="chevron-forward" size={20} color="#FFFFFF" />
-        </TouchableOpacity>
-      </View>
-
-      {/* Main Content */}
-      <FlatList
-        data={serviciosPublicados}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderItem}
-        ListHeaderComponent={<PedidosMicaSection />}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Icon name="inbox" size={64} color="#D1D5DB" />
-            <Text style={styles.emptyText}>No has publicado ofertas aún</Text>
-            <Text style={styles.emptySubtext}>
-              Tus servicios aparecerán aquí una vez que los publiques
+          <BottomSheetView style={styles.bottomSheetContent}>
+            <Text style={styles.bottomSheetTitle}>
+              {selectedService?.titulo}
             </Text>
-          </View>
-        }
-      />
 
-      {/* Floating Action Button */}
-      {/* <TouchableOpacity style={styles.fab}>
-        <Ionicons name="add" size={32} color="#FFFFFF" />
-      </TouchableOpacity> */}
-
-      {/* Bottom Sheet for Actions */}
-      <BottomSheet
-        ref={bottomSheetRef}
-        index={-1}
-        snapPoints={snapPoints}
-        enablePanDownToClose
-        backdropComponent={renderBackdrop}
-        backgroundStyle={styles.bottomSheetBackground}
-        handleIndicatorStyle={styles.bottomSheetIndicator}
-      >
-        <BottomSheetView style={styles.bottomSheetContent}>
-          <Text style={styles.bottomSheetTitle}>{selectedService?.titulo}</Text>
-
-          <View style={styles.actionsContainer}>
-            {/* Edit Action */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={editarServicio}
-            >
-              <View
-                style={[
-                  styles.actionIconContainer,
-                  { backgroundColor: "#E8FAF7" },
-                ]}
+            <View style={styles.actionsContainer}>
+              {/* Edit Action */}
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={editarServicio}
               >
-                <Icon name="edit" size={20} color="#0e7b78" />
-              </View>
-              <Text style={styles.actionText}>Editar servicio</Text>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
+                <View
+                  style={[
+                    styles.actionIconContainer,
+                    { backgroundColor: "#E8FAF7" },
+                  ]}
+                >
+                  <Icon name="edit" size={20} color="#0e7b78" />
+                </View>
+                <Text style={styles.actionText}>Editar servicio</Text>
+                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
 
-            {/* Pause/Resume Action */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={pausarServicio}
-              disabled={toggleEstadoMutation.isPending}
-            >
-              <View
-                style={[
-                  styles.actionIconContainer,
-                  { backgroundColor: "#EFF6FF" },
-                ]}
+              {/* Pause/Resume Action */}
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={pausarServicio}
+                disabled={toggleEstadoMutation.isPending}
               >
-                <Icon
-                  name={
-                    selectedService?.estado === "pausado" ? "play" : "pause"
-                  }
-                  size={20}
-                  color="#3B82F6"
-                />
-              </View>
-              <Text style={styles.actionText}>
-                {selectedService?.estado === "pausado" ? "Reanudar" : "Pausar"}{" "}
-                servicio
-              </Text>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
+                <View
+                  style={[
+                    styles.actionIconContainer,
+                    { backgroundColor: "#EFF6FF" },
+                  ]}
+                >
+                  <Icon
+                    name={
+                      selectedService?.estado === "pausado" ? "play" : "pause"
+                    }
+                    size={20}
+                    color="#3B82F6"
+                  />
+                </View>
+                <Text style={styles.actionText}>
+                  {selectedService?.estado === "pausado"
+                    ? "Reanudar"
+                    : "Pausar"}{" "}
+                  servicio
+                </Text>
+                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
 
-            {/* Delete Action */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={eliminarServicio}
-              disabled={deleteMutation.isPending}
-            >
-              <View
-                style={[
-                  styles.actionIconContainer,
-                  { backgroundColor: "#FEF2F2" },
-                ]}
+              {/* Delete Action */}
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={eliminarServicio}
+                disabled={deleteMutation.isPending}
               >
-                <Icon name="trash" size={20} color="#EF4444" />
-              </View>
-              <Text style={[styles.actionText, { color: "#EF4444" }]}>
-                Eliminar servicio
-              </Text>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
-        </BottomSheetView>
-      </BottomSheet>
+                <View
+                  style={[
+                    styles.actionIconContainer,
+                    { backgroundColor: "#FEF2F2" },
+                  ]}
+                >
+                  <Icon name="trash" size={20} color="#EF4444" />
+                </View>
+                <Text style={[styles.actionText, { color: "#EF4444" }]}>
+                  Eliminar servicio
+                </Text>
+                <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+          </BottomSheetView>
+        </BottomSheet>
+      </SafeAreaView>
     </GestureHandlerRootView>
   );
 }
@@ -430,7 +438,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 80,
+    paddingTop: 8,
     paddingBottom: 16,
   },
   pageTitle: {
@@ -547,22 +555,6 @@ const styles = StyleSheet.create({
     color: "#0e7b78",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-  },
-  fab: {
-    position: "absolute",
-    bottom: 24,
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: "#0e7b78",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#0e7b78",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
   emptyContainer: {
     alignItems: "center",

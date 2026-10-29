@@ -1,8 +1,18 @@
-import { BottomSheetView } from "@gorhom/bottom-sheet";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  BottomSheetScrollView,
+  useBottomSheetModal,
+} from "@gorhom/bottom-sheet";
+import { useQuery } from "@tanstack/react-query";
 import { View, Text, StyleSheet, Switch, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUserSettings } from "../../lib/hooks/useUserSettings";
 import { useCallback } from "react";
+import { useMainNavigation } from "../../lib/hooks/useNavigation";
+import { perfilQueryOptions } from "../../lib/queryOptions";
+import { getProviderProfileCompleteness } from "../../lib/utils/providerProfile";
+import { hasProviderCapability } from "../../lib/utils/user";
+import { useIsGuest } from "../../store/authStore";
 
 // Color definitions
 const colors = {
@@ -83,11 +93,20 @@ const RadiusOption = ({
 
 function OptionsSheetView() {
   const insets = useSafeAreaInsets();
+  const navigation = useMainNavigation();
+  const { dismiss } = useBottomSheetModal();
+  const isGuest = useIsGuest();
+  const { data: profile } = useQuery(perfilQueryOptions);
   const bottomNavBarHeight = insets.bottom;
   const { settings, updateSettings } = useUserSettings();
 
   const showAllCategories = settings?.showAllCategories ?? true;
   const locationRadius = settings?.searchRadius ?? 10000;
+  const isProvider = hasProviderCapability(profile);
+  const profileCompleteness = getProviderProfileCompleteness(profile);
+  const needsProfileCompletion = isProvider
+    ? profileCompleteness.score < 100
+    : profile?.perfil_completo === false;
 
   const handleCategoriesSwitch = useCallback(() => {
     updateSettings({ showAllCategories: !showAllCategories });
@@ -100,17 +119,25 @@ function OptionsSheetView() {
     [updateSettings],
   );
 
-  const radiusOptions = [
-  { value: 1000, label: "1KM" },
-  { value: 5000, label: "5KM" },
-  { value: 10000, label: "10KM" },
-  { value: 50000, label: "50KM" },
-];
+  const handleProfilePress = useCallback(() => {
+    dismiss();
+    if (profile?.perfil_completo) {
+      navigation.navigate("Perfil");
+      return;
+    }
+    navigation.navigate("CrearPerfil");
+  }, [dismiss, navigation, profile?.perfil_completo]);
 
+  const radiusOptions = [
+    { value: 1000, label: "1KM" },
+    { value: 5000, label: "5KM" },
+    { value: 10000, label: "10KM" },
+    { value: 50000, label: "50KM" },
+  ];
 
   return (
-    <BottomSheetView
-      style={[
+    <BottomSheetScrollView
+      contentContainerStyle={[
         styles.sheetContainer,
         { paddingBottom: bottomNavBarHeight + 20 },
       ]}
@@ -120,6 +147,58 @@ function OptionsSheetView() {
       </View>
 
       <View style={styles.settingsContainer}>
+        {!isGuest ? (
+          <>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Cuenta</Text>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Abrir tu perfil"
+                onPress={handleProfilePress}
+                style={styles.profileRow}
+              >
+                <View style={styles.profileIcon}>
+                  <Ionicons name="person-outline" size={22} color="#047a8f" />
+                </View>
+                <View style={styles.profileCopy}>
+                  <Text style={styles.profileTitle}>Tu perfil</Text>
+                  <Text style={styles.profileSubtitle}>
+                    {isProvider
+                      ? `${profileCompleteness.score}% completo`
+                      : profile?.perfil_completo
+                        ? "Datos personales y de contacto"
+                        : "Faltan datos para habilitar todas las funciones"}
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#52666a" />
+              </TouchableOpacity>
+
+              {needsProfileCompletion ? (
+                <View style={styles.completionBox}>
+                  <Text style={styles.completionTitle}>Completá tu perfil</Text>
+                  <Text style={styles.completionText}>
+                    {isProvider
+                      ? "Sumá la información que falta para que los clientes entiendan mejor tu experiencia."
+                      : "Completá los datos pendientes para usar todas las funciones de ServiciosYa."}
+                  </Text>
+                  {isProvider ? (
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          { width: `${profileCompleteness.score}%` },
+                        ]}
+                      />
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.divider} />
+          </>
+        ) : null}
+
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Ubicación</Text>
 
@@ -155,7 +234,7 @@ function OptionsSheetView() {
           />
         </View>
       </View>
-    </BottomSheetView>
+    </BottomSheetScrollView>
   );
 }
 
@@ -163,7 +242,6 @@ export default OptionsSheetView;
 
 const styles = StyleSheet.create({
   sheetContainer: {
-    flex: 1,
     paddingHorizontal: 24,
     backgroundColor: colors.background,
   },
@@ -189,6 +267,68 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.primary,
     marginBottom: 4,
+  },
+  profileRow: {
+    minHeight: 64,
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#dcebed",
+    backgroundColor: "#f7fbfb",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  profileIcon: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+    backgroundColor: "#e4f5f5",
+  },
+  profileCopy: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  profileTitle: {
+    color: colors.textPrimary,
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  profileSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  completionBox: {
+    borderRadius: 12,
+    backgroundColor: "#eef9f9",
+    padding: 12,
+  },
+  completionTitle: {
+    color: "#174f59",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  completionText: {
+    color: "#52666a",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  progressTrack: {
+    height: 6,
+    overflow: "hidden",
+    borderRadius: 3,
+    backgroundColor: "#cde6e8",
+    marginTop: 9,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 3,
+    backgroundColor: "#069eb3",
   },
   switchContainer: {
     flexDirection: "row",

@@ -8,9 +8,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { supabase } from "../../lib/supabase";
-import {
-  workerStatusQueryOptions,
-} from "../../lib/queryOptions";
+import { workerStatusQueryOptions } from "../../lib/queryOptions";
 import {
   getLocationParamsFromClient,
   locationQueryString,
@@ -33,40 +31,22 @@ const availabilityChoices: AvailabilityChoice[] = [
     key: "online-8",
     status: "ONLINE",
     durationHours: 8,
-    label: "Disponible por 8 horas",
-    description: "Ideal para una jornada de trabajo.",
+    label: "8 horas",
+    description: "Para una jornada de trabajo.",
   },
   {
     key: "online-12",
     status: "ONLINE",
     durationHours: 12,
-    label: "Disponible por 12 horas",
-    description: "La opción recomendada para hoy.",
+    label: "12 horas",
+    description: "La opción predeterminada.",
   },
   {
     key: "online-24",
     status: "ONLINE",
     durationHours: 24,
-    label: "Disponible por 24 horas",
-    description: "Seguirás apareciendo primero hasta mañana.",
-  },
-  {
-    key: "busy",
-    status: "BUSY",
-    label: "Estoy ocupado",
-    description: "Los clientes podrán consultar tu próximo horario.",
-  },
-  {
-    key: "break",
-    status: "ON_BREAK",
-    label: "En descanso",
-    description: "Pausá temporalmente las solicitudes nuevas.",
-  },
-  {
-    key: "offline",
-    status: "OFFLINE",
-    label: "No disponible",
-    description: "Tu perfil seguirá publicado, con disponibilidad a confirmar.",
+    label: "24 horas",
+    description: "Para mantenerla activa hasta el día siguiente.",
   },
 ];
 
@@ -101,7 +81,7 @@ export async function updateWorkerAvailability(
       last_seen_at: now.toISOString(),
       available_until: availableUntil,
       availability_duration_hours:
-        status === "ONLINE" ? durationHours ?? 12 : null,
+        durationHours ?? (status === "ONLINE" ? 12 : null),
       ...(location?.search_lat != null && location.search_lon != null
         ? {
             location: locationQueryString(
@@ -142,10 +122,10 @@ function SelectWorkStateSheetView() {
 
   return (
     <SheetContainer>
-      <Text style={styles.sheetTitle}>Actualizar disponibilidad</Text>
+      <Text style={styles.sheetTitle}>Configurar disponibilidad</Text>
       <Text style={styles.sheetSubtitle}>
-        Elegí cuánto tiempo querés aparecer como disponible. Al vencer, tu
-        perfil seguirá publicado para consultas.
+        Elegí cuánto tiempo querés aparecer como disponible. Esta opción queda
+        guardada para el interruptor de Inicio y se activa al elegirla.
       </Text>
       <View style={styles.contentContainer}>
         {availabilityChoices.map((choice) => (
@@ -159,9 +139,7 @@ function SelectWorkStateSheetView() {
             disabled={isPending}
           >
             <Text style={styles.statusLabel}>{choice.label}</Text>
-            <Text style={styles.statusDescription}>
-              {choice.description}
-            </Text>
+            <Text style={styles.statusDescription}>{choice.description}</Text>
           </Pressable>
         ))}
       </View>

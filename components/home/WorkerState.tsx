@@ -1,50 +1,44 @@
-import { View, Text, StyleSheet, Pressable } from "react-native";
-import type { WorkerStatus } from "../../types/worker";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { BottomSheetModal } from "@gorhom/bottom-sheet";
-import SelectWorkStateSheetView from "../workers/SelectWorkStateSheetView";
-import { updateWorkerAvailability } from "../workers/SelectWorkStateSheetView";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { workerStatusQueryOptions } from "../../lib/queryOptions";
 import { supabase } from "../../lib/supabase";
+import showToast from "../../lib/toast";
 import { getUserFromClient } from "../../lib/utils/user";
-import type { StyleProp, ViewStyle } from "react-native";
+import SelectWorkStateSheetView, {
+  updateWorkerAvailability,
+} from "../workers/SelectWorkStateSheetView";
 
-type Labels = {
-  [P in WorkerStatus]: string;
-};
+type AvailabilityDuration = 8 | 12 | 24;
 
-const workStatusLabels: Labels = {
-  ONLINE: "En línea",
-  OFFLINE: "Desconectado",
-  BUSY: "Ocupado",
-  ON_BREAK: "En descanso",
-};
-
-const statusColors: Record<WorkerStatus, string> = {
-  ONLINE: "#43D675", // Green
-  OFFLINE: "#F44336", // Red
-  BUSY: "#FFB300", // Amber
-  ON_BREAK: "#42A5F5", // Blue
-};
+const getPreferredDuration = (value?: number | null): AvailabilityDuration =>
+  value === 8 || value === 24 ? value : 12;
 
 function WorkState({ style }: { style?: StyleProp<ViewStyle> }) {
   const queryClient = useQueryClient();
   const { data } = useQuery(workerStatusQueryOptions);
   const [now, setNow] = useState(Date.now());
   const status = data?.status ?? "OFFLINE";
-  const color = statusColors[status];
   const availableUntilMs = Date.parse(data?.availableUntil ?? "") || 0;
   const lastSeenMs = Date.parse(data?.lastSeenAt ?? "") || 0;
+  const preferredDuration = getPreferredDuration(data?.durationHours);
   const explicitAvailabilityActive =
     status === "ONLINE" && availableUntilMs > now;
   const legacyAvailabilityActive =
     status === "ONLINE" &&
     !availableUntilMs &&
     lastSeenMs > now - 30 * 60 * 1000;
-  const isAvailable =
-    explicitAvailabilityActive || legacyAvailabilityActive;
+  const isAvailable = explicitAvailabilityActive || legacyAvailabilityActive;
 
   const bottomSheetModalRef = useRef<BottomSheetModal>(null);
 
@@ -52,10 +46,13 @@ function WorkState({ style }: { style?: StyleProp<ViewStyle> }) {
     bottomSheetModalRef.current?.present();
   }, []);
 
-  const activateToday = useMutation({
-    mutationFn: () =>
+  const availabilityMutation = useMutation({
+    mutationFn: (nextAvailable: boolean) =>
       updateWorkerAvailability(
-        { status: "ONLINE", durationHours: 12 },
+        {
+          status: nextAvailable ? "ONLINE" : "OFFLINE",
+          durationHours: preferredDuration,
+        },
         queryClient,
       ),
     onSuccess: () => {
@@ -64,7 +61,7 @@ function WorkState({ style }: { style?: StyleProp<ViewStyle> }) {
       });
     },
     onError: (error: Error) => {
-      console.error("[WorkerState] no se pudo actualizar:", error);
+      showToast.error("No pudimos cambiar tu disponibilidad", error.message);
     },
   });
 
@@ -79,34 +76,31 @@ function WorkState({ style }: { style?: StyleProp<ViewStyle> }) {
       const canRefresh =
         status === "ONLINE" &&
         ((availableUntilMs > 0 && availableUntilMs > currentTime) ||
-          (!availableUntilMs &&
-            lastSeenMs > currentTime - 30 * 60 * 1000));
-      if (canRefresh) {
-        const user = getUserFromClient(queryClient);
-        if (user?.id) {
-          const { error } = await supabase.from("workers").upsert(
-            {
-              user_id: user.id,
-              last_seen_at: new Date().toISOString(),
-            },
-            { onConflict: "user_id" },
-          );
-          if (error) {
-            // Optionally handle/log error
-            console.error("Failed to update last_seen_at:", error);
-          }
-        }
+          (!availableUntilMs && lastSeenMs > currentTime - 30 * 60 * 1000));
+      if (!canRefresh) return;
+
+      const user = getUserFromClient(queryClient);
+      if (!user?.id) return;
+
+      const { error } = await supabase.from("workers").upsert(
+        {
+          user_id: user.id,
+          last_seen_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" },
+      );
+      if (error) {
+        console.error(
+          "[WorkerState] no se pudo actualizar last_seen_at:",
+          error,
+        );
       }
     };
 
-    const interval = setInterval(updateLastSeen, 3 * 60 * 1000); // 3 minutes
+    const interval = setInterval(updateLastSeen, 3 * 60 * 1000);
+    void updateLastSeen();
 
-    // Run immediately on mount if ONLINE
-    updateLastSeen();
-
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [availableUntilMs, lastSeenMs, status, queryClient]);
 
   const availabilityDetail = isAvailable
@@ -115,57 +109,39 @@ function WorkState({ style }: { style?: StyleProp<ViewStyle> }) {
           hour: "2-digit",
           minute: "2-digit",
         })}`
-      : "Actividad reciente"
-    : "Tu perfil sigue publicado";
+      : "Activa ahora"
+    : `Se activará por ${preferredDuration} h`;
 
   return (
     <>
       <View style={[styles.container, style]}>
         <View style={styles.copy}>
-          <View style={styles.statusRow}>
-            <View
-              style={[
-                styles.circle,
-                { backgroundColor: isAvailable ? "#159447" : color },
-              ]}
-            />
-            <Text style={styles.title}>
-              {isAvailable ? "Disponible hoy" : workStatusLabels[status]}
-            </Text>
-          </View>
+          <Text style={styles.title}>Estoy disponible</Text>
           <Text style={styles.detail}>{availabilityDetail}</Text>
         </View>
+        <Switch
+          accessibilityLabel="Estoy disponible para recibir solicitudes"
+          disabled={availabilityMutation.isPending}
+          value={isAvailable}
+          onValueChange={(value) => availabilityMutation.mutate(value)}
+          trackColor={{ false: "#b8c5c7", true: "#7dd8c4" }}
+          thumbColor={isAvailable ? "#047a8f" : "#f4f4f4"}
+        />
         <Pressable
           accessibilityRole="button"
-          disabled={activateToday.isPending}
-          onPress={
-            isAvailable
-              ? handlePresentModalPress
-              : () => activateToday.mutate()
-          }
+          accessibilityLabel="Configurar duración de disponibilidad"
+          onPress={handlePresentModalPress}
           style={({ pressed }) => [
-            styles.primaryButton,
+            styles.configureButton,
             pressed && styles.buttonPressed,
           ]}
         >
-          <Text style={styles.primaryButtonText}>
-            {activateToday.isPending
-              ? "Actualizando..."
-              : isAvailable
-                ? "Cambiar"
-                : "Disponible 12 h"}
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Ver más opciones de disponibilidad"
-          onPress={handlePresentModalPress}
-          style={styles.moreButton}
-        >
           <MaterialCommunityIcons
-            name="tune-variant"
-            size={20}
+            name="clock-outline"
+            size={19}
             color="#047a8f"
           />
+          <Text style={styles.configureText}>Configurar</Text>
         </Pressable>
       </View>
       <BottomSheetModal ref={bottomSheetModalRef}>
@@ -179,29 +155,19 @@ export default memo(WorkState);
 
 const styles = StyleSheet.create({
   container: {
+    minHeight: 64,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    minHeight: 76,
-    paddingVertical: 12,
+    paddingVertical: 9,
     paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: "#b7e0dc",
-    borderRadius: 18,
+    borderRadius: 16,
     backgroundColor: "#f5fcfb",
-  },
-  circle: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    marginRight: 7,
   },
   copy: {
     flex: 1,
-  },
-  statusRow: {
-    flexDirection: "row",
-    alignItems: "center",
   },
   title: {
     color: "#174d54",
@@ -209,32 +175,26 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   detail: {
-    marginTop: 4,
     color: "#5e7377",
     fontSize: 11,
+    marginTop: 3,
   },
-  primaryButton: {
-    minHeight: 40,
+  configureButton: {
+    minHeight: 44,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 13,
-    borderRadius: 20,
-    backgroundColor: "#047a8f",
-  },
-  primaryButtonText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "900",
-  },
-  moreButton: {
-    width: 38,
-    height: 38,
-    alignItems: "center",
-    justifyContent: "center",
+    gap: 5,
     borderWidth: 1,
     borderColor: "#b7dadd",
-    borderRadius: 19,
+    borderRadius: 22,
     backgroundColor: "#fff",
+    paddingHorizontal: 11,
+  },
+  configureText: {
+    color: "#047a8f",
+    fontSize: 11,
+    fontWeight: "800",
   },
   buttonPressed: {
     opacity: 0.78,

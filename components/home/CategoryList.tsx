@@ -1,10 +1,16 @@
-import React, { useMemo, useState, useCallback, useEffect } from "react";
+import React, {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   RefreshControl,
+  SectionList,
   StyleSheet,
   Text,
   View,
-  SectionList
 } from "react-native";
 
 // Components & Utils
@@ -28,7 +34,7 @@ interface CategoryListProps {
   busqueda: string;
   onCategoryPress: (category: string) => void;
   isUserRestricted: boolean;
-  // Removed 'refreshing' and 'onRefresh' as they were not used (logic is internal)
+  header?: ReactNode;
 }
 
 const normalize = (s: string) =>
@@ -42,15 +48,20 @@ const CategoryList = ({
   busqueda,
   onCategoryPress,
   isUserRestricted,
+  header,
 }: CategoryListProps) => {
   // 1. Hooks & State
   const { settings } = useUserSettings();
   const [isPullingToRefresh, setIsPullingToRefresh] = useState(false);
-  const [workerCountsError, setWorkerCountsError] = useState<string | null>(null);
-  const setHomeDataReady = useHomeEventsStore(s => s.setHomeDataReady);
+  const [workerCountsError, setWorkerCountsError] = useState<string | null>(
+    null,
+  );
+  const setHomeDataReady = useHomeEventsStore((s) => s.setHomeDataReady);
   const [workerCounts, setWorkerCounts] = useState<Record<string, number>>({});
   const { data: categoriasDB } = useSuspenseQuery(categoriasQueryOptions);
-  const effectiveLocation = useLocationStore((state) => state.effectiveLocation);
+  const effectiveLocation = useLocationStore(
+    (state) => state.effectiveLocation,
+  );
 
   const { dbByNormalized, iconUrls } = useMemo(() => {
     const map = new Map<string, string>();
@@ -101,7 +112,6 @@ const CategoryList = ({
       );
       return;
     }
-
   }, [
     categoriasDB,
     effectiveLocation?.city,
@@ -135,7 +145,8 @@ const CategoryList = ({
           if (usedInSections.has(dbName)) continue;
           usedInSections.add(dbName);
           const count = conteosMap[dbName] || 0;
-          const matchesSearch = !searchNorm || normalize(dbName).includes(searchNorm);
+          const matchesSearch =
+            !searchNorm || normalize(dbName).includes(searchNorm);
           const hasItemsOrShowAll = showAllCategories || count > 0;
           if (matchesSearch && hasItemsOrShowAll) activeCategories.push(dbName);
         }
@@ -148,14 +159,15 @@ const CategoryList = ({
         }
         return acc;
       },
-      [] as { title: string; data: string[][] }[]
+      [] as { title: string; data: string[][] }[],
     );
 
     const otras = Array.from(dbByNormalized.values())
       .filter((cat) => !usedInSections.has(cat))
       .filter((cat) => {
         const count = conteosMap[cat] || 0;
-        const matchesSearch = !searchNorm || normalize(cat).includes(searchNorm);
+        const matchesSearch =
+          !searchNorm || normalize(cat).includes(searchNorm);
         const hasItemsOrShowAll = showAllCategories || count > 0;
         return matchesSearch && hasItemsOrShowAll;
       })
@@ -192,30 +204,41 @@ const CategoryList = ({
       sections={filteredSections}
       keyExtractor={(_, index) => index.toString()}
       extraData={busqueda}
-
       ListHeaderComponent={
-        !effectiveLocation ? (
-          <View style={styles.notice}>
-            <Text style={styles.noticeTitle}>{"Confirm\u00e1 tu ubicaci\u00f3n"}</Text>
-            <Text style={styles.noticeText}>
-              {"Las cantidades aparecen cuando podemos calcular prestadores dentro de tu radio de b\u00fasqueda."}
+        <>
+          {header}
+          <View style={styles.catalogIntro}>
+            <Text style={styles.catalogTitle}>Servicios disponibles</Text>
+            <Text style={styles.catalogSubtitle}>
+              Elegí una categoría para ver profesionales de tu zona.
             </Text>
           </View>
-        ) : workerCountsError ? (
-          <View style={[styles.notice, styles.errorNotice]}>
-            <Text style={styles.noticeTitle}>No pudimos actualizar la zona</Text>
-            <Text style={styles.noticeText}>{workerCountsError}</Text>
-          </View>
-        ) : null
+          {!effectiveLocation ? (
+            <View style={styles.notice}>
+              <Text style={styles.noticeTitle}>
+                {"Confirm\u00e1 tu ubicaci\u00f3n"}
+              </Text>
+              <Text style={styles.noticeText}>
+                {
+                  "Las cantidades aparecen cuando podemos calcular prestadores dentro de tu radio de b\u00fasqueda."
+                }
+              </Text>
+            </View>
+          ) : workerCountsError ? (
+            <View style={[styles.notice, styles.errorNotice]}>
+              <Text style={styles.noticeTitle}>
+                No pudimos actualizar la zona
+              </Text>
+              <Text style={styles.noticeText}>{workerCountsError}</Text>
+            </View>
+          ) : null}
+        </>
       }
-
       renderSectionHeader={({ section }) => (
         <Text style={styles.sectionTitle}>{section.title}</Text>
       )}
-
-      renderItem={({ item, section }) => (
+      renderItem={({ item }) => (
         <CategorySection
-          title={section.title}
           categories={item}
           conteos={conteosMap}
           onCategoryPress={onCategoryPress}
@@ -223,7 +246,6 @@ const CategoryList = ({
           iconUrls={iconUrls}
         />
       )}
-
       refreshControl={
         <RefreshControl
           colors={["#00B8A9", "#fe971a"]}
@@ -231,9 +253,7 @@ const CategoryList = ({
           onRefresh={handleOnRefresh}
         />
       }
-
-      contentContainerStyle={{ paddingBottom: 120 }}
-
+      contentContainerStyle={styles.contentContainer}
       // 🔥 VIRTUALIZACIÓN REAL
       initialNumToRender={2}
       maxToRenderPerBatch={2}
@@ -243,31 +263,23 @@ const CategoryList = ({
   );
 };
 
-export default withSuspense(
-  CategoryList,
-  <LoadingView withNavBarMargin />,
-);
+export default withSuspense(CategoryList, <LoadingView withNavBarMargin />);
 
 // 6. Styles
 const styles = StyleSheet.create({
   sectionTitle: {
     fontWeight: "900",
-    color: "#333",
-    backgroundColor: "white",
-    paddingVertical: 6,
-    paddingHorizontal: 26,
-    borderRadius: 10,
-    marginLeft: 16,
-    marginBottom: 8,
-    alignSelf: "flex-start",
-    elevation: 3,
+    color: "#174f59",
+    fontSize: 18,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 10,
   },
   container: {
     flex: 1,
   },
   contentContainer: {
-    paddingTop: 10,
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
   centerContainer: {
     padding: 20,
@@ -286,6 +298,22 @@ const styles = StyleSheet.create({
     borderColor: "#bcdde1",
     backgroundColor: "#edfafa",
     padding: 14,
+  },
+  catalogIntro: {
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 12,
+  },
+  catalogTitle: {
+    color: "#174f59",
+    fontSize: 22,
+    fontWeight: "900",
+  },
+  catalogSubtitle: {
+    color: "#52666a",
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 4,
   },
   errorNotice: {
     borderColor: "#fed7aa",

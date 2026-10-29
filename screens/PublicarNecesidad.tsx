@@ -23,6 +23,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import SelectCitySheetView from "../components/home/SelectCitySheetView";
 import { withModalProvider } from "../components/sheet/withModalProvider";
 import {
@@ -311,444 +312,463 @@ function PublicarNecesidad({ navigation, route }: Props) {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={23} color="#064b59" />
-        </TouchableOpacity>
-        <View style={styles.headerCopy}>
-          <Text style={styles.headerTitle}>
-            {activeView === "history" ? "Mis búsquedas" : "Nueva publicación"}
-          </Text>
-          <Text style={styles.headerSubtitle}>
-            {activeView === "history"
-              ? "Seguimiento, propuestas e historial"
-              : "Recibí propuestas de prestadores"}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.viewTabs}>
-        <TouchableOpacity
-          onPress={() => setActiveView("history")}
-          style={[
-            styles.viewTab,
-            activeView === "history" && styles.viewTabActive,
-          ]}
-        >
-          <Ionicons
-            name="documents-outline"
-            size={18}
-            color={activeView === "history" ? "#fff" : "#087d8d"}
-          />
-          <Text
-            style={[
-              styles.viewTabText,
-              activeView === "history" && styles.viewTabTextActive,
-            ]}
-          >
-            Mis búsquedas
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActiveView("new")}
-          style={[styles.viewTab, activeView === "new" && styles.viewTabActive]}
-        >
-          <Ionicons
-            name="add-circle-outline"
-            size={18}
-            color={activeView === "new" ? "#fff" : "#087d8d"}
-          />
-          <Text
-            style={[
-              styles.viewTabText,
-              activeView === "new" && styles.viewTabTextActive,
-            ]}
-          >
-            Nueva publicación
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              loadRequests();
-            }}
-          />
-        }
+    <SafeAreaView style={styles.screen}>
+      <KeyboardAvoidingView
+        style={styles.screen}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {activeView === "new" ? (
-          <>
-            <View style={styles.introCard}>
-              <Ionicons
-                name="shield-checkmark-outline"
-                size={24}
-                color="#087d8d"
-              />
-              <Text style={styles.introText}>
-                Publicá el trabajo sin compartir teléfono, email ni enlaces.
-                Podés conversar cada propuesta antes de elegirla.
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadRequests();
+              }}
+            />
+          }
+        >
+          <View style={styles.header}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Volver"
+              style={styles.backButton}
+              onPress={() => navigation.goBack()}
+            >
+              <Ionicons name="arrow-back" size={23} color="#064b59" />
+            </TouchableOpacity>
+            <View style={styles.headerCopy}>
+              <Text style={styles.headerTitle}>
+                {activeView === "history"
+                  ? "Mis búsquedas"
+                  : "Nueva publicación"}
+              </Text>
+              <Text style={styles.headerSubtitle}>
+                {activeView === "history"
+                  ? "Seguimiento, propuestas e historial"
+                  : "Recibí propuestas de prestadores"}
               </Text>
             </View>
+          </View>
 
-            <View style={styles.formCard}>
-              <Text style={styles.sectionTitle}>¿Qué necesitás?</Text>
-
-              <Text style={styles.label}>Categoría</Text>
-              <View style={styles.pickerShell}>
-                {categories.length === 0 ? (
-                  <ActivityIndicator
-                    color="#069eb3"
-                    style={styles.pickerLoading}
-                  />
-                ) : (
-                  <Picker
-                    selectedValue={category}
-                    onValueChange={setCategory}
-                    style={styles.picker}
-                  >
-                    {categories.map((item) => (
-                      <Picker.Item key={item} label={item} value={item} />
-                    ))}
-                  </Picker>
-                )}
-              </View>
-
-              <Text style={styles.label}>Descripción del trabajo</Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Ej: necesito reparar una pérdida debajo de la mesada; empezó hoy y la llave de paso funciona."
-                placeholderTextColor="#8a9aa0"
-                multiline
-                maxLength={1500}
-                style={[styles.input, styles.descriptionInput]}
+          <View style={styles.viewTabs}>
+            <TouchableOpacity
+              onPress={() => setActiveView("history")}
+              style={[
+                styles.viewTab,
+                activeView === "history" && styles.viewTabActive,
+              ]}
+            >
+              <Ionicons
+                name="documents-outline"
+                size={18}
+                color={activeView === "history" ? "#fff" : "#087d8d"}
               />
-              <Text style={styles.helperText}>
-                {descriptionRemaining > 0
-                  ? `Faltan ${descriptionRemaining} caracteres como mínimo.`
-                  : "Buen nivel de detalle para recibir propuestas."}
-              </Text>
-
-              <Text style={styles.label}>Ciudad y provincia</Text>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => locationSheetRef.current?.present()}
+              <Text
                 style={[
-                  styles.locationPicker,
-                  (!city || !province) && styles.locationPickerMissing,
+                  styles.viewTabText,
+                  activeView === "history" && styles.viewTabTextActive,
                 ]}
               >
-                <Ionicons
-                  name="location-outline"
-                  size={20}
-                  color={city && province ? "#087d8d" : "#9a6000"}
-                />
-                <View style={styles.locationPickerCopy}>
-                  <Text style={styles.locationPickerValue}>
-                    {[city, province].filter(Boolean).join(", ") ||
-                      "Ubicación sin confirmar"}
-                  </Text>
-                  <Text style={styles.locationPickerHint}>
-                    {locationSource === "ip" && !city
-                      ? "La IP es aproximada: elegí la ciudad manualmente"
-                      : "Usá GPS o elegí una ciudad de Argentina"}
-                  </Text>
-                </View>
-                <Text style={styles.locationPickerAction}>
-                  {city && province ? "Cambiar" : "Elegir"}
-                </Text>
-              </TouchableOpacity>
-
-              <Text style={styles.label}>Barrio o referencia</Text>
-              <TextInput
-                value={zone}
-                onChangeText={setZone}
-                placeholder="Ej: Barrio 9 de Julio"
-                placeholderTextColor="#8a9aa0"
-                style={styles.input}
-              />
-              <Text style={styles.helperText}>
-                No publiques calle ni número: se comparten con el prestador
-                elegido dentro del chat seguro.
+                Mis búsquedas
               </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setActiveView("new")}
+              style={[
+                styles.viewTab,
+                activeView === "new" && styles.viewTabActive,
+              ]}
+            >
+              <Ionicons
+                name="add-circle-outline"
+                size={18}
+                color={activeView === "new" ? "#fff" : "#087d8d"}
+              />
+              <Text
+                style={[
+                  styles.viewTabText,
+                  activeView === "new" && styles.viewTabTextActive,
+                ]}
+              >
+                Nueva publicación
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {activeView === "new" ? (
+            <>
+              <View style={styles.introCard}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={24}
+                  color="#087d8d"
+                />
+                <Text style={styles.introText}>
+                  Publicá el trabajo sin compartir teléfono, email ni enlaces.
+                  Podés conversar cada propuesta antes de elegirla.
+                </Text>
+              </View>
 
-              <Text style={styles.label}>Prioridad</Text>
-              <View style={styles.optionGrid}>
-                {urgencyOptions.map((option) => {
-                  const selected = urgency === option.value;
-                  return (
+              <View style={styles.formCard}>
+                <Text style={styles.sectionTitle}>¿Qué necesitás?</Text>
+
+                <Text style={styles.label}>Categoría</Text>
+                <View style={styles.pickerShell}>
+                  {categories.length === 0 ? (
+                    <ActivityIndicator
+                      color="#069eb3"
+                      style={styles.pickerLoading}
+                    />
+                  ) : (
+                    <Picker
+                      selectedValue={category}
+                      onValueChange={setCategory}
+                      style={styles.picker}
+                    >
+                      {categories.map((item) => (
+                        <Picker.Item key={item} label={item} value={item} />
+                      ))}
+                    </Picker>
+                  )}
+                </View>
+
+                <Text style={styles.label}>Descripción del trabajo</Text>
+                <TextInput
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Ej: necesito reparar una pérdida debajo de la mesada; empezó hoy y la llave de paso funciona."
+                  placeholderTextColor="#8a9aa0"
+                  multiline
+                  maxLength={1500}
+                  style={[styles.input, styles.descriptionInput]}
+                />
+                <Text style={styles.helperText}>
+                  {descriptionRemaining > 0
+                    ? `Faltan ${descriptionRemaining} caracteres como mínimo.`
+                    : "Buen nivel de detalle para recibir propuestas."}
+                </Text>
+
+                <Text style={styles.label}>Ciudad y provincia</Text>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => locationSheetRef.current?.present()}
+                  style={[
+                    styles.locationPicker,
+                    (!city || !province) && styles.locationPickerMissing,
+                  ]}
+                >
+                  <Ionicons
+                    name="location-outline"
+                    size={20}
+                    color={city && province ? "#087d8d" : "#9a6000"}
+                  />
+                  <View style={styles.locationPickerCopy}>
+                    <Text style={styles.locationPickerValue}>
+                      {[city, province].filter(Boolean).join(", ") ||
+                        "Ubicación sin confirmar"}
+                    </Text>
+                    <Text style={styles.locationPickerHint}>
+                      {locationSource === "ip" && !city
+                        ? "La IP es aproximada: elegí la ciudad manualmente"
+                        : "Usá GPS o elegí una ciudad de Argentina"}
+                    </Text>
+                  </View>
+                  <Text style={styles.locationPickerAction}>
+                    {city && province ? "Cambiar" : "Elegir"}
+                  </Text>
+                </TouchableOpacity>
+
+                <Text style={styles.label}>Barrio o referencia</Text>
+                <TextInput
+                  value={zone}
+                  onChangeText={setZone}
+                  placeholder="Ej: Barrio 9 de Julio"
+                  placeholderTextColor="#8a9aa0"
+                  style={styles.input}
+                />
+                <Text style={styles.helperText}>
+                  No publiques calle ni número: se comparten con el prestador
+                  elegido dentro del chat seguro.
+                </Text>
+
+                <Text style={styles.label}>Prioridad</Text>
+                <View style={styles.optionGrid}>
+                  {urgencyOptions.map((option) => {
+                    const selected = urgency === option.value;
+                    return (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[
+                          styles.optionCard,
+                          selected && styles.optionCardSelected,
+                        ]}
+                        onPress={() => setUrgency(option.value)}
+                      >
+                        <Text
+                          style={[
+                            styles.optionLabel,
+                            selected && styles.optionLabelSelected,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                        <Text style={styles.optionDetail}>{option.detail}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {urgency === "urgente" ? (
+                  <Text style={styles.noticeText}>
+                    La publicación quedará destacada como prioritaria. El plazo
+                    de respuesta de 20 minutos se usa al elegir un prestador y
+                    enviarle una solicitud urgente explícita.
+                  </Text>
+                ) : null}
+
+                <Text style={styles.label}>Herramientas y materiales</Text>
+                <View style={styles.chipRow}>
+                  {toolsOptions.map((option) => (
                     <TouchableOpacity
                       key={option.value}
                       style={[
-                        styles.optionCard,
-                        selected && styles.optionCardSelected,
+                        styles.chip,
+                        toolsResponsibility === option.value &&
+                          styles.chipSelected,
                       ]}
-                      onPress={() => setUrgency(option.value)}
+                      onPress={() => setToolsResponsibility(option.value)}
                     >
                       <Text
                         style={[
-                          styles.optionLabel,
-                          selected && styles.optionLabelSelected,
+                          styles.chipText,
+                          toolsResponsibility === option.value &&
+                            styles.chipTextSelected,
                         ]}
                       >
                         {option.label}
                       </Text>
-                      <Text style={styles.optionDetail}>{option.detail}</Text>
                     </TouchableOpacity>
-                  );
-                })}
-              </View>
-              {urgency === "urgente" ? (
-                <Text style={styles.noticeText}>
-                  La publicación quedará destacada como prioritaria. El plazo de
-                  respuesta de 20 minutos se usa al elegir un prestador y
-                  enviarle una solicitud urgente explícita.
+                  ))}
+                </View>
+
+                <Text style={styles.label}>
+                  Personas estimadas para el trabajo
                 </Text>
-              ) : null}
-
-              <Text style={styles.label}>Herramientas y materiales</Text>
-              <View style={styles.chipRow}>
-                {toolsOptions.map((option) => (
+                <View style={styles.counterRow}>
                   <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.chip,
-                      toolsResponsibility === option.value &&
-                        styles.chipSelected,
-                    ]}
-                    onPress={() => setToolsResponsibility(option.value)}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        toolsResponsibility === option.value &&
-                          styles.chipTextSelected,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.label}>
-                Personas estimadas para el trabajo
-              </Text>
-              <View style={styles.counterRow}>
-                <TouchableOpacity
-                  style={styles.counterButton}
-                  onPress={() => setTeamSize((value) => Math.max(1, value - 1))}
-                >
-                  <Ionicons name="remove" size={20} color="#087d8d" />
-                </TouchableOpacity>
-                <Text style={styles.counterValue}>{teamSize}</Text>
-                <TouchableOpacity
-                  style={styles.counterButton}
-                  onPress={() =>
-                    setTeamSize((value) => Math.min(10, value + 1))
-                  }
-                >
-                  <Ionicons name="add" size={20} color="#087d8d" />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.label}>
-                Modalidad de presupuesto preferida
-              </Text>
-              <View style={styles.chipRow}>
-                {budgetModes.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.chip,
-                      budgetMode === option.value && styles.chipSelected,
-                    ]}
-                    onPress={() => setBudgetMode(option.value)}
-                  >
-                    <Text
-                      style={[
-                        styles.chipText,
-                        budgetMode === option.value && styles.chipTextSelected,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                disabled={submitting}
-                style={[
-                  styles.submitButton,
-                  submitting && styles.disabledButton,
-                ]}
-                onPress={submit}
-              >
-                {submitting ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <>
-                    <Ionicons name="megaphone-outline" size={20} color="#fff" />
-                    <Text style={styles.submitText}>Publicar necesidad</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </>
-        ) : null}
-
-        {activeView === "history" ? (
-          <>
-            <View style={styles.historyHeader}>
-              <Text style={styles.sectionTitle}>Todas tus búsquedas</Text>
-              <Text style={styles.historyHint}>
-                Tocá una para ver sus propuestas
-              </Text>
-            </View>
-
-            {requestsError ? (
-              <View style={styles.errorCard}>
-                <Ionicons
-                  name="cloud-offline-outline"
-                  size={25}
-                  color="#a33f3f"
-                />
-                <Text style={styles.errorText}>{requestsError}</Text>
-                <TouchableOpacity
-                  onPress={loadRequests}
-                  style={styles.retryButton}
-                >
-                  <Text style={styles.retryButtonText}>Reintentar</Text>
-                </TouchableOpacity>
-              </View>
-            ) : loadingRequests ? (
-              <ActivityIndicator
-                color="#069eb3"
-                style={styles.historyLoading}
-              />
-            ) : requests.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="documents-outline" size={28} color="#7b9298" />
-                <Text style={styles.emptyText}>
-                  Todavía no publicaste ninguna necesidad.
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setActiveView("new")}
-                  style={styles.emptyAction}
-                >
-                  <Text style={styles.emptyActionText}>Crear la primera</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              requests.map((request) => {
-                const closed = [
-                  "cancelada",
-                  "cancelado",
-                  "finalizada",
-                  "finalizado",
-                ].includes(request.status.toLowerCase());
-                const canCancel =
-                  !closed && !request.selectedBudgetId && !request.chatId;
-                return (
-                  <TouchableOpacity
-                    key={request.id}
-                    activeOpacity={0.8}
-                    style={[
-                      styles.requestCard,
-                      closed && styles.requestCardDisabled,
-                    ]}
+                    style={styles.counterButton}
                     onPress={() =>
-                      navigation.navigate("MicaChat", {
-                        mode: "buscar-servicio",
-                        offerId: request.id,
-                      })
+                      setTeamSize((value) => Math.max(1, value - 1))
                     }
                   >
-                    <View style={styles.requestTopRow}>
-                      <View style={styles.sourceBadge}>
-                        <Text style={styles.sourceText}>
-                          {request.source === "manual_app"
-                            ? "PUBLICACIÓN"
-                            : "MICA"}
+                    <Ionicons name="remove" size={20} color="#087d8d" />
+                  </TouchableOpacity>
+                  <Text style={styles.counterValue}>{teamSize}</Text>
+                  <TouchableOpacity
+                    style={styles.counterButton}
+                    onPress={() =>
+                      setTeamSize((value) => Math.min(10, value + 1))
+                    }
+                  >
+                    <Ionicons name="add" size={20} color="#087d8d" />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.label}>
+                  Modalidad de presupuesto preferida
+                </Text>
+                <View style={styles.chipRow}>
+                  {budgetModes.map((option) => (
+                    <TouchableOpacity
+                      key={option.value}
+                      style={[
+                        styles.chip,
+                        budgetMode === option.value && styles.chipSelected,
+                      ]}
+                      onPress={() => setBudgetMode(option.value)}
+                    >
+                      <Text
+                        style={[
+                          styles.chipText,
+                          budgetMode === option.value &&
+                            styles.chipTextSelected,
+                        ]}
+                      >
+                        {option.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <TouchableOpacity
+                  disabled={submitting}
+                  style={[
+                    styles.submitButton,
+                    submitting && styles.disabledButton,
+                  ]}
+                  onPress={submit}
+                >
+                  {submitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="megaphone-outline"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.submitText}>Publicar necesidad</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : null}
+
+          {activeView === "history" ? (
+            <>
+              <View style={styles.historyHeader}>
+                <Text style={styles.sectionTitle}>Todas tus búsquedas</Text>
+                <Text style={styles.historyHint}>
+                  Tocá una para ver sus propuestas
+                </Text>
+              </View>
+
+              {requestsError ? (
+                <View style={styles.errorCard}>
+                  <Ionicons
+                    name="cloud-offline-outline"
+                    size={25}
+                    color="#a33f3f"
+                  />
+                  <Text style={styles.errorText}>{requestsError}</Text>
+                  <TouchableOpacity
+                    onPress={loadRequests}
+                    style={styles.retryButton}
+                  >
+                    <Text style={styles.retryButtonText}>Reintentar</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : loadingRequests ? (
+                <ActivityIndicator
+                  color="#069eb3"
+                  style={styles.historyLoading}
+                />
+              ) : requests.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Ionicons
+                    name="documents-outline"
+                    size={28}
+                    color="#7b9298"
+                  />
+                  <Text style={styles.emptyText}>
+                    Todavía no publicaste ninguna necesidad.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setActiveView("new")}
+                    style={styles.emptyAction}
+                  >
+                    <Text style={styles.emptyActionText}>Crear la primera</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                requests.map((request) => {
+                  const closed = [
+                    "cancelada",
+                    "cancelado",
+                    "finalizada",
+                    "finalizado",
+                  ].includes(request.status.toLowerCase());
+                  const canCancel =
+                    !closed && !request.selectedBudgetId && !request.chatId;
+                  return (
+                    <TouchableOpacity
+                      key={request.id}
+                      activeOpacity={0.8}
+                      style={[
+                        styles.requestCard,
+                        closed && styles.requestCardDisabled,
+                      ]}
+                      onPress={() =>
+                        navigation.navigate("MicaChat", {
+                          mode: "buscar-servicio",
+                          offerId: request.id,
+                        })
+                      }
+                    >
+                      <View style={styles.requestTopRow}>
+                        <View style={styles.sourceBadge}>
+                          <Text style={styles.sourceText}>
+                            {request.source === "manual_app"
+                              ? "PUBLICACIÓN"
+                              : "MICA"}
+                          </Text>
+                        </View>
+                        <Text style={styles.requestDate}>
+                          {new Date(request.createdAt).toLocaleDateString(
+                            "es-AR",
+                          )}
                         </Text>
                       </View>
-                      <Text style={styles.requestDate}>
-                        {new Date(request.createdAt).toLocaleDateString(
-                          "es-AR",
-                        )}
+                      <Text style={styles.requestCategory}>
+                        {request.category}
                       </Text>
-                    </View>
-                    <Text style={styles.requestCategory}>
-                      {request.category}
-                    </Text>
-                    <View style={styles.requestZoneRow}>
-                      <Ionicons
-                        name="location-outline"
-                        size={14}
-                        color="#087d8d"
-                      />
-                      <Text style={styles.requestZone} numberOfLines={2}>
-                        {request.zone || "Ubicación no informada"}
-                      </Text>
-                    </View>
-                    <Text style={styles.requestDescription} numberOfLines={3}>
-                      {request.description}
-                    </Text>
-                    <View style={styles.requestFooter}>
-                      <View style={styles.requestStatus}>
+                      <View style={styles.requestZoneRow}>
                         <Ionicons
-                          name={
-                            closed
-                              ? "archive-outline"
-                              : request.responseCount > 0
-                                ? "mail-open-outline"
-                                : "time-outline"
-                          }
-                          size={15}
+                          name="location-outline"
+                          size={14}
                           color="#087d8d"
                         />
-                        <Text style={styles.requestStatusText}>
-                          {statusCopy(request)}
+                        <Text style={styles.requestZone} numberOfLines={2}>
+                          {request.zone || "Ubicación no informada"}
                         </Text>
                       </View>
-                      {canCancel ? (
-                        <TouchableOpacity
-                          style={styles.cancelButton}
-                          onPress={() => cancel(request)}
-                        >
-                          <Text style={styles.cancelText}>Cancelar</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })
-            )}
-          </>
-        ) : null}
-      </ScrollView>
-      <BottomSheetModal
-        ref={locationSheetRef}
-        snapPoints={LOCATION_SHEET_SNAP_POINTS}
-        enablePanDownToClose
-      >
-        <SelectCitySheetView />
-      </BottomSheetModal>
-    </KeyboardAvoidingView>
+                      <Text style={styles.requestDescription} numberOfLines={3}>
+                        {request.description}
+                      </Text>
+                      <View style={styles.requestFooter}>
+                        <View style={styles.requestStatus}>
+                          <Ionicons
+                            name={
+                              closed
+                                ? "archive-outline"
+                                : request.responseCount > 0
+                                  ? "mail-open-outline"
+                                  : "time-outline"
+                            }
+                            size={15}
+                            color="#087d8d"
+                          />
+                          <Text style={styles.requestStatusText}>
+                            {statusCopy(request)}
+                          </Text>
+                        </View>
+                        {canCancel ? (
+                          <TouchableOpacity
+                            style={styles.cancelButton}
+                            onPress={() => cancel(request)}
+                          >
+                            <Text style={styles.cancelText}>Cancelar</Text>
+                          </TouchableOpacity>
+                        ) : null}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </>
+          ) : null}
+        </ScrollView>
+        <BottomSheetModal
+          ref={locationSheetRef}
+          snapPoints={LOCATION_SHEET_SNAP_POINTS}
+          enablePanDownToClose
+        >
+          <SelectCitySheetView />
+        </BottomSheetModal>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -766,8 +786,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#dbe5e7",
   },
   backButton: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
     borderRadius: 14,
     backgroundColor: "#eaf8fa",
     alignItems: "center",
@@ -787,7 +807,7 @@ const styles = StyleSheet.create({
   },
   viewTab: {
     flex: 1,
-    minHeight: 42,
+    minHeight: 44,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#bcdde1",

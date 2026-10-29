@@ -62,15 +62,17 @@ function BadgeNavButton({
           : null,
       ]}
     >
-      <Ionicons name={name} size={24} color="#fff" />
+      <View style={styles.iconWithBadge}>
+        <Ionicons name={name} size={24} color="#fff" />
+        {badgeCount > 0 ? (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>
+              {badgeCount > 99 ? "99+" : badgeCount}
+            </Text>
+          </View>
+        ) : null}
+      </View>
       <Text style={styles.navLabel}>{label}</Text>
-      {badgeCount > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>
-            {badgeCount > 99 ? "99+" : badgeCount}
-          </Text>
-        </View>
-      )}
     </Pressable>
   );
 }
@@ -129,10 +131,6 @@ export default memo(BottomNavBar);
 
 const styles = StyleSheet.create({
   navContainer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
     flexDirection: "row",
     justifyContent: "space-around",
     alignItems: "center",
@@ -153,7 +151,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   navButton: {
-    position: "relative",
     minWidth: 54,
     borderRadius: 18,
     paddingHorizontal: 6,
@@ -161,10 +158,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 1,
     alignItems: "center",
   },
+  iconWithBadge: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
   badge: {
-    position: "absolute",
-    top: 0,
-    right: 0,
     backgroundColor: "#ff5b5b",
     borderRadius: 10,
     minWidth: 18,
@@ -174,6 +173,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#fff",
+    marginLeft: 3,
   },
   badgeText: {
     color: "#fff",

@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import BotonVolver from "../components/BotonVolver";
 import { useSuspenseProfile } from "../lib/hooks/useUser";
 import { supabase } from "../lib/supabase";
@@ -737,7 +738,11 @@ export default function OperationalDashboard() {
         { body: { action: "send", batchSize: 10 } },
       );
       if (error || data?.error) {
-        throw new Error(data?.error || error?.message || "No se pudieron enviar los recordatorios.");
+        throw new Error(
+          data?.error ||
+            error?.message ||
+            "No se pudieron enviar los recordatorios.",
+        );
       }
       Alert.alert(
         "Lote procesado",
@@ -755,8 +760,7 @@ export default function OperationalDashboard() {
   }, [loadDashboard, providerCampaign?.due, sendingProviderEmails]);
 
   return (
-    <View style={styles.screen}>
-      <BotonVolver />
+    <SafeAreaView style={styles.screen}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
@@ -768,6 +772,7 @@ export default function OperationalDashboard() {
           />
         }
       >
+        <BotonVolver />
         <LinearGradient
           colors={["#063b45", "#047a8f", "#069eb3"]}
           start={{ x: 0, y: 0 }}
@@ -877,16 +882,26 @@ export default function OperationalDashboard() {
                 />
                 <View style={styles.campaignMetrics}>
                   <View style={styles.campaignMetric}>
-                    <Text style={styles.campaignValue}>{formatCount(providerCampaign.incomplete)}</Text>
-                    <Text style={styles.campaignLabel}>Perfiles incompletos</Text>
+                    <Text style={styles.campaignValue}>
+                      {formatCount(providerCampaign.incomplete)}
+                    </Text>
+                    <Text style={styles.campaignLabel}>
+                      Perfiles incompletos
+                    </Text>
                   </View>
                   <View style={styles.campaignMetric}>
-                    <Text style={styles.campaignValue}>{formatCount(providerCampaign.due)}</Text>
-                    <Text style={styles.campaignLabel}>Habilitados para email</Text>
+                    <Text style={styles.campaignValue}>
+                      {formatCount(providerCampaign.due)}
+                    </Text>
+                    <Text style={styles.campaignLabel}>
+                      Habilitados para email
+                    </Text>
                   </View>
                 </View>
                 <Text style={styles.campaignNote}>
-                  El mensaje aclara que completar el perfil no tiene costo, no promete trabajos y ofrece un enlace de baja. Solo se envía a emails confirmados.
+                  El mensaje aclara que completar el perfil no tiene costo, no
+                  promete trabajos y ofrece un enlace de baja. Solo se envía a
+                  emails confirmados.
                 </Text>
                 <TouchableOpacity
                   activeOpacity={0.8}
@@ -894,7 +909,8 @@ export default function OperationalDashboard() {
                   onPress={() => void sendProviderProfileReminders()}
                   style={[
                     styles.campaignButton,
-                    (sendingProviderEmails || providerCampaign.due === 0) && styles.campaignButtonDisabled,
+                    (sendingProviderEmails || providerCampaign.due === 0) &&
+                      styles.campaignButtonDisabled,
                   ]}
                 >
                   {sendingProviderEmails ? (
@@ -902,7 +918,9 @@ export default function OperationalDashboard() {
                   ) : (
                     <>
                       <Ionicons name="send" size={17} color="#fff" />
-                      <Text style={styles.campaignButtonText}>Enviar próximo lote de 10</Text>
+                      <Text style={styles.campaignButtonText}>
+                        Enviar próximo lote de 10
+                      </Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -1056,9 +1074,8 @@ export default function OperationalDashboard() {
                         </Text>
                       </View>
                       <Text style={styles.reportProvider}>
-                        {CANCELLATION_REASON_LABELS[
-                          cancellation.reason_code
-                        ] ?? cancellation.reason_code}
+                        {CANCELLATION_REASON_LABELS[cancellation.reason_code] ??
+                          cancellation.reason_code}
                       </Text>
                       <Text style={styles.cancellationParties}>
                         Cliente: {cancellation.client_name}
@@ -1691,7 +1708,7 @@ export default function OperationalDashboard() {
           </>
         ) : null}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -1702,7 +1719,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 14,
-    paddingTop: 56,
+    paddingTop: 8,
     paddingBottom: 48,
   },
   hero: {
@@ -2344,11 +2361,35 @@ const styles = StyleSheet.create({
     borderColor: "#dce8e6",
   },
   campaignMetrics: { flexDirection: "row", gap: 10 },
-  campaignMetric: { flex: 1, padding: 14, borderRadius: 16, backgroundColor: "#eff8f7" },
+  campaignMetric: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: "#eff8f7",
+  },
   campaignValue: { color: "#047a8f", fontSize: 24, fontWeight: "900" },
-  campaignLabel: { color: "#60777a", fontSize: 11, fontWeight: "700", marginTop: 3 },
-  campaignNote: { color: "#60777a", fontSize: 12, lineHeight: 18, marginTop: 13 },
-  campaignButton: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, minHeight: 46, borderRadius: 23, backgroundColor: "#069eb3", marginTop: 14 },
+  campaignLabel: {
+    color: "#60777a",
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 3,
+  },
+  campaignNote: {
+    color: "#60777a",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 13,
+  },
+  campaignButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minHeight: 46,
+    borderRadius: 23,
+    backgroundColor: "#069eb3",
+    marginTop: 14,
+  },
   campaignButtonDisabled: { opacity: 0.45 },
   campaignButtonText: { color: "#fff", fontSize: 13, fontWeight: "900" },
   cancellationCard: {

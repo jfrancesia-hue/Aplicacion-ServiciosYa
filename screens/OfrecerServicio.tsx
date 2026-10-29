@@ -240,7 +240,6 @@ function OfrecerServicio({ navigation, route }: Props) {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#E8FAF7" }}>
-      <BotonVolver />
       <KeyboardAwareScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContentContainer}
@@ -252,9 +251,8 @@ function OfrecerServicio({ navigation, route }: Props) {
         extraHeight={Platform.OS === "ios" ? 80 : 140}
         enableOnAndroid={true}
       >
-        <Text style={[styles.title, { marginTop: 20 }]}>
-          Publicar un Servicio
-        </Text>
+        <BotonVolver />
+        <Text style={styles.title}>Publicar un Servicio</Text>
 
         {micaDraft ? (
           <View style={styles.micaDraftNotice}>

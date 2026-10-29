@@ -910,7 +910,6 @@ function ServiciosPorCategoria({ route, navigation }: Props) {
       setLoading(false);
       return;
     }
-
   }, [
     categoria,
     effectiveLocation,
@@ -951,9 +950,9 @@ function ServiciosPorCategoria({ route, navigation }: Props) {
             ? "Buscando en tu zona..."
             : loadError
               ? "No se pudo actualizar la b\u00fasqueda"
-            : locationFallbackActive
-              ? `${visibleWorkers.length} dentro de ${Math.max(1, Math.round(searchRadius / 1000))} km`
-              : `${visibleWorkers.length} prestador${visibleWorkers.length !== 1 ? "es" : ""} en tu zona`}
+              : locationFallbackActive
+                ? `${visibleWorkers.length} dentro de ${Math.max(1, Math.round(searchRadius / 1000))} km`
+                : `${visibleWorkers.length} prestador${visibleWorkers.length !== 1 ? "es" : ""} en tu zona`}
         </Text>
       </LinearGradient>
 
@@ -995,128 +994,135 @@ function ServiciosPorCategoria({ route, navigation }: Props) {
                 province={userLocation?.provincia}
                 navigation={navigation}
               />
-            {locationError ? (
-              <View style={styles.locationBanner}>
-                <MaterialIcons name="location-off" size={18} color="#92400e" />
-                <View style={styles.locationBannerCopy}>
-                  <Text style={styles.locationBannerTitle}>
-                    Confirmá tu ubicación exacta
-                  </Text>
-                  <Text style={styles.locationBannerText}>
-                    No mostramos resultados generales: usá GPS o ingresá una
-                    dirección para encontrar prestadores cercanos.
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel="Elegir mi ubicación"
-                  onPress={() => locationSheetRef.current?.present()}
-                  style={styles.locationRetryButton}
-                >
-                  <MaterialIcons name="refresh" size={20} color="#047a8f" />
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View
-                style={[
-                  styles.scopeBanner,
-                  locationFallbackActive && styles.scopeBannerFallback,
-                ]}
-              >
-                <View style={styles.scopeIcon}>
+              {locationError ? (
+                <View style={styles.locationBanner}>
                   <MaterialIcons
-                    name={
-                      locationFallbackActive ? "travel-explore" : "my-location"
-                    }
+                    name="location-off"
                     size={18}
-                    color="#fff"
+                    color="#92400e"
                   />
-                </View>
-                <View style={styles.locationBannerCopy}>
-                  <Text style={styles.scopeTitle}>
-                    {locationFallbackActive && targetCity
-                      ? `Opciones cercanas a ${targetCity}`
-                      : `Prestadores de ${locationScope || "tu zona"}`}
-                  </Text>
-                  <Text style={styles.scopeText}>
-                    {locationFallbackActive
-                      ? `No hab\u00eda resultados en la misma ciudad. Mostramos opciones dentro del radio configurado de ${Math.max(1, Math.round(searchRadius / 1000))} km, sin mezclar otras provincias.`
-                      : `Resultados dentro del radio configurado de ${Math.max(1, Math.round(searchRadius / 1000))} km. Priorizamos cercan\u00eda y disponibilidad.`}
-                  </Text>
-                  {(userLocation?.ciudad || userLocation?.localidad) && (
-                    <View style={styles.scopeToggle}>
-                      <TouchableOpacity
-                        activeOpacity={0.78}
-                        onPress={() => setLocationMode("auto")}
-                        style={[
-                          styles.scopeToggleButton,
-                          locationMode === "auto" &&
-                            styles.scopeToggleButtonActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.scopeToggleText,
-                            locationMode === "auto" &&
-                              styles.scopeToggleTextActive,
-                          ]}
-                        >
-                          Recomendado
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        activeOpacity={0.78}
-                        onPress={() => setLocationMode("province")}
-                        style={[
-                          styles.scopeToggleButton,
-                          locationMode === "province" &&
-                            styles.scopeToggleButtonActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.scopeToggleText,
-                            locationMode === "province" &&
-                              styles.scopeToggleTextActive,
-                          ]}
-                        >
-                          En mi radio
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        activeOpacity={0.78}
-                        onPress={() => setLocationMode("city")}
-                        style={[
-                          styles.scopeToggleButton,
-                          locationMode === "city" &&
-                            styles.scopeToggleButtonActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.scopeToggleText,
-                            locationMode === "city" &&
-                              styles.scopeToggleTextActive,
-                          ]}
-                        >
-                          Mi ciudad
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                  {legacyIncluded > 0 && (
-                    <Text style={styles.legacyIncludedText}>
-                      Incluye {legacyIncluded} registro
-                      {legacyIncluded !== 1 ? "s" : ""} del formulario anterior
-                      {campaignIncluded > 0
-                        ? ` (${campaignIncluded} recuperado${campaignIncluded !== 1 ? "s" : ""} de campaña)`
-                        : ""}
-                      .
+                  <View style={styles.locationBannerCopy}>
+                    <Text style={styles.locationBannerTitle}>
+                      Confirmá tu ubicación exacta
                     </Text>
-                  )}
+                    <Text style={styles.locationBannerText}>
+                      No mostramos resultados generales: usá GPS o ingresá una
+                      dirección para encontrar prestadores cercanos.
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="Elegir mi ubicación"
+                    onPress={() => locationSheetRef.current?.present()}
+                    style={styles.locationRetryButton}
+                  >
+                    <MaterialIcons name="refresh" size={20} color="#047a8f" />
+                  </TouchableOpacity>
                 </View>
-              </View>
-            )}
+              ) : (
+                <View
+                  style={[
+                    styles.scopeBanner,
+                    locationFallbackActive && styles.scopeBannerFallback,
+                  ]}
+                >
+                  <View style={styles.scopeIcon}>
+                    <MaterialIcons
+                      name={
+                        locationFallbackActive
+                          ? "travel-explore"
+                          : "my-location"
+                      }
+                      size={18}
+                      color="#fff"
+                    />
+                  </View>
+                  <View style={styles.locationBannerCopy}>
+                    <Text style={styles.scopeTitle}>
+                      {locationFallbackActive && targetCity
+                        ? `Opciones cercanas a ${targetCity}`
+                        : `Prestadores de ${locationScope || "tu zona"}`}
+                    </Text>
+                    <Text style={styles.scopeText}>
+                      {locationFallbackActive
+                        ? `No hab\u00eda resultados en la misma ciudad. Mostramos opciones dentro del radio configurado de ${Math.max(1, Math.round(searchRadius / 1000))} km, sin mezclar otras provincias.`
+                        : `Resultados dentro del radio configurado de ${Math.max(1, Math.round(searchRadius / 1000))} km. Priorizamos cercan\u00eda y disponibilidad.`}
+                    </Text>
+                    {(userLocation?.ciudad || userLocation?.localidad) && (
+                      <View style={styles.scopeToggle}>
+                        <TouchableOpacity
+                          activeOpacity={0.78}
+                          onPress={() => setLocationMode("auto")}
+                          style={[
+                            styles.scopeToggleButton,
+                            locationMode === "auto" &&
+                              styles.scopeToggleButtonActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.scopeToggleText,
+                              locationMode === "auto" &&
+                                styles.scopeToggleTextActive,
+                            ]}
+                          >
+                            Recomendado
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          activeOpacity={0.78}
+                          onPress={() => setLocationMode("province")}
+                          style={[
+                            styles.scopeToggleButton,
+                            locationMode === "province" &&
+                              styles.scopeToggleButtonActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.scopeToggleText,
+                              locationMode === "province" &&
+                                styles.scopeToggleTextActive,
+                            ]}
+                          >
+                            En mi radio
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          activeOpacity={0.78}
+                          onPress={() => setLocationMode("city")}
+                          style={[
+                            styles.scopeToggleButton,
+                            locationMode === "city" &&
+                              styles.scopeToggleButtonActive,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.scopeToggleText,
+                              locationMode === "city" &&
+                                styles.scopeToggleTextActive,
+                            ]}
+                          >
+                            Mi ciudad
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                    {legacyIncluded > 0 && (
+                      <Text style={styles.legacyIncludedText}>
+                        Incluye {legacyIncluded} registro
+                        {legacyIncluded !== 1 ? "s" : ""} del formulario
+                        anterior
+                        {campaignIncluded > 0
+                          ? ` (${campaignIncluded} recuperado${campaignIncluded !== 1 ? "s" : ""} de campaña)`
+                          : ""}
+                        .
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              )}
             </View>
           }
           ListEmptyComponent={
@@ -1171,7 +1177,7 @@ function ServiciosPorCategoria({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#f0f2f5" },
-  headerGrad: { paddingHorizontal: 20, paddingVertical: 16, paddingTop: 40 },
+  headerGrad: { paddingHorizontal: 20, paddingVertical: 16 },
   headerTitle: { fontSize: 22, fontWeight: "800", color: "#fff" },
   headerSub: { fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 2 },
   loadingContainer: {
@@ -1181,10 +1187,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: { color: "#069eb3", fontSize: 15 },
-  listContent: { padding: 16, paddingBottom: 100 },
+  listContent: { padding: 16, paddingBottom: 24 },
   emptyContainer: {
     alignItems: "center",
-    paddingTop: 60,
+    paddingTop: 24,
     gap: 12,
     paddingHorizontal: 30,
   },

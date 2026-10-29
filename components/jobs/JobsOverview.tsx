@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { type ReactNode, useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -27,6 +27,7 @@ type JobsNavigation = Pick<
 type Props = {
   navigation: JobsNavigation;
   compact?: boolean;
+  header?: ReactNode;
 };
 
 const sectionConfig = {
@@ -149,7 +150,11 @@ function JobCard({
   );
 }
 
-export default function JobsOverview({ navigation, compact = false }: Props) {
+export default function JobsOverview({
+  navigation,
+  compact = false,
+  header,
+}: Props) {
   const [jobs, setJobs] = useState<ServiceJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -199,11 +204,18 @@ export default function JobsOverview({ navigation, compact = false }: Props) {
   );
 
   if (loading) {
-    return (
+    const loadingState = (
       <View style={styles.centerBox}>
         <ActivityIndicator color="#087d8d" />
         <Text style={styles.centerText}>Cargando trabajos...</Text>
       </View>
+    );
+    if (compact) return loadingState;
+    return (
+      <ScrollView contentContainerStyle={styles.fullContent}>
+        {header}
+        {loadingState}
+      </ScrollView>
     );
   }
 
@@ -257,6 +269,7 @@ export default function JobsOverview({ navigation, compact = false }: Props) {
         />
       }
     >
+      {header}
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
       {jobs.length === 0 ? (
         <View style={styles.emptyBox}>

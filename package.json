@@ -122,7 +122,8 @@
       "reactNativeDirectoryCheck": {
         "exclude": [
           "expo-av",
-          "react-native-keyboard-aware-scroll-view"
+          "react-native-keyboard-aware-scroll-view",
+          "react-native-edge-to-edge"
         ],
         "listUnknownPackages": false
       }

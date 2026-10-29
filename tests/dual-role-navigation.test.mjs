@@ -6,8 +6,8 @@ const home = readFileSync(
   new URL("../screens/Home.tsx", import.meta.url),
   "utf8",
 );
-const quickMenu = readFileSync(
-  new URL("../components/SideQuickAccessMenu.tsx", import.meta.url),
+const homeHeader = readFileSync(
+  new URL("../components/HomeHeader.tsx", import.meta.url),
   "utf8",
 );
 const providerRegistration = readFileSync(
@@ -37,18 +37,14 @@ const reconciliationMigration = readFileSync(
   "utf8",
 );
 
-test("un cliente autenticado puede iniciar el alta como prestador desde el menu rapido", () => {
+test("un cliente autenticado puede iniciar el alta como prestador desde el encabezado", () => {
   assert.match(
     home,
     /const canBecomeProvider = !isGuest && !isProvider && rol !== "admin"/,
   );
   assert.match(home, /navigation\.navigate\("RegistroTrabajador"\)/);
-  assert.match(
-    home,
-    /offerServiceMode=\{canBecomeProvider \? "register" : "publish"\}/,
-  );
-  assert.match(quickMenu, /Quiero ofrecer servicios/);
-  assert.match(quickMenu, /Completá tu perfil de prestador/);
+  assert.match(home, /"Ofrecer servicios"/);
+  assert.match(homeHeader, /onProviderActionPress/);
 });
 
 test("prestadores y administradores publican con una capacidad independiente", () => {
@@ -81,9 +77,11 @@ test("toda cuenta conserva la posibilidad de solicitar aunque también preste se
   assert.match(profile, /Gestionar mis servicios/);
 });
 
-test("el acceso flotante no se duplica ni se abre vacío", () => {
-  assert.match(home, /\{isGuest && \(\s*<FloatingActionButtonMenu/);
-  assert.match(home, /\{!isGuest && \(\s*<SideQuickAccessMenu/);
+test("las acciones de inicio se desplazan con el encabezado y no tapan contenido", () => {
+  assert.doesNotMatch(home, /FloatingActionButtonMenu/);
+  assert.doesNotMatch(home, /SideQuickAccessMenu/);
+  assert.match(home, /onMicaPress=/);
+  assert.match(homeHeader, /Consultar a MICA/);
 });
 
 test("la base separa la capacidad de prestador y mantiene compatibilidad con builds anteriores", () => {
