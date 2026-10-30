@@ -48,6 +48,7 @@ interface CategoryItemProps {
   disabled?: boolean;
   iconoUrl?: string | null;
   width?: number;
+  compact?: boolean;
 }
 
 export const CategoryItem = ({
@@ -57,6 +58,7 @@ export const CategoryItem = ({
   disabled,
   iconoUrl,
   width = 155,
+  compact = false,
 }: CategoryItemProps) => (
   <TouchableOpacity
     accessibilityRole="button"
@@ -66,12 +68,28 @@ export const CategoryItem = ({
         : "Aún no hay profesionales"
     }`}
     accessibilityState={{ disabled: Boolean(disabled) }}
-    style={[styles.container, { width }, disabled && styles.disabled]}
+    style={[
+      styles.container,
+      { width },
+      compact && styles.compactContainer,
+      disabled && styles.disabled,
+    ]}
     onPress={onPress}
     disabled={disabled}
   >
-    <View style={[styles.iconContainer, { width }]}>
-      <CategoryIcon categoria={categoria} iconoUrl={iconoUrl} width={width} />
+    <View
+      style={[
+        styles.iconContainer,
+        { width },
+        compact && styles.compactIconContainer,
+      ]}
+    >
+      <CategoryIcon
+        categoria={categoria}
+        iconoUrl={iconoUrl}
+        width={width}
+        height={compact ? 76 : 100}
+      />
     </View>
     <View style={styles.textContainer}>
       <Text style={styles.name} numberOfLines={3} ellipsizeMode="tail">
@@ -107,10 +125,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   disabled: { opacity: 0.6 },
+  compactContainer: { minHeight: 144 },
   iconContainer: {
     marginBottom: 8,
     height: 100,
   },
+  compactIconContainer: { height: 76 },
   iconImage: {
     resizeMode: "cover",
     borderRadius: 16,

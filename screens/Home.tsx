@@ -15,6 +15,7 @@ import { AuthContext } from "../lib/context/AppContext";
 import { useHomeData } from "../lib/hooks/useHomeData";
 
 import HomeHeader from "../components/HomeHeader";
+import HomeQuickAccessMenu from "../components/HomeQuickAccessMenu";
 // Refactored Components
 import BottomNavBar from "../components/home/BottomNavBar";
 import CategoryList from "../components/home/CategoryList";
@@ -119,21 +120,6 @@ function Home({ navigation, route }: Props) {
         onPublishPress={() =>
           navigation.navigate("PublicarNecesidad", { view: "new" })
         }
-        onMicaPress={() => handleMicaModePress("buscar-servicio")}
-        onProviderActionPress={
-          canPublishService
-            ? () => navigation.navigate("OfrecerServicio")
-            : canBecomeProvider
-              ? () => navigation.navigate("RegistroTrabajador")
-              : undefined
-        }
-        providerActionLabel={
-          canPublishService
-            ? "Publicar servicio"
-            : canBecomeProvider
-              ? "Ofrecer servicios"
-              : undefined
-        }
       />
 
       {!isGuest && askDniVerification && <DniPendingWarning />}
@@ -161,6 +147,30 @@ function Home({ navigation, route }: Props) {
           />
         )}
       </View>
+
+      <HomeQuickAccessMenu
+        onPublishRequest={() =>
+          isGuest
+            ? navigation.navigate("AuthStack", { screen: "LoginSelect" })
+            : navigation.navigate("PublicarNecesidad", { view: "new" })
+        }
+        onSearchWithMica={() => handleMicaModePress("buscar-servicio")}
+        onOfferService={
+          isGuest
+            ? () =>
+                navigation.navigate("AuthStack", { screen: "LoginSelect" })
+            : canPublishService
+              ? () => navigation.navigate("OfrecerServicio")
+              : canBecomeProvider
+                ? () => navigation.navigate("RegistroTrabajador")
+                : undefined
+        }
+        offerServiceLabel={
+          isGuest || canBecomeProvider
+            ? "Quiero ofrecer servicios"
+            : "Publicar un servicio"
+        }
+      />
 
       <BottomNavBar
         unreadMessagesCount={unreadMessagesCount}

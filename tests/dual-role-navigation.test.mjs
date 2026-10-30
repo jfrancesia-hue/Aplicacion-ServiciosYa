@@ -10,6 +10,10 @@ const homeHeader = readFileSync(
   new URL("../components/HomeHeader.tsx", import.meta.url),
   "utf8",
 );
+const homeQuickAccess = readFileSync(
+  new URL("../components/HomeQuickAccessMenu.tsx", import.meta.url),
+  "utf8",
+);
 const providerRegistration = readFileSync(
   new URL("../screens/RegistroTrabajador.tsx", import.meta.url),
   "utf8",
@@ -37,14 +41,15 @@ const reconciliationMigration = readFileSync(
   "utf8",
 );
 
-test("un cliente autenticado puede iniciar el alta como prestador desde el encabezado", () => {
+test("un cliente autenticado puede iniciar el alta como prestador desde los accesos rápidos", () => {
   assert.match(
     home,
     /const canBecomeProvider = !isGuest && !isProvider && rol !== "admin"/,
   );
   assert.match(home, /navigation\.navigate\("RegistroTrabajador"\)/);
-  assert.match(home, /"Ofrecer servicios"/);
-  assert.match(homeHeader, /onProviderActionPress/);
+  assert.match(home, /"Quiero ofrecer servicios"/);
+  assert.match(home, /<HomeQuickAccessMenu/);
+  assert.match(homeQuickAccess, /offerServiceLabel/);
 });
 
 test("prestadores y administradores publican con una capacidad independiente", () => {
@@ -77,11 +82,13 @@ test("toda cuenta conserva la posibilidad de solicitar aunque también preste se
   assert.match(profile, /Gestionar mis servicios/);
 });
 
-test("las acciones de inicio se desplazan con el encabezado y no tapan contenido", () => {
+test("las acciones de inicio participan del layout y no tapan contenido", () => {
   assert.doesNotMatch(home, /FloatingActionButtonMenu/);
   assert.doesNotMatch(home, /SideQuickAccessMenu/);
-  assert.match(home, /onMicaPress=/);
-  assert.match(homeHeader, /Consultar a MICA/);
+  assert.match(home, /onSearchWithMica=/);
+  assert.match(homeQuickAccess, /Buscar servicio con MICA/);
+  assert.doesNotMatch(homeQuickAccess, /position:\s*["']absolute["']/);
+  assert.doesNotMatch(homeHeader, /Consultar a MICA/);
 });
 
 test("la base separa la capacidad de prestador y mantiene compatibilidad con builds anteriores", () => {

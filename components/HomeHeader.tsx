@@ -23,9 +23,6 @@ interface HomeHeaderProps {
   onSearch: (query: string) => void;
   onPublishPress: () => void;
   onRequestsPress?: () => void;
-  onMicaPress: () => void;
-  onProviderActionPress?: () => void;
-  providerActionLabel?: string;
   publishLabel: string;
 }
 
@@ -33,9 +30,6 @@ function HomeHeader({
   onSearch,
   onPublishPress,
   onRequestsPress,
-  onMicaPress,
-  onProviderActionPress,
-  providerActionLabel,
   publishLabel,
 }: HomeHeaderProps) {
   const navigation = useMainNavigation();
@@ -67,10 +61,12 @@ function HomeHeader({
       <View style={styles.container}>
         <View style={styles.headerTop}>
           <View style={styles.logoAndTextContainer}>
-            <Image
-              source={require("../assets/serviciosya-logo-2026.png")}
-              style={styles.headerLogo}
-            />
+            <View style={styles.logoBadge}>
+              <Image
+                source={require("../assets/logo2.png")}
+                style={styles.headerLogo}
+              />
+            </View>
             <View style={styles.saludoContainer}>
               <Text style={styles.brandName}>Servicios Ya</Text>
               <Text style={styles.subtitulo}>¿Qué necesitás hoy?</Text>
@@ -174,34 +170,6 @@ function HomeHeader({
           </View>
         )}
 
-        <View style={styles.quickActions}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Consultar a MICA"
-            activeOpacity={0.85}
-            onPress={onMicaPress}
-            style={styles.micaButton}
-          >
-            <Ionicons name="sparkles" size={18} color="#047a8f" />
-            <Text style={styles.micaButtonText} numberOfLines={1}>
-              Consultar a MICA
-            </Text>
-          </TouchableOpacity>
-          {onProviderActionPress && providerActionLabel ? (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={providerActionLabel}
-              activeOpacity={0.85}
-              onPress={onProviderActionPress}
-              style={styles.providerActionButton}
-            >
-              <Ionicons name="briefcase-outline" size={18} color="#fff" />
-              <Text style={styles.providerActionText} numberOfLines={1}>
-                {providerActionLabel}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-        </View>
       </View>
     </LinearGradient>
   );
@@ -286,9 +254,20 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 12,
   },
+  logoBadge: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: "#050505",
+    borderWidth: 2,
+    borderColor: "rgba(255, 255, 255, 0.82)",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
   headerLogo: {
-    width: 50,
-    height: 50,
+    width: 47,
+    height: 47,
     resizeMode: "contain",
   },
   saludoContainer: {
@@ -435,47 +414,5 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.18)",
     alignItems: "center",
     justifyContent: "center",
-  },
-  quickActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 8,
-  },
-  micaButton: {
-    minHeight: 44,
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    borderRadius: 22,
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-  },
-  micaButtonText: {
-    flexShrink: 1,
-    color: "#047a8f",
-    fontSize: 13,
-    fontWeight: "900",
-  },
-  providerActionButton: {
-    minHeight: 44,
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.45)",
-    backgroundColor: "rgba(0,0,0,0.14)",
-    paddingHorizontal: 12,
-  },
-  providerActionText: {
-    flexShrink: 1,
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "800",
   },
 });

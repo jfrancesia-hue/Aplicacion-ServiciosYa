@@ -1,5 +1,5 @@
-import React from "react";
-import { StyleSheet, useWindowDimensions, View } from "react-native";
+import React, { useMemo } from "react";
+import { FlatList, StyleSheet, View } from "react-native";
 
 import { CategoryItem } from "./CategoryItem";
 
@@ -11,8 +11,15 @@ interface CategorySectionProps {
   iconUrls?: Record<string, string | null | undefined>;
 }
 
-const GRID_GAP = 12;
-const GRID_HORIZONTAL_PADDING = 16;
+const CARD_WIDTH = 132;
+
+const pairCategories = (categories: string[]) => {
+  const pairs: string[][] = [];
+  for (let index = 0; index < categories.length; index += 2) {
+    pairs.push(categories.slice(index, index + 2));
+  }
+  return pairs;
+};
 
 export const CategorySection = ({
   categories,
@@ -21,43 +28,43 @@ export const CategorySection = ({
   disabled,
   iconUrls,
 }: CategorySectionProps) => {
-  const { width: screenWidth } = useWindowDimensions();
+  const categoryPairs = useMemo(() => pairCategories(categories), [categories]);
 
   if (categories.length === 0) return null;
 
-  const availableWidth = Math.max(
-    screenWidth - GRID_HORIZONTAL_PADDING * 2,
-    280,
-  );
-  const columnCount = availableWidth >= 720 ? 4 : availableWidth >= 520 ? 3 : 2;
-  const cardWidth =
-    (availableWidth - GRID_GAP * (columnCount - 1)) / columnCount;
-
   return (
     <View style={styles.container}>
-      <View style={styles.grid}>
-        {categories.map((category) => (
-          <CategoryItem
-            key={category}
-            categoria={category}
-            count={conteos[category] || 0}
-            onPress={() => onCategoryPress(category)}
-            disabled={disabled}
-            iconoUrl={iconUrls?.[category]}
-            width={cardWidth}
-          />
-        ))}
-      </View>
+      <FlatList
+        horizontal
+        data={categoryPairs}
+        keyExtractor={(pair) => pair.join("|")}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        ItemSeparatorComponent={() => <View style={styles.columnSeparator} />}
+        renderItem={({ item: pair }) => (
+          <View style={styles.column}>
+            {pair.map((category) => (
+              <CategoryItem
+                key={category}
+                categoria={category}
+                count={conteos[category] || 0}
+                onPress={() => onCategoryPress(category)}
+                disabled={disabled}
+                iconoUrl={iconUrls?.[category]}
+                width={CARD_WIDTH}
+                compact
+              />
+            ))}
+          </View>
+        )}
+      />
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 16 },
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: GRID_GAP,
-    paddingHorizontal: GRID_HORIZONTAL_PADDING,
-  },
+  container: { marginBottom: 18 },
+  listContent: { paddingHorizontal: 16, paddingBottom: 4 },
+  column: { gap: 10 },
+  columnSeparator: { width: 10 },
 });

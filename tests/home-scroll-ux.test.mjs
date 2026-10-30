@@ -18,6 +18,8 @@ const readAppSources = (relativeDirectory) => {
 };
 
 const home = readSource("../screens/Home.tsx");
+const homeQuickAccess = readSource("../components/HomeQuickAccessMenu.tsx");
+const homeHeader = readSource("../components/HomeHeader.tsx");
 const workerHome = readSource("../components/home/WorkerHomeView.tsx");
 const categoryList = readSource("../components/home/CategoryList.tsx");
 const categorySection = readSource("../components/home/CategorySection.tsx");
@@ -46,11 +48,12 @@ test("el inicio completo se desplaza con el contenido y no deja el encabezado fi
   assert.match(workerHome, /header=\{workerHeader\}/);
 });
 
-test("las categorías usan una grilla vertical y no capturan el gesto horizontal", () => {
-  assert.doesNotMatch(categorySection, /FlatList/);
-  assert.doesNotMatch(categorySection, /\bhorizontal\b/);
-  assert.match(categorySection, /flexWrap: "wrap"/);
-  assert.match(categorySection, /useWindowDimensions/);
+test("cada grupo de categorías usa dos filas y desplazamiento horizontal", () => {
+  assert.match(categorySection, /<FlatList/);
+  assert.match(categorySection, /\bhorizontal\b/);
+  assert.match(categorySection, /pairCategories/);
+  assert.match(categorySection, /index \+= 2/);
+  assert.doesNotMatch(categorySection, /flexWrap: "wrap"/);
   assert.match(categoryList, /Servicios disponibles/);
   assert.match(categoryList, /Elegí una categoría/);
 });
@@ -66,10 +69,22 @@ test("ofertas tiene un solo desplazamiento vertical", () => {
   );
 });
 
-test("MICA y las acciones secundarias se desplazan sin tapar contenido", () => {
+test("MICA recupera el menú desplegable con tres accesos sin tapar contenido", () => {
   assert.doesNotMatch(home, /SideQuickAccessMenu/);
   assert.doesNotMatch(home, /FloatingActionButtonMenu/);
-  assert.match(home, /onMicaPress=/);
+  assert.match(home, /<HomeQuickAccessMenu/);
+  assert.match(homeQuickAccess, /Publicar necesidad/);
+  assert.match(homeQuickAccess, /Buscar servicio con MICA/);
+  assert.match(homeQuickAccess, /Publicar un servicio/);
+  assert.match(homeQuickAccess, /name=\{isOpen \? "close" : "add"\}/);
+  assert.doesNotMatch(homeHeader, /Consultar a MICA/);
+});
+
+test("el foco del logo se destaca dentro de un círculo negro", () => {
+  assert.match(homeHeader, /assets\/logo2\.png/);
+  assert.match(homeHeader, /style=\{styles\.logoBadge\}/);
+  assert.match(homeHeader, /backgroundColor: "#050505"/);
+  assert.match(homeHeader, /borderRadius: 29/);
 });
 
 test("completar el perfil vive en el menú y no ocupa el inicio", () => {
