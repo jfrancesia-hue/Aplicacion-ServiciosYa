@@ -488,9 +488,14 @@ export default function Perfil() {
                 onPress={actualizarFotoPerfil}
                 disabled={updatingPhoto}
               >
-                <Text style={styles.photoBtnText}>
-                  {updatingPhoto ? "Subiendo…" : "📷 Cambiar foto"}
-                </Text>
+                {updatingPhoto ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="camera-outline" size={17} color="#ffffff" />
+                    <Text style={styles.photoBtnText}>Cambiar foto</Text>
+                  </>
+                )}
               </TouchableOpacity>
             </View>
 
@@ -501,7 +506,8 @@ export default function Perfil() {
                   style={styles.editBtn}
                   onPress={() => setEditing(true)}
                 >
-                  <Text style={styles.editBtnText}>✏️ Editar perfil</Text>
+                  <Ionicons name="create-outline" size={18} color="#ffffff" />
+                  <Text style={styles.editBtnText}>Editar perfil</Text>
                 </TouchableOpacity>
               ) : (
                 <View style={styles.editActions}>
@@ -510,9 +516,14 @@ export default function Perfil() {
                     onPress={guardarCambios}
                     disabled={saving}
                   >
-                    <Text style={styles.saveBtnText}>
-                      {saving ? "Guardando…" : "💾  Guardar cambios"}
-                    </Text>
+                    {saving ? (
+                      <ActivityIndicator color="#ffffff" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="save-outline" size={18} color="#ffffff" />
+                        <Text style={styles.saveBtnText}>Guardar cambios</Text>
+                      </>
+                    )}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.cancelBtn}
@@ -758,7 +769,8 @@ export default function Perfil() {
                             )
                           }
                         >
-                          <Text style={styles.fileAddBtnText}>📷 Imagen</Text>
+                          <Ionicons name="image-outline" size={17} color="#ffffff" />
+                          <Text style={styles.fileAddBtnText}>Imagen</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.fileAddBtn}
@@ -771,7 +783,12 @@ export default function Perfil() {
                             )
                           }
                         >
-                          <Text style={styles.fileAddBtnText}>📄 PDF</Text>
+                          <Ionicons
+                            name="document-outline"
+                            size={17}
+                            color="#ffffff"
+                          />
+                          <Text style={styles.fileAddBtnText}>PDF</Text>
                         </TouchableOpacity>
                       </View>
                       <View style={styles.chipsRow}>
@@ -878,9 +895,14 @@ export default function Perfil() {
                 onPress={guardarCambios}
                 disabled={saving}
               >
-                <Text style={styles.saveBtnText}>
-                  {saving ? "Guardando…" : "💾  Guardar cambios"}
-                </Text>
+                {saving ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <>
+                    <Ionicons name="save-outline" size={18} color="#ffffff" />
+                    <Text style={styles.saveBtnText}>Guardar cambios</Text>
+                  </>
+                )}
               </TouchableOpacity>
             )}
           </View>
@@ -948,6 +970,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderRadius: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
   },
   photoBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   actionRow: { marginBottom: 16 },
@@ -1026,7 +1052,10 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE,
     paddingVertical: 12,
     borderRadius: 14,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     shadowColor: BLUE,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
@@ -1039,7 +1068,10 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE_DARK,
     paddingVertical: 13,
     borderRadius: 14,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
     shadowColor: BLUE_DARK,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
@@ -1135,7 +1167,10 @@ const styles = StyleSheet.create({
     backgroundColor: BLUE,
     paddingVertical: 10,
     borderRadius: 12,
+    flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
   },
   fileAddBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

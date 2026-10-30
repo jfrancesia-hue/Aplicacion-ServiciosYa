@@ -35,6 +35,6 @@ npx expo-doctor
 ## Build actual
 
 - Rama base funcional: `main`.
-- Versión de app: `100.0.0`.
+- Versión de app: `101.0.0`.
 - Android `versionCode`: `99`.
 - Nombre visible: `Servicios Ya`.

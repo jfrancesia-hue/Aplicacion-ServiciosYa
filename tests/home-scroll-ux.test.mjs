@@ -33,6 +33,9 @@ const myServices = readSource("../screens/MisServicios.js");
 const settings = readSource("../screens/Configuracion.tsx");
 const offerService = readSource("../screens/OfrecerServicio.tsx");
 const jobsScreen = readSource("../screens/TrabajosPendientes.tsx");
+const chatList = readSource("../screens/ChatListScreen.tsx");
+const profile = readSource("../screens/Perfil.js");
+const appConfig = JSON.parse(readSource("../app.json"));
 
 test("el inicio completo se desplaza con el contenido y no deja el encabezado fijo", () => {
   assert.match(home, /const homeHeaderContent =/);
@@ -132,4 +135,39 @@ test("las pantallas secundarias desplazan sus encabezados con el contenido", () 
   );
   assert.match(jobsScreen, /<JobsOverview[\s\S]*header=/);
   assert.match(jobsScreen, /<SafeAreaView style=\{styles\.screen\}>/);
+});
+
+test("MICA abre desde el comienzo y mantiene el editor visible con el teclado", () => {
+  assert.doesNotMatch(micaChat, /onContentSizeChange=\{\(\) =>[\s\S]{0,120}scrollToEnd/);
+  assert.match(micaChat, /onFocus=\{\(\) =>[\s\S]{0,180}scrollToEnd/);
+  assert.equal(appConfig.expo.android.softwareKeyboardLayoutMode, "resize");
+
+  const scrollStart = micaChat.indexOf("<ScrollView");
+  const warning = micaChat.indexOf("style={styles.locationWarning}");
+  const scrollEnd = micaChat.indexOf("</ScrollView>", scrollStart);
+  assert.ok(scrollStart < warning && warning < scrollEnd);
+});
+
+test("cambiar la contrasena no valida ni guarda campos vacios", () => {
+  assert.match(settings, /useState\(false\)[\s\S]{0,100}useState\(false\)/);
+  assert.match(settings, /password\.length > 0/);
+  assert.match(settings, /confirmPassword\.length > 0/);
+  assert.match(settings, /disabled=\{!canSavePassword\}/);
+});
+
+test("una publicacion exige coordenadas exactas y deja el barrio opcional", () => {
+  assert.match(publishRequest, /locationSource === "ip" \? null : effectiveLocation/);
+  assert.match(publishRequest, /exactLocation\?\.latitude == null/);
+  assert.match(publishRequest, /exactLocation\.longitude/);
+  assert.match(publishRequest, /Barrio o referencia \(opcional\)/);
+  assert.doesNotMatch(publishRequest, /setZone\(\(current\) => current \|\| location\)/);
+});
+
+test("chats y perfil usan iconos del sistema en vez de emojis decorativos", () => {
+  assert.match(chatList, /name="chatbubbles-outline"/);
+  assert.doesNotMatch(chatList, /\ud83d\udce8/);
+  assert.match(profile, /name="camera-outline"/);
+  assert.match(profile, /name="create-outline"/);
+  assert.match(profile, /name="save-outline"/);
+  assert.doesNotMatch(profile, /[\ud83d\udcf7\u270f\ud83d\udcbe]/u);
 });

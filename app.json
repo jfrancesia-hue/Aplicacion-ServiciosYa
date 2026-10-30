@@ -8,7 +8,7 @@
       "android",
       "web"
     ],
-    "version": "100.0.0",
+    "version": "101.0.0",
     "orientation": "portrait",
     "icon": "./assets/serviciosya-logo-2026.png",
     "userInterfaceStyle": "light",
@@ -30,7 +30,7 @@
       "reactCompiler": true
     },
     "ios": {
-      "buildNumber": "100",
+      "buildNumber": "101",
       "associatedDomains": [
         "applinks:serviciosya.site"
       ],
@@ -53,12 +53,13 @@
       "appleTeamId": "HHY5MJ22J3"
     },
     "android": {
-      "versionCode": 100,
+      "versionCode": 101,
       "adaptiveIcon": {
         "foregroundImage": "./assets/serviciosya-logo-2026.png",
         "backgroundColor": "#20231f"
       },
       "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize",
       "package": "com.alex_6775.appTrabajo",
       "googleServicesFile": "./google-services.json",
       "permissions": [

@@ -8,6 +8,10 @@ const allowedUnpatchedAdvisories = new Map([
   [1240992, "braces: build-tool glob denial of service"],
   [1240912, "node-forge: Expo code-signing verification"],
   [1241202, "sprintf-js: Metro build-tool denial of service"],
+  [
+    1243505,
+    "deepmerge: Expo 53 configuration dependency has no patched release",
+  ],
 ]);
 
 const npmCommand = process.env.npm_execpath;

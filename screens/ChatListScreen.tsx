@@ -189,7 +189,10 @@ function ChatListScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <BotonVolver />
-      <Text style={styles.titulo}>📨 Tus chats</Text>
+      <View style={styles.titleRow}>
+        <Ionicons name="chatbubbles-outline" size={31} color="#202B3A" />
+        <Text style={styles.titulo}>Tus chats</Text>
+      </View>
       <ChatList />
     </SafeAreaView>
   );
@@ -217,12 +220,18 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: "800",
     color: "#202B3A",
-    marginBottom: 20,
     textAlign: "center",
     letterSpacing: 1,
     textShadowColor: "#b6e1ea88",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    marginBottom: 20,
   },
   chatItem: {
     flexDirection: "row",

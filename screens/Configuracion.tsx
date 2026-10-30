@@ -31,8 +31,8 @@ type Props = NativeStackScreenProps<MainStackParamList, "Configuracion">;
 function Configuracion({ navigation }: Props) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordValid, setPasswordValid] = useState(true);
-  const [passwordMatch, setPasswordMatch] = useState(true);
+  const [passwordValid, setPasswordValid] = useState(false);
+  const [passwordMatch, setPasswordMatch] = useState(false);
   const [enablingNotifications, setEnablingNotifications] = useState(false);
   const profile = useSuspenseProfile();
   const { rol } = profile;
@@ -60,7 +60,11 @@ function Configuracion({ navigation }: Props) {
   };
 
   const verificarContraseñas = (password: string, confirmPassword: string) => {
-    setPasswordMatch(password === confirmPassword);
+    setPasswordMatch(
+      password.length > 0 &&
+        confirmPassword.length > 0 &&
+        password === confirmPassword,
+    );
   };
 
   const handlePasswordChange = (password: string) => {
@@ -94,6 +98,9 @@ function Configuracion({ navigation }: Props) {
       Alert.alert("Éxito", "Contraseña cambiada correctamente");
     }
   };
+
+  const canSavePassword =
+    passwordValid && passwordMatch && confirmPassword.length > 0;
 
   const invitarAmigo = () => {
     present();
@@ -257,8 +264,12 @@ function Configuracion({ navigation }: Props) {
               </View>
 
               <TouchableOpacity
-                style={styles.buttonOrange}
+                style={[
+                  styles.buttonOrange,
+                  !canSavePassword && styles.buttonDisabled,
+                ]}
                 onPress={cambiarContrasena}
+                disabled={!canSavePassword}
               >
                 <Text style={styles.buttonText}>Guardar Contraseña</Text>
               </TouchableOpacity>
@@ -557,6 +568,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 7,
+  },
+  buttonDisabled: {
+    opacity: 0.45,
+    elevation: 0,
+    shadowOpacity: 0,
   },
   buttonProvider: {
     backgroundColor: "#e98212",

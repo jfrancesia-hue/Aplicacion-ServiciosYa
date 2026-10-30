@@ -1475,38 +1475,35 @@ function MicaChat({ navigation, route }: Props) {
         ) : null}
       </LinearGradient>
 
-      {mode === "buscar-servicio" && !locationStatus.isComplete ? (
-        <TouchableOpacity
-          activeOpacity={0.85}
-          onPress={() => locationSheetRef.current?.present()}
-          style={styles.locationWarning}
-          accessibilityRole="button"
-          accessibilityLabel="Confirmar ubicación exacta"
-        >
-          <Ionicons name="alert-circle-outline" size={19} color="#8a5600" />
-          <View style={styles.locationWarningCopy}>
-            <Text style={styles.locationWarningTitle}>
-              Confirmá dónde se hará el trabajo
-            </Text>
-            <Text style={styles.locationWarningText}>
-              El GPS necesita permiso. Si preferís no darlo, ingresá una
-              dirección exacta manualmente. La ubicación por IP no se usa.
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color="#8a5600" />
-        </TouchableOpacity>
-      ) : null}
-
       <ScrollView
         ref={scrollRef}
         style={styles.messages}
         contentContainerStyle={styles.messagesContent}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
-        onContentSizeChange={() =>
-          scrollRef.current?.scrollToEnd({ animated: true })
-        }
       >
+        {mode === "buscar-servicio" && !locationStatus.isComplete ? (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => locationSheetRef.current?.present()}
+            style={styles.locationWarning}
+            accessibilityRole="button"
+            accessibilityLabel="Confirmar ubicación exacta"
+          >
+            <Ionicons name="alert-circle-outline" size={19} color="#8a5600" />
+            <View style={styles.locationWarningCopy}>
+              <Text style={styles.locationWarningTitle}>
+                Confirmá dónde se hará el trabajo
+              </Text>
+              <Text style={styles.locationWarningText}>
+                El GPS necesita permiso. Si preferís no darlo, ingresá una
+                dirección exacta manualmente. La ubicación por IP no se usa.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#8a5600" />
+          </TouchableOpacity>
+        ) : null}
+
         <View style={styles.agentPanel}>
           <View style={styles.panelHeader}>
             <View>
@@ -2034,6 +2031,12 @@ function MicaChat({ navigation, route }: Props) {
               style={styles.input}
               value={input}
               onChangeText={setInput}
+              onFocus={() =>
+                setTimeout(
+                  () => scrollRef.current?.scrollToEnd({ animated: true }),
+                  250,
+                )
+              }
               placeholder={config.placeholder}
               placeholderTextColor="#7c8b90"
               multiline
@@ -2136,8 +2139,7 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   locationWarning: {
-    marginHorizontal: 12,
-    marginTop: 10,
+    marginBottom: 14,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: "#efc56f",

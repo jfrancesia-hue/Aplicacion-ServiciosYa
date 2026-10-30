@@ -225,7 +225,8 @@ test("los pedidos nuevos guardan coordenadas y el matching usa distancia real", 
   assert.match(exactLocationMigration, /gis\.st_makepoint/);
   assert.match(exactLocationMigration, /gis\.st_distance/);
   assert.match(micaChat, /create_mica_app_request_v2/);
-  assert.match(publicationScreen, /effectiveLocation\.latitude/);
+  assert.match(publicationScreen, /exactLocation\.latitude/);
+  assert.match(publicationScreen, /locationSource === "ip" \? null/);
 });
 
 test("el radio y la distancia real llegan al buscador sin exponer coordenadas", () => {

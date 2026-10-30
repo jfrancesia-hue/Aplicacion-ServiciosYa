@@ -84,7 +84,7 @@ function PublicarNecesidad({ navigation, route }: Props) {
     (state) => state.effectiveLocation,
   );
   const locationSource = useLocationStore((state) => state.source);
-  const automaticZoneRef = useRef("");
+  const exactLocation = locationSource === "ip" ? null : effectiveLocation;
   const locationSheetRef = useRef<BottomSheetModal>(null);
   const [activeView, setActiveView] = useState<"history" | "new">(
     route.params?.view ?? "history",
@@ -133,12 +133,8 @@ function PublicarNecesidad({ navigation, route }: Props) {
       const detectedCity =
         detectedLocation?.city ?? detectedLocation?.locality ?? profile?.ciudad;
       const detectedProvince = detectedLocation?.province ?? profile?.provincia;
-      const location = [detectedCity, detectedProvince]
-        .filter(Boolean)
-        .join(", ");
       setCity(detectedCity ?? null);
       setProvince(detectedProvince ?? null);
-      setZone((current) => current || location);
     };
 
     loadInitialData().catch(() => undefined);
@@ -154,17 +150,8 @@ function PublicarNecesidad({ navigation, route }: Props) {
     const currentProvince = effectiveLocation?.province ?? null;
     if (locationSource === "ip" || (!currentCity && !currentProvince)) return;
 
-    const automaticZone = [currentCity, currentProvince]
-      .filter(Boolean)
-      .join(", ");
     setCity(currentCity);
     setProvince(currentProvince);
-    setZone((current) =>
-      !current.trim() || current === automaticZoneRef.current
-        ? automaticZone
-        : current,
-    );
-    automaticZoneRef.current = automaticZone;
   }, [effectiveLocation, locationSource]);
 
   const loadRequests = useCallback(async () => {
@@ -210,19 +197,25 @@ function PublicarNecesidad({ navigation, route }: Props) {
       );
       return;
     }
-    if (!zone.trim()) {
+    const zoneForRequest =
+      zone.trim() || [city, province].filter(Boolean).join(", ");
+    if (!zoneForRequest) {
       Alert.alert(
         "Falta la zona",
-        "Indicá la localidad o zona donde se realizará el trabajo.",
+        "Confirmá la ubicación donde se realizará el trabajo.",
       );
       return;
     }
     const requestLocation = getMicaRequestLocationStatus({
-      requestedZone: zone,
+      requestedZone: zoneForRequest,
       fallbackCity: city,
       fallbackProvince: province,
     });
-    if (!requestLocation.isComplete || !effectiveLocation) {
+    if (
+      !requestLocation.isComplete ||
+      exactLocation?.latitude == null ||
+      exactLocation.longitude == null
+    ) {
       Alert.alert(
         "Falta confirmar la ubicación",
         "Usá el GPS o ingresá una dirección exacta. Una ciudad o un barrio sin coordenadas no alcanza para publicar.",
@@ -245,8 +238,8 @@ function PublicarNecesidad({ navigation, route }: Props) {
         zone: requestLocation.label as string,
         city: requestLocation.city,
         province: requestLocation.province,
-        latitude: effectiveLocation.latitude,
-        longitude: effectiveLocation.longitude,
+        latitude: exactLocation.latitude,
+        longitude: exactLocation.longitude,
         urgency,
         toolsResponsibility,
         teamSize,
@@ -470,17 +463,23 @@ function PublicarNecesidad({ navigation, route }: Props) {
                         "Ubicación sin confirmar"}
                     </Text>
                     <Text style={styles.locationPickerHint}>
-                      {locationSource === "ip" && !city
-                        ? "La IP es aproximada: elegí la ciudad manualmente"
-                        : "Usá GPS o elegí una ciudad de Argentina"}
+                      {exactLocation
+                        ? "Ubicación exacta confirmada"
+                        : locationSource === "ip" && !city
+                          ? "La IP es aproximada: elegí la ciudad manualmente"
+                          : "Falta confirmar con GPS o una dirección exacta"}
                     </Text>
                   </View>
                   <Text style={styles.locationPickerAction}>
-                    {city && province ? "Cambiar" : "Elegir"}
+                    {exactLocation
+                      ? "Cambiar"
+                      : city && province
+                        ? "Confirmar"
+                        : "Elegir"}
                   </Text>
                 </TouchableOpacity>
 
-                <Text style={styles.label}>Barrio o referencia</Text>
+                <Text style={styles.label}>Barrio o referencia (opcional)</Text>
                 <TextInput
                   value={zone}
                   onChangeText={setZone}
